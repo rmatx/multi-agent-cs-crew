@@ -584,6 +584,37 @@ in agent prompts. This is what keeps a fixed 2024 dataset demo-usable against a 
 
 **Rules**: Never UPDATE the practice DuckDB. Eligibility (14-day returns, trial active) uses `asOf` + shifted/overlay dates. Operator trace includes `{ asOf, shiftDays, alignMaxDateToToday, overlayHit }`.
 
+##### Validated against the practice DB (2026-08-08)
+
+Measured directly from `novamart_practice.duckdb` (read-only connection):
+
+| Observation | Value |
+|-------------|-------|
+| `max(orders.order_date)` | `2025-01-01` |
+| Resulting `shiftDays` at `asOf = 2026-08-08` | **584** |
+| Orders landing inside a 14-day return window post-shift | **3,335** of 47,199 |
+| `max(memberships.ended_at)` | `2025-01-13` — **12 days past** the order anchor |
+| Memberships still active at the anchor | **79** of 5,513 (1.4%) |
+
+Three consequences the Build epics must honor:
+
+1. **The 12-day membership overshoot is correct, not a defect.** Shifting on the order
+   anchor pushes those 79 rows to `2026-08-20`, i.e. *after* `asOf` — which is exactly what
+   an active membership must look like. Do not clamp shifted dates to `asOf`; clamping would
+   destroy the entire active-Plus population.
+2. **79 active memberships is a thin demo pool** and they are not chosen for narrative fit.
+   This is the empirical justification for **DemoOverlay** (ADR-14): hand-authored personas
+   guarantee a usable trial-active and returns-eligible case regardless of what the shift
+   happens to produce.
+3. **Eval runs must pin `AS_OF_DATE`.** With `ALIGN_MAX_DATE_TO_TODAY=true` and `asOf`
+   defaulting to `today()`, `shiftDays` increases by one every day, so any expectation
+   written against an absolute date silently rots. F-EVAL-01 scripts set `AS_OF_DATE`
+   explicitly (or pin `DATE_SHIFT_DAYS`) so results are reproducible.
+
+Note also that `users.signup_date` maxes at `2024-12-31`, inside the order anchor, so user
+records need no special handling. Relative intervals are preserved everywhere because the
+shift is a single uniform offset applied in the repository adapter.
+
 **Env vars (names only)**
 
 ```text
@@ -911,12 +942,39 @@ Use this mapping as epic boundaries:
 | ID | Question | Status |
 | -- | -------- | ------ |
 | SAD-OQ-1 | Next BFF vs separate API | **Resolved** — Next BFF (ADR-09) |
-| SAD-OQ-2 | CI DuckDB strategy | **Resolved** — fixture + mocks (ADR-12) |
+| SAD-OQ-2 | CI DuckDB strategy | **Resolved** — fixture + mocks (ADR-12); fixture *artifact* re-opened as SAD-OQ-6 |
 | SAD-OQ-3 | Model id | **Resolved (default)** — `MODEL_ID` env; record in Build Audit |
 | SAD-OQ-4 | TS language config | **Resolved** — typescript primary |
 | SAD-OQ-5 | Policy chunking | **Resolved** — section/keyword (ADR-11) |
+| SAD-OQ-6 | CI fixture artifact exceeds GitHub file limit | **Open — non-blocking for Define; must close in Setup epic** |
 
-*No blocking architecture open questions remain.*
+### SAD-OQ-6 — CI fixture artifact (raised 2026-08-08)
+
+ADR-12 and the environment matrix specify `data/fixtures/novamart_practice.duckdb` as a
+**repo fixture copy** for CI integration tests. The practice DB is **151 MB**
+(158,347,264 bytes), which exceeds GitHub's 100 MB per-file hard limit (warning at 50 MB).
+As written, ADR-12 cannot be executed.
+
+The decision itself (integration tests run against a real DuckDB fixture; unit tests mock
+the ports) is unaffected — only the artifact is. Options, in recommended order:
+
+1. **Slimmed CI fixture** (recommended). Build `data/fixtures/novamart_ci.duckdb` containing
+   only the five MVP-read tables (`users`, `orders`, `order_items`, `products`,
+   `memberships`), row-subset to the demo personas and eval scripts. `support_tickets` is
+   already out of the MVP tool surface, so excluding it costs no coverage. Expected to be
+   single-digit MB and committable. Generation script owned by the Setup epic; must be
+   deterministic and re-runnable.
+2. **Git LFS** for the full DB. Costs GitHub free-tier quota (1 GB storage, 1 GB/month
+   bandwidth) and every revision counts against it. Poor fit for Capstone scale.
+3. **CI-time download** from an external URL. Adds a network dependency and a secret to CI;
+   contradicts the reproducibility principle in `aamad-core`.
+
+**Interim state**: the full 151 MB DB is kept local and untracked
+(`.gitignore` → `data/fixtures/*.duckdb`, with `novamart_ci.duckdb` explicitly un-ignored).
+Local dev resolves it via `NOVAMART_DUCKDB_PATH` or the default fixture path.
+
+*No blocking architecture open questions remain for Define. SAD-OQ-6 is a Build/Setup-epic
+obligation and does not gate the Define phase gate.*
 
 ---
 
@@ -924,7 +982,7 @@ Use this mapping as epic boundaries:
 
 - **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize); **2026-08-08** (runtime retrofit)  
 - **Persona id**: `system-arch`  
-- **Action**: `create-sad --mvp` + quality pass (PRD flow coverage, ADR locks) + runtime retrofit `cursor-sdk` → `claude-agent-sdk` + add flow diagrams (temporal layer, turn lifecycle)  
+- **Action**: `create-sad --mvp` + quality pass (PRD flow coverage, ADR locks) + runtime retrofit `cursor-sdk` → `claude-agent-sdk` + add flow diagrams (temporal layer, turn lifecycle) + raise SAD-OQ-6 (CI fixture artifact exceeds GitHub file limit)  
 - AAMAD_TARGET_RUNTIME: claude-agent-sdk  
 - **Inputs**: `mrd.md`, `prd.md` (post quality pass), adapter rule  
 - **Output**: `project-context/1.define/sad.md`  

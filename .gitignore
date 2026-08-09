@@ -17,3 +17,12 @@ dist/
 
 # AAMAD runtime logs
 project-context/2.build/logs/
+
+# NovaMart practice DB — 151 MB, over GitHub's 100 MB hard limit.
+# Keep the full DB local: point NOVAMART_DUCKDB_PATH at it, or drop a copy in
+# data/fixtures/. The slimmed CI fixture (ADR-12) is the exception below.
+data/fixtures/*.duckdb
+!data/fixtures/novamart_ci.duckdb
+
+# Runtime-generated stores (SQLite, ADR-10)
+data/*.sqlite
