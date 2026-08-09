@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(tsc *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Read(**)",
+      "Edit(**)"
+    ]
+  },
+  "env": {
+    "AAMAD_TARGET_RUNTIME": "claude-agent-sdk"
+  }
+}

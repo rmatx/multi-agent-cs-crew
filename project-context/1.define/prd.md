@@ -8,7 +8,7 @@
 | **Deep Research / MRD** | `project-context/1.define/mrd.md` (primary context; finalized) |
 | **System Description** | N/A (not authored; MRD + this PRD are authoritative) |
 | **System Concept** | Customer-facing multi-agent chat support crew for fictional mid-stage ecommerce NovaMart |
-| **Selected Runtime** | `cursor-sdk` (`aamad.config.yml` → `runtime.target`; `AAMAD_TARGET_RUNTIME`) |
+| **Selected Runtime** | `claude-agent-sdk` (`aamad.config.yml` → `runtime.target`; `AAMAD_TARGET_RUNTIME`); retrofitted 2026-08-08 from `cursor-sdk` |
 
 **Traceability rule**: Every P0 feature below cites an **MRD pain / persona / gap**. Downstream agents must not invent market facts outside MRD/PRD Assumptions.
 
@@ -48,7 +48,7 @@ Build a **Multi-Agent Customer Support Crew** that:
 | Differentiator | Product implication |
 |----------------|---------------------|
 | Specialist crew vs mega-prompt | Six named agents with hard tool allowlists |
-| Explicit tool contracts (`cursor-sdk`) | Typed tools; audit every call |
+| Explicit tool contracts (`claude-agent-sdk`) | Typed tools; audit every call |
 | Escalation as first-class agent | Required schema for handoff packages |
 | NovaMart-domain fidelity | Plus + order + ticket taxonomy fields |
 | DB-swap architecture | Repository ports; DuckDB adapter MVP |
@@ -112,13 +112,13 @@ Wrong policy · infinite loops · opaque escalation · answers without order/Plu
 
 ### 3. Technical Requirements & Architecture
 
-> Requirements-level only. SAD owns low-level design. Runtime conventions follow `.cursor/rules/adapter-cursor-sdk.mdc`.
+> Requirements-level only. SAD owns low-level design. Runtime conventions follow `.claude/rules/adapter-claude-agent-sdk.md`.
 
 #### 3.1 Runtime & Coordination (requirements)
 
 | Requirement | Spec |
 |-------------|------|
-| Runtime | `cursor-sdk` |
+| Runtime | `claude-agent-sdk` |
 | Pattern | **Hierarchical router**: Triage selects exactly one primary specialist per turn (may chain Returns after Order when needed); Escalation is terminal for that conversation thread until customer continues |
 | Max agent hops / turn | Configurable; default **≤ 4** specialist hops before force-escalate |
 | Memory | Conversation transcript + structured `SessionState` (intent, entities, tool results, citations); no cross-user memory |
@@ -126,7 +126,7 @@ Wrong policy · infinite loops · opaque escalation · answers without order/Plu
 | Streaming | Customer-visible token stream for assistant messages |
 | Observability | Every turn logs: `agent_id`, tool name/args/result hash, latency_ms, escalation_reason |
 
-**Language (locked)**: TypeScript/Node LTS + `cursor-sdk`. `aamad.config.yml` → `language.primary: typescript` (Python optional for one-off data scripts only).
+**Language (locked)**: TypeScript/Node LTS + `claude-agent-sdk`. `aamad.config.yml` → `language.primary: typescript` (Python optional for one-off data scripts only).
 
 #### 3.2 Core Agent Definitions
 
@@ -215,7 +215,7 @@ Wrong policy · infinite loops · opaque escalation · answers without order/Plu
 | **Demo overlay** | Tiny JSON/SQLite personas (3–5) with current-relative dates for eval scripts | Checked before DuckDB; never mutates practice DB |
 | **Ticket stub store** | Separate writable store (SQLite) for escalation stubs | Do **not** require write to practice DuckDB |
 | **support_tickets (DuckDB)** | **Out of MVP tool surface** (taxonomy enum only in code) | No body text; avoid large scans; P1+ if needed |
-| **LLM provider** | Via `cursor-sdk` / project secrets; never commit keys | Per `aamad.config.yml` security |
+| **LLM provider** | Anthropic API via `claude-agent-sdk`; `ANTHROPIC_API_KEY` from project secrets; never commit keys | Per `aamad.config.yml` security |
 | **Payments / carriers / Zendesk / Gorgias** | **Out of MVP** | — |
 | **events / sessions / experiments** | **Out of MVP** | Analytics / Scenario D |
 | **Auth provider** | Lite only: customer supplies `order_id` and/or `user_id`; validate exists in DB | No SSO/magic-link in MVP |
@@ -602,7 +602,7 @@ Aligned to MRD success table; Capstone measured on **eval scripts + demo**, not 
 
 #### Build sequence (recommended for agents)
 
-1. `@project-mgr` — scaffold app (TS/Node + `cursor-sdk` adapter).  
+1. `@project-mgr` — scaffold app (TS/Node + `claude-agent-sdk` adapter).  
 2. Repository ports + DuckDB read adapter + policy corpus.  
 3. `@backend-eng` — agents + orchestration + ticket stub store.  
 4. `@frontend-eng` — chat UI + operator trace.  
@@ -640,7 +640,7 @@ Demo/portfolio launch checklist:
 ## Quality Assurance Checklist
 
 - [x] Requirements traceable to MRD personas/pains/gaps  
-- [x] Runtime = `cursor-sdk` with adapter-aligned notes  
+- [x] Runtime = `claude-agent-sdk` with adapter-aligned notes  
 - [x] Success metrics aligned to MRD KPI table  
 - [x] MVP vs P1/P2/OUT explicit  
 - [x] Scenario D analytics excluded from MVP  
@@ -655,7 +655,7 @@ Demo/portfolio launch checklist:
 1. `project-context/1.define/mrd.md` — primary  
 2. `.cursor/templates/prd-template.md` — structure  
 3. `aamad.config.yml` — runtime, UI, security, testing preferences  
-4. `.cursor/rules/adapter-cursor-sdk.mdc` — runtime conventions (by reference)  
+4. `.claude/rules/adapter-claude-agent-sdk.md` — runtime conventions (by reference; superseded `.cursor/rules/adapter-cursor-sdk.mdc` 2026-08-08)  
 5. NovaMart practice DuckDB — path and schema as documented in MRD  
 6. Stakeholder lock: support product; customers in chat; synthetic chat/policy; DuckDB lookups  
 
@@ -677,7 +677,7 @@ Demo/portfolio launch checklist:
 1. Synthetic **NovaMart policy corpus** in-repo: **14-day** return window; Plus **14-day trial** → **$14.99/mo** or **$99/yr**; free shipping for active Plus — aligned to NovaMart brief.  
 2. Lite auth = validate `order_id` and/or `user_id` against DuckDB; no passwords.  
 3. Operator trace is **not** shown to customers by default.  
-4. Stack = **TypeScript/Node + cursor-sdk** (config updated).  
+4. Stack = **TypeScript/Node + claude-agent-sdk** (config updated; runtime retrofitted from `cursor-sdk` 2026-08-08, language unchanged).  
 5. DuckDB is **P0** read backend; unit tests may mock ports; CI uses fixture copy under repo (e.g. `data/fixtures/novamart_practice.duckdb`) or `NOVAMART_DUCKDB_PATH`.  
 6. Core demos are **hand-authored**; category utterance generation is P1+.  
 7. Human L1 is simulated via ticket stub text only.  
@@ -705,10 +705,10 @@ Demo/portfolio launch checklist:
 
 ## Audit
 
-- **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize)  
+- **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize); **2026-08-08** (runtime retrofit)  
 - **Persona id**: `product-mgr`  
-- **Action**: `create-prd` + quality pass (specificity, traceability, OQ closure)  
-- AAMAD_TARGET_RUNTIME: cursor-sdk  
+- **Action**: `create-prd` + quality pass (specificity, traceability, OQ closure) + runtime retrofit `cursor-sdk` → `claude-agent-sdk`  
+- AAMAD_TARGET_RUNTIME: claude-agent-sdk  
 - **Inputs**: `mrd.md`; PRD template; `aamad.config.yml`; SAD cross-check  
 - **Output**: `project-context/1.define/prd.md`  
 - **Quality gate**: FINAL-FOR-BUILD — P0 AC testable; MRD↔PRD matrix present; scope frozen  

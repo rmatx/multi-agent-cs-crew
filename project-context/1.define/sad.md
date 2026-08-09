@@ -11,8 +11,8 @@
 | **MRD**              | `project-context/1.define/mrd.md`                                                                     |
 | **User Stories**     | Not yet authored (`project-context/1.define/user-stories/` empty) — PRD feature IDs are authoritative |
 | **MVP Scope**        | Customer chat + hierarchical multi-agent crew + DuckDB read tools + synthetic policy + ticket stubs   |
-| **Selected Runtime** | `cursor-sdk`                                                                                          |
-| **Adapter rule**     | `.cursor/rules/adapter-cursor-sdk.mdc`                                                                |
+| **Selected Runtime** | `claude-agent-sdk` (retrofitted 2026-08-08 from `cursor-sdk`)                                         |
+| **Adapter rule**     | `.claude/rules/adapter-claude-agent-sdk.md`                                                           |
 
 
 **Audience**: Build-phase epics — Solution/Project setup, Frontend, Backend, Integration, QA, Security, DevOps.
@@ -57,9 +57,9 @@
 
 | ID     | Decision                                                    | Rationale                                                                                          |
 | ------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| ADR-01 | TypeScript + Node LTS for FE + BE runtime | `cursor-sdk` adapter; `aamad.config.yml` → `language.primary: typescript` |
+| ADR-01 | TypeScript + Node LTS for FE + BE runtime | `claude-agent-sdk` adapter; `aamad.config.yml` → `language.primary: typescript` |
 | ADR-02 | Next.js (App Router) + React for chat UI                    | Fast streaming chat MVP; minimal UI (`visual_style: minimal`)                                      |
-| ADR-03 | Hierarchical coordinator (Triage) + specialists             | PRD orchestration; matches cursor-sdk coordinator + specialist roles                               |
+| ADR-03 | Hierarchical coordinator (Triage) + specialists             | PRD orchestration; maps to `claude-agent-sdk` main-agent coordinator + `AgentDefinition` specialists |
 | ADR-04 | **SSE** (`text/event-stream`) for tokens + trace events | PRD streaming + F-TRACE-01; single envelope |
 | ADR-05 | Repository ports + DuckDB read adapter + DateShiftMapper + DemoOverlay | MRD/PRD DB-swap; F-TIME-01 |
 | ADR-06 | Writable ticket stubs outside practice DuckDB | Practice DB is read-only |
@@ -83,7 +83,7 @@
 
 #### High-level description
 
-The system is a **web chat application** backed by a **Node/TypeScript API** that runs a **cursor-sdk multi-agent runtime**. Each customer message is processed by a **Triage** coordinator that routes to one specialist (optionally chaining Returns after Order). Specialists call **typed tools** backed by **NovaMart DuckDB** (read) and a **policy corpus** (search). Restricted or failed paths end in **Escalation**, which writes a **ticket stub** and returns a customer-safe summary.
+The system is a **web chat application** backed by a **Node/TypeScript API** that runs a **`claude-agent-sdk` multi-agent runtime**. Each customer message is processed by a **Triage** coordinator that routes to one specialist (optionally chaining Returns after Order). Specialists call **typed tools** backed by **NovaMart DuckDB** (read) and a **policy corpus** (search). Restricted or failed paths end in **Escalation**, which writes a **ticket stub** and returns a customer-safe summary.
 
 #### Main functions
 
@@ -114,7 +114,7 @@ The system is a **web chat application** backed by a **Node/TypeScript API** tha
        v
 [Next.js Route Handlers (BFF) — ADR-09]
        |
-       +--> [Runtime Orchestrator (cursor-sdk)]
+       +--> [Runtime Orchestrator (claude-agent-sdk)]
        |         +--> Agents (6)
        |         +--> Tools --> Repository Ports
        |
@@ -134,7 +134,7 @@ flowchart LR
   Operator[Operator / Grader]
   UI[Chat Web UI]
   API[Chat API]
-  RT[cursor-sdk Runtime]
+  RT[claude-agent-sdk Runtime]
   DB[(novamart_practice.duckdb)]
   POL[Policy files]
   TIX[(Ticket stub store)]
@@ -315,12 +315,12 @@ type SessionState = {
 
 **Forbidden in MVP**: any payment, refund, cancel-order, membership-mutate, shell, arbitrary network tools.
 
-#### cursor-sdk runtime-conditional configuration
+#### claude-agent-sdk runtime-conditional configuration
 
 
 | Control             | MVP default                                                                                      | Notes                                                                      |
 | ------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| Runtime roles       | Coordinator = `triage-router`; specialists as named agents                                       | Adapter: coordinator + specialists                                         |
+| Runtime roles       | Main agent = `triage-router` coordinator; specialists as `AgentDefinition` entries in `ClaudeAgentOptions.agents`, invoked via the `Agent` tool | Adapter Mapping: coordinator + specialists |
 | Language            | TypeScript / Node LTS                                                                            | Pin in setup epic                                                          |
 | Streaming envelope  | See §4                                                                                           | Contract-first before FE/BE impl                                           |
 | Turn / hop budget   | `maxHops=4`                                                                                      | Then `reason_code=repeat_failure`                                          |
@@ -332,6 +332,9 @@ type SessionState = {
 | Retries             | Tool read: **1** retry on transient failure; no retry on validation errors                       | Idempotent reads                                                           |
 | Cancellation        | Client disconnect or timeout → abort orchestrator; no partial ticket unless Escalation completed | Document in runbook                                                        |
 | Prompt Trace        | Persist under `project-context/2.build/logs/` (redacted)                                         | Adapter Quality Gates                                                      |
+| Tool permissions    | Per-agent `allowed_tools` allow-list; no built-in `Bash`/`WebFetch`/`WebSearch`/`Write` in MVP   | Adapter Tools: least privilege; enforces the Forbidden-in-MVP list above   |
+| Lifecycle hooks     | `PreToolUse` / `PostToolUse` / `SubagentStart` / `SubagentStop` → Trace Log + guardrails          | Adapter Logging; feeds F-TRACE-01 operator panel                           |
+| Client mode         | `ClaudeSDKClient` for the streaming chat turn (bidirectional + SSE bridge)                        | Adapter Execution                                                          |
 
 
 
@@ -480,7 +483,7 @@ Returns ordered hops for operator panel (F-TRACE-01). Auth: MVP = local-only / s
 
 ##### `GET /api/health`
 
-`{ status: "ok", runtime: "cursor-sdk", duckdb: "ok"|"error", version }`
+`{ status: "ok", runtime: "claude-agent-sdk", duckdb: "ok"|"error", version }`
 
 ##### Error envelope (non-stream)
 
@@ -524,7 +527,7 @@ Tool get_order(id)
 **Env vars (names only)**
 
 ```text
-AAMAD_TARGET_RUNTIME=cursor-sdk
+AAMAD_TARGET_RUNTIME=claude-agent-sdk
 NOVAMART_DUCKDB_PATH=
 DEMO_OVERLAY_PATH=data/demo_overlay.json
 ALIGN_MAX_DATE_TO_TODAY=true
@@ -533,7 +536,7 @@ DATE_SHIFT_DAYS=
 POLICY_CORPUS_PATH=
 TICKET_STUB_DB_PATH=
 SESSION_DB_PATH=
-CURSOR_SDK_API_KEY=
+ANTHROPIC_API_KEY=
 MODEL_ID=
 MAX_HOPS=4
 TURN_TIMEOUT_MS=60000
@@ -618,7 +621,7 @@ flowchart TB
 
 | External                       | Direction | MVP          |
 | ------------------------------ | --------- | ------------ |
-| LLM provider (via cursor-sdk)  | outbound  | Required     |
+| Anthropic API (via `claude-agent-sdk`) | outbound | Required |
 | DuckDB file                    | read      | Required     |
 | Zendesk / carriers / payments  | —         | **Excluded** |
 | Prod warehouse / Scenario D BI | —         | **Excluded** |
@@ -787,7 +790,7 @@ Use this mapping as epic boundaries:
 - [x] FE/BE agree on SSE `StreamEvent` contract  
 - [x] Secrets via env names only  
 - [x] MVP vs Future Work explicit (no Scenario D analytics)  
-- [x] `AAMAD_TARGET_RUNTIME=cursor-sdk` recorded  
+- [x] `AAMAD_TARGET_RUNTIME=claude-agent-sdk` recorded  
 - [x] Timeouts, cancellation, budgets specified  
 - [x] DuckDB RO + separate stub store  
 
@@ -823,8 +826,8 @@ Use this mapping as epic boundaries:
 
 1. `project-context/1.define/prd.md`
 2. `project-context/1.define/mrd.md`
-3. `.cursor/templates/sad-template.md`
-4. `.cursor/rules/adapter-cursor-sdk.mdc`
+3. `.cursor/templates/sad-template.md` (AAMAD ships templates under `.cursor/templates/` for every IDE target)
+4. `.claude/rules/adapter-claude-agent-sdk.md` (runtime conventions; superseded `.cursor/rules/adapter-cursor-sdk.mdc` on 2026-08-08)
 5. `aamad.config.yml` (UI/security/testing prefs; language override noted)
 
 ---
@@ -859,10 +862,10 @@ Use this mapping as epic boundaries:
 
 ## Audit
 
-- **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize)  
+- **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize); **2026-08-08** (runtime retrofit)  
 - **Persona id**: `system-arch`  
-- **Action**: `create-sad --mvp` + quality pass (PRD flow coverage, ADR locks)  
-- AAMAD_TARGET_RUNTIME: cursor-sdk  
+- **Action**: `create-sad --mvp` + quality pass (PRD flow coverage, ADR locks) + runtime retrofit `cursor-sdk` → `claude-agent-sdk`  
+- AAMAD_TARGET_RUNTIME: claude-agent-sdk  
 - **Inputs**: `mrd.md`, `prd.md` (post quality pass), adapter rule  
 - **Output**: `project-context/1.define/sad.md`  
 - **Quality gate**: FINAL-FOR-BUILD — critical flows covered; OQs closed; stack feasible  

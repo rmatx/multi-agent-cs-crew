@@ -1,0 +1,49 @@
+# AAMAD project configuration — NovaMart Multi-Agent Customer Support Crew
+# Schema reference: .cursor/templates/aamad-config-template.yml
+# Personas load this file at start and honor it unless PRD/SAD conflict
+# (record conflicts under Open Questions — PRD/SAD stay authoritative for scope).
+
+version: 1
+
+runtime:
+  # AAMAD_TARGET_RUNTIME env (.claude/settings.json) takes precedence and is set
+  # to the same value. Retrofitted from cursor-sdk on 2026-08-08 — see
+  # project-context/1.define/define-quality-gate.md.
+  target: claude-agent-sdk  # crewai | claude-agent-sdk | cursor-sdk
+
+language:
+  primary: typescript  # SAD ADR-01: TypeScript + Node LTS for FE + BE runtime
+  secondary: []        # Python permitted for one-off data scripts only (PRD)
+
+libraries:
+  approved:
+    - next            # ADR-02 / ADR-09: App Router UI + BFF route handlers
+    - react
+    - typescript
+    - duckdb          # ADR-05: read-only NovaMart practice DB adapter
+    - "@anthropic-ai/claude-agent-sdk"
+  forbidden: []
+
+ui:
+  theme: system
+  visual_style: minimal    # SAD: no card-heavy chrome
+  prefer_modals: false
+
+coding_standards:
+  style_guide: eslint
+  type_checking: true      # SAD: TypeScript strict
+  max_file_lines: 400
+
+security:
+  require_security_assessment: true
+  forbid_committed_secrets: true
+  dependency_audit: true
+
+documentation:
+  require_user_guide: true
+  sync_docs_after_code_changes: true
+
+testing:
+  require_unit_tests: true
+  require_integration_tests: true
+  map_to_acceptance_criteria: true   # ADR-12: unit = mocked ports, integration = repo fixture DuckDB

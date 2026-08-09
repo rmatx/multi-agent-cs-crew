@@ -18,8 +18,8 @@
 | SAD supports all critical PRD flows | Pass (SAD critical-flow table) |
 | Assumptions under-specified? | Closed via ADR-09…13 + PRD OQ closure |
 | Scope realistic for Capstone | Pass (P0 freeze; P2/OUT excluded) |
-| Stack feasible (`cursor-sdk`, TS, Next BFF, DuckDB RO) | Pass |
-| `AAMAD_TARGET_RUNTIME=cursor-sdk` recorded | Pass |
+| Stack feasible (`claude-agent-sdk`, TS, Next BFF, DuckDB RO) | Pass |
+| `AAMAD_TARGET_RUNTIME=claude-agent-sdk` recorded | Pass |
 | Blocking open questions | **None** |
 
 ---
@@ -56,8 +56,32 @@ We are building a **customer-facing multi-agent support chat** for NovaMart: Tri
 
 ---
 
+---
+
+## Runtime retrofit (2026-08-08)
+
+Define-phase artifacts were authored in Cursor with `AAMAD_TARGET_RUNTIME=cursor-sdk`. The
+project moved to Claude Code as the sole authoring IDE, and the target runtime was changed
+to `claude-agent-sdk` to match.
+
+| Item | Before | After |
+|------|--------|-------|
+| Target runtime | `cursor-sdk` | `claude-agent-sdk` |
+| Adapter rule | `.cursor/rules/adapter-cursor-sdk.mdc` | `.claude/rules/adapter-claude-agent-sdk.md` |
+| Runtime SDK key | `CURSOR_SDK_API_KEY` | `ANTHROPIC_API_KEY` |
+| Project config | absent (referenced but never committed) | `aamad.config.yml` created |
+
+**Unaffected by the change**: ADR-01 (TypeScript + Node LTS), ADR-02/09 (Next.js App Router
+BFF), ADR-03 (Triage coordinator + specialists — both SDKs use coordinator-delegates-to-
+specialist with typed tools), ADR-05/06/10/12/14 (data, session, CI, temporal layer). No
+requirement, acceptance criterion, or flow changed. Historical review findings above are
+left as originally recorded.
+
+---
+
 ## Audit
 
 - Personas: `product-mgr`, `system-arch`  
 - Action: Define quality pass / finalize  
-- Runtime: `cursor-sdk`
+- Runtime: `claude-agent-sdk` (retrofitted 2026-08-08 from `cursor-sdk`)  
+- IDE: Claude Code (retrofitted from Cursor)

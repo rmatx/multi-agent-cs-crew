@@ -3,14 +3,14 @@
 
 ## Context & Instructions
 
-Comprehensive market research for a production-oriented Capstone multi-agent system. Recommendations are evidence-based. Selected runtime (`AAMAD_TARGET_RUNTIME=cursor-sdk`) is an implementation choice for Phase 2 Build, not the market thesis.
+Comprehensive market research for a production-oriented Capstone multi-agent system. Recommendations are evidence-based. Selected runtime (`AAMAD_TARGET_RUNTIME=claude-agent-sdk`) is an implementation choice for Phase 2 Build, not the market thesis.
 
 ---
 
 ## Research Query Structure
 
 **Primary Focus**: Multi-agent customer support chat crew for NovaMart (fictional mid-stage ecommerce) that triages and resolves routine support intents, with governed escalation to humans.  
-**Selected Runtime** (optional for research; required later in Build): `cursor-sdk`  
+**Selected Runtime** (optional for research; required later in Build): `claude-agent-sdk`  
 **Stakeholder answers locked for this draft**:
 
 | Decision | Choice |
@@ -19,7 +19,7 @@ Comprehensive market research for a production-oriented Capstone multi-agent sys
 | Primary user | **Customers in chat** |
 | Data for MVP | **Synthetic chat/policy layer** + **P0 read-only** NovaMart practice DuckDB (see Data Source) |
 | Scenario D | Clarified below — **pain validation / domain signal**, not MVP product job |
-| Stack (locked with PRD/SAD) | TypeScript / Node + `cursor-sdk`; Next.js chat UI |
+| Stack (locked with PRD/SAD) | TypeScript / Node + `claude-agent-sdk`; Next.js chat UI |
 
 **Document status**: `FINAL-FOR-BUILD` (quality pass 2026-08-08). Capstone commitment is the customer chat crew below — not Scenario D analytics.
 
@@ -77,7 +77,7 @@ Global AI for customer service is a large, fast-growing category (~USD 12–13B 
 
 ### Technical Feasibility
 
-A multi-agent crew (specialize → hand off → escalate) is a proven pattern for ecommerce support: triage, policy/FAQ grounding, order/membership lookup, returns guidance, and escalation with full context. Capstone MVP is **technically feasible** with synthetic catalogs/orders/tickets and a chat UI; production DB, payments write-back, and omnichannel are deferred. Runtime target `cursor-sdk` fits a TypeScript-first agent + tool-contract Build later; market need does not depend on that choice.
+A multi-agent crew (specialize → hand off → escalate) is a proven pattern for ecommerce support: triage, policy/FAQ grounding, order/membership lookup, returns guidance, and escalation with full context. Capstone MVP is **technically feasible** with synthetic catalogs/orders/tickets and a chat UI; production DB, payments write-back, and omnichannel are deferred. Runtime target `claude-agent-sdk` fits a TypeScript-first agent + tool-contract Build later; market need does not depend on that choice.
 
 ### Recommended Approach
 
@@ -154,7 +154,7 @@ A multi-agent crew (specialize → hand off → escalate) is a proven pattern fo
 - MVP should use **tools over memory**: order lookup, membership status, policy RAG, ticket create/tag.
 - **NovaMart practice DuckDB** is available as the example structured store; chat/policy text remains synthetic (tickets lack body text).
 - Design tool interfaces so DuckDB today / other DB later can swap behind the same ports.
-- `cursor-sdk` (configured) favors explicit tool/runtime contracts, streaming chat UX, and TypeScript/Node packaging in Build — aligned with a chat product.
+- `claude-agent-sdk` (configured) favors explicit tool/runtime contracts, streaming chat UX, and TypeScript/Node packaging in Build — aligned with a chat product.
 - Main technical risks: hallucination on policy/refunds, tool errors, latency under multi-agent hops, unsafe “actions.”
 
 #### Recommended MVP agent crew
@@ -270,7 +270,7 @@ A multi-agent crew (specialize → hand off → escalate) is a proven pattern fo
 #### Unique value propositions (multi-agent approach)
 
 1. **Specialist crew** instead of one mega-prompt — clearer ownership of order vs Plus vs policy.  
-2. **Explicit tool contracts** (cursor-sdk-aligned) — lookups are auditable; fewer silent hallucinations.  
+2. **Explicit tool contracts** (claude-agent-sdk-aligned) — lookups are auditable; fewer silent hallucinations.  
 3. **Escalation as a first-class agent** — context package quality is a product feature.  
 4. **NovaMart-domain fidelity** — Plus trial/paid, promotions calendar awareness (read-only FAQ), app_version tagging for spike realism.  
 5. **DB-swap architecture** — synthetic now, NovaMart DB later without rewriting the crew.
@@ -313,7 +313,7 @@ A multi-agent crew (specialize → hand off → escalate) is a proven pattern fo
 
 | Choice | Recommendation |
 |--------|----------------|
-| Runtime (Build) | `cursor-sdk` per project config |
+| Runtime (Build) | `claude-agent-sdk` per project config |
 | Orchestration | Multi-agent crew with router + specialists + escalation |
 | Data | Synthetic NovaMart-shaped entities; port-based repository |
 | UI | Customer chat (+ simple debug/trace view for demo) |
@@ -403,7 +403,7 @@ A multi-agent crew (specialize → hand off → escalate) is a proven pattern fo
 15. Pixeltree — AI customer support for DTC brands (Gorgias vs Zendesk; grounding & handoff). https://www.pixeltree.store/blog/ai-support-dtc-brands-2026  
 16. Chatarmin — Zendesk AI limitations for ecommerce teams. https://chatarmin.com/en/blog/zendesk-ai-limitations  
 17. GrowthNow — Gorgias vs Zendesk vs Intercom comparison. https://growthnow.in/gorgias-vs-zendesk-vs-intercom-enterprise-customer-support-stack-comparison-for-2025/  
-18. AAMAD project config — `aamad.config.yml` (`runtime.target: cursor-sdk`).  
+18. AAMAD project config — `aamad.config.yml` (`runtime.target: claude-agent-sdk`).  
 19. AAMAD MRD template — `.cursor/templates/mrd-template.md`.  
 20. NovaMart practice DuckDB — `.../Maven-Analyst-101/ai-analyst-starter/data/practice/novamart_practice.duckdb` (inspected 2026-08-07; counts/categories in Data Source).  
 
@@ -432,7 +432,7 @@ A multi-agent crew (specialize → hand off → escalate) is a proven pattern fo
 | 1 | Return window / Plus policy copy | **Resolved** — invent in-repo corpus: 14-day returns; Plus trial 14 days → $14.99/mo or $99/yr; free shipping for members (PRD Assumptions) |
 | 2 | Auth | **Resolved** — lite `order_id` and/or `user_id` validated against DuckDB |
 | 3 | Trace UI | **Resolved** — operator-only (`?trace=1` / toggle) |
-| 4 | Stack language | **Resolved** — TypeScript/Node + `cursor-sdk` (PRD/SAD ADR-01) |
+| 4 | Stack language | **Resolved** — TypeScript/Node + `claude-agent-sdk` (PRD/SAD ADR-01) |
 | 5 | Mandatory demos | **Resolved** — PRD §7 eight eval scripts |
 | 6 | NovaMart DB | **Resolved** — practice DuckDB P0 read backend; CI fixture copy |
 | 7 | Chat script authoring | **Resolved** — hand-author core demos; category generation is P1+ |
@@ -443,10 +443,10 @@ A multi-agent crew (specialize → hand off → escalate) is a proven pattern fo
 
 ## Audit
 
-- **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize)  
+- **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize); **2026-08-08** (runtime retrofit)  
 - **Persona id**: `product-mgr`  
-- **Action**: `create-mrd` + quality pass (align PRD/SAD locks)  
-- AAMAD_TARGET_RUNTIME: cursor-sdk  
+- **Action**: `create-mrd` + quality pass (align PRD/SAD locks) + runtime retrofit `cursor-sdk` → `claude-agent-sdk`  
+- AAMAD_TARGET_RUNTIME: claude-agent-sdk  
 - **Inputs**: `novamart.pdf`; stakeholder answers; `novamart_practice.duckdb`; web sources; PRD/SAD cross-check  
 - **Output**: `project-context/1.define/mrd.md`  
 - **Quality gate**: FINAL-FOR-BUILD — OQs closed; DuckDB P0; stack locked

@@ -1,2 +1,19 @@
 .DS_Store
 **/.DS_Store
+
+# Environments and secrets
+.venv/
+.env
+.env.local
+
+# Node
+node_modules/
+dist/
+.next/
+
+# Local-only Claude Code state
+.claude/settings.local.json
+.claude-state/
+
+# AAMAD runtime logs
+project-context/2.build/logs/
