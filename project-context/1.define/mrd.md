@@ -168,6 +168,37 @@ A multi-agent crew (specialize → hand off → escalate) is a proven pattern fo
 | **Returns Advisor** | Policy + eligibility guidance; **no money movement in MVP** | Partial — advise only |
 | **Escalation / Human Handoff** | Package summary + ticket stub for L1 | Auto package; human simulated |
 
+##### Intent → agent routing (research view)
+
+Triage is the single entry point; every inbound intent lands on exactly one primary
+specialist. Returns is the only chained hop — an order lookup may precede returns advice.
+Escalation is reachable from every specialist, which is what makes the crew safe rather
+than merely automated.
+
+```mermaid
+flowchart LR
+  IN["Customer message"] --> T{"Triage:<br/>intent + entities"}
+
+  T -->|"shipping, returns policy,<br/>Plus rules"| FAQ["FAQ / Policy"]
+  T -->|"WISMO, order status"| ORD["Order Specialist"]
+  T -->|"trial vs paid, benefits"| PLUS["Membership / Plus"]
+  T -->|"return eligibility"| RET["Returns Advisor"]
+  T -->|"refund, legal, abuse,<br/>human requested"| ESC["Escalation"]
+
+  ORD -.->|"chain when intent is returns"| RET
+
+  FAQ -->|"ungrounded"| ESC
+  ORD -->|"restricted or failed"| ESC
+  PLUS -->|"account mutation"| ESC
+  RET -->|"money movement"| ESC
+
+  FAQ --> OUT["Grounded answer<br/>+ policy citations"]
+  ORD --> OUT
+  PLUS --> OUT
+  RET --> OUT
+  ESC --> TIX["Ticket stub +<br/>customer-safe summary"]
+```
+
 #### Integration requirements (MVP vs later)
 
 | Integration | MVP | Later (out of scope now) |
@@ -210,6 +241,28 @@ A multi-agent crew (specialize → hand off → escalate) is a proven pattern fo
 3. Specialist answers with tool-grounded facts + policy citations.  
 4. If unresolved or restricted → Escalation agent opens synthetic ticket + shows summary.  
 5. Customer rates resolution (CSAT micro-survey).
+
+```mermaid
+flowchart TD
+  A["Customer opens chat"] --> B["Lite identity:<br/>order_id and/or email"]
+  B --> C["Triage classifies intent,<br/>extracts entities"]
+  C --> D["Specialist answers from<br/>tools + policy corpus"]
+  D --> E{"Grounded and<br/>permitted?"}
+  E -->|Yes| F["Answer with citations"]
+  E -->|"No: ungrounded, restricted,<br/>or human requested"| G["Escalation packages<br/>intent + entities + steps tried"]
+  G --> H["Ticket stub written +<br/>customer-safe summary shown"]
+  F --> I["CSAT micro-survey"]
+  H --> I
+
+  classDef safe fill:#e8f4ea,stroke:#4a7a55,color:#1d3a24
+  classDef risk fill:#fdeeee,stroke:#a35c5c,color:#4a1f1f
+  class F,I safe
+  class G,H risk
+```
+
+**Why the escalation branch matters commercially**: deflection is only valuable if the
+un-deflected tail arrives at a human *with context*. The escalation package — not the
+containment rate — is what separates this from a deflection chatbot.
 
 #### Spike / Scenario D–flavored journey (support product view)
 
@@ -445,7 +498,7 @@ A multi-agent crew (specialize → hand off → escalate) is a proven pattern fo
 
 - **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize); **2026-08-08** (runtime retrofit)  
 - **Persona id**: `product-mgr`  
-- **Action**: `create-mrd` + quality pass (align PRD/SAD locks) + runtime retrofit `cursor-sdk` → `claude-agent-sdk`  
+- **Action**: `create-mrd` + quality pass (align PRD/SAD locks) + runtime retrofit `cursor-sdk` → `claude-agent-sdk` + add flow diagrams (intent routing, MVP journey)  
 - AAMAD_TARGET_RUNTIME: claude-agent-sdk  
 - **Inputs**: `novamart.pdf`; stakeholder answers; `novamart_practice.duckdb`; web sources; PRD/SAD cross-check  
 - **Output**: `project-context/1.define/mrd.md`  

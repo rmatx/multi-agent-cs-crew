@@ -98,6 +98,36 @@ Customer opens chat
      OR Escalation agent → ticket stub + summary shown to customer
 ```
 
+```mermaid
+flowchart TD
+  A["Customer opens chat"] --> B{"order_id or user_id<br/>supplied?"}
+  B -->|No| C["Ask customer for identity"]
+  C --> B
+  B -->|Yes| D["Validate exists in DuckDB<br/>(lite auth, no passwords)"]
+  D --> E["Triage: intent + entities + urgency"]
+
+  E --> F["Primary specialist<br/>(exactly one per turn)"]
+  F --> G["Allowlisted tools →<br/>DuckDB read + policy search"]
+  G --> H{"Grounded, permitted,<br/>within hop budget?"}
+
+  H -->|Yes| I["Stream answer + citations"]
+  H -->|"No"| J["Escalation:<br/>package + reason_code"]
+  J --> K["create_ticket_stub"]
+  K --> L["Customer-safe summary<br/>+ ticket id"]
+
+  I --> M["Optional CSAT"]
+  L --> M
+
+  N["Operator trace panel"] -.->|"observes hops,<br/>not customer-visible"| F
+```
+
+**Normative reading of the diagram**: the identity loop is a real gate — Triage does not
+route until lite auth validates (§3.4 *Auth provider*; Assumption 2). Lite auth is the MVP
+ceiling here; richer identity is **F-AUTH-02, P1**, not MVP. Exactly one primary specialist
+runs per turn (§3.1); Returns may be chained after Order, and no other
+specialist-to-specialist edge is permitted (§3.3). Every path terminates in either a cited
+answer or a ticket stub — there is no "give up silently" state.
+
 **Spike-flavored path** (support product view of Scenario D signal): customer reports Android crash → triage tags `device`, `app_version`, `category` → FAQ workaround if present else escalate — **no** analytics causal test.
 
 #### Competitive stance (requirements-level)
@@ -205,6 +235,46 @@ Wrong policy · infinite loops · opaque escalation · answers without order/Plu
 | Specialist → specialist | Only Triage or orchestrator may re-route; Returns may be invoked after Order when intent is returns |
 | Specialist → Escalation | On restricted action, ungrounded, or explicit human request |
 | Visibility | Customer sees one assistant voice; **operator trace panel** shows agent hops (not customer-default) |
+
+##### Permitted handoff edges (normative)
+
+Any edge not drawn below is prohibited. This is the requirements-level statement of the
+routing rules in the table above — QA asserts against it directly.
+
+```mermaid
+flowchart LR
+  subgraph Coordinator
+    T["Triage / Router"]
+  end
+
+  subgraph Specialists["Specialists — exactly one primary per turn"]
+    FAQ["FAQ / Policy"]
+    ORD["Order"]
+    PLUS["Membership / Plus"]
+    RET["Returns Advisor"]
+  end
+
+  ESC["Escalation — terminal for the thread"]
+
+  T --> FAQ
+  T --> ORD
+  T --> PLUS
+  T --> RET
+  T --> ESC
+
+  ORD -->|"only permitted<br/>specialist-to-specialist edge"| RET
+
+  FAQ --> ESC
+  ORD --> ESC
+  PLUS --> ESC
+  RET --> ESC
+
+  FAQ -.->|"re-route requires<br/>returning to Triage"| T
+```
+
+**Escalation triggers** (any one is sufficient): restricted action attempted, answer not
+groundable in tools or policy corpus, hop budget exhausted, or the customer asks for a
+human. Escalation is terminal for that thread until the customer sends a new message.
 
 #### 3.4 Integration Requirements
 
@@ -707,7 +777,7 @@ Demo/portfolio launch checklist:
 
 - **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize); **2026-08-08** (runtime retrofit)  
 - **Persona id**: `product-mgr`  
-- **Action**: `create-prd` + quality pass (specificity, traceability, OQ closure) + runtime retrofit `cursor-sdk` → `claude-agent-sdk`  
+- **Action**: `create-prd` + quality pass (specificity, traceability, OQ closure) + runtime retrofit `cursor-sdk` → `claude-agent-sdk` + add flow diagrams (normative journey, permitted handoff edges)  
 - AAMAD_TARGET_RUNTIME: claude-agent-sdk  
 - **Inputs**: `mrd.md`; PRD template; `aamad.config.yml`; SAD cross-check  
 - **Output**: `project-context/1.define/prd.md`  

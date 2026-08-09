@@ -336,8 +336,46 @@ type SessionState = {
 | Lifecycle hooks     | `PreToolUse` / `PostToolUse` / `SubagentStart` / `SubagentStop` → Trace Log + guardrails          | Adapter Logging; feeds F-TRACE-01 operator panel                           |
 | Client mode         | `ClaudeSDKClient` for the streaming chat turn (bidirectional + SSE bridge)                        | Adapter Execution                                                          |
 
+##### Turn lifecycle (budgets, cancellation, terminal states)
 
+The budgets above are only meaningful as transitions. Every exit is one of three terminal
+states — answered, escalated, or aborted — and `Aborted` is the only one that writes no
+ticket stub.
 
+```mermaid
+stateDiagram-v2
+  [*] --> Routing: message received
+  Routing --> Clarifying: identity missing
+  Clarifying --> Routing: identity supplied
+  Routing --> Working: handoff to specialist
+
+  Working --> Working: tool call (hop < maxHops=4)
+  Working --> Answered: grounded + permitted
+  Working --> Escalating: restricted / ungrounded / human requested
+  Working --> Escalating: hops exhausted (repeat_failure)
+
+  Working --> Aborted: turnTimeoutMs=60000
+  Working --> Aborted: client disconnect
+  Routing --> Aborted: client disconnect
+
+  Escalating --> Escalated: ticket stub written
+  Escalating --> Aborted: abort before stub committed
+
+  Answered --> [*]
+  Escalated --> [*]
+  Aborted --> [*]
+
+  note right of Aborted
+    No partial ticket stub.
+    In-flight tools cancelled.
+    Customer sees a safe message.
+  end note
+
+  note right of Escalated
+    Terminal for the thread until
+    the customer sends a new message.
+  end note
+```
 
 #### Intent → agent map (from PRD)
 
@@ -514,6 +552,28 @@ Tool get_order(id)
   → DateShiftMapper.apply(row, asOf, shiftDays)
   → agent sees shifted timestamps only
 ```
+
+```mermaid
+flowchart TD
+  CALL["Tool call: get_order(id)"] --> OV{"DemoOverlay hit?"}
+  OV -->|Yes| OVR["Overlay row —<br/>dates already asOf-relative"]
+  OV -->|No| DB["DuckDB read<br/>(read-only, raw 2024 dates)"]
+  DB --> SHIFT["DateShiftMapper.apply<br/>(row, asOf, shiftDays)"]
+
+  OVR --> AGENT["Agent sees shifted<br/>timestamps only"]
+  SHIFT --> AGENT
+  AGENT --> ELIG{"Eligibility check<br/>vs asOf"}
+  ELIG -->|"within 14 days /<br/>trial active"| YES["Eligible"]
+  ELIG -->|else| NO["Not eligible"]
+
+  AGENT -.->|"{ asOf, shiftDays,<br/>alignMaxDateToToday, overlayHit }"| TRACE["Operator trace"]
+
+  DB -.-x|"never UPDATE"| WRITE["Practice DuckDB writes"]
+```
+
+Raw dates never reach the agent: the shift is applied inside the repository adapter, not
+in agent prompts. This is what keeps a fixed 2024 dataset demo-usable against a moving
+`asOf` without ever writing to the practice DB.
 
 | Knob | Default | Behavior |
 |------|---------|----------|
@@ -864,7 +924,7 @@ Use this mapping as epic boundaries:
 
 - **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize); **2026-08-08** (runtime retrofit)  
 - **Persona id**: `system-arch`  
-- **Action**: `create-sad --mvp` + quality pass (PRD flow coverage, ADR locks) + runtime retrofit `cursor-sdk` → `claude-agent-sdk`  
+- **Action**: `create-sad --mvp` + quality pass (PRD flow coverage, ADR locks) + runtime retrofit `cursor-sdk` → `claude-agent-sdk` + add flow diagrams (temporal layer, turn lifecycle)  
 - AAMAD_TARGET_RUNTIME: claude-agent-sdk  
 - **Inputs**: `mrd.md`, `prd.md` (post quality pass), adapter rule  
 - **Output**: `project-context/1.define/sad.md`  
