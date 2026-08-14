@@ -10,6 +10,76 @@
   min-height: 100dvh;
 }
 
+/* Crew status banner. Tone is carried by the pill colour AND the label text, so
+   the state is legible without relying on colour alone. */
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--tone);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.pill {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--tone);
+  align-self: center;
+  flex: 0 0 auto;
+}
+
+.bannerLabel {
+  font-weight: 600;
+}
+
+.bannerHint {
+  color: var(--muted);
+}
+
+.updated {
+  margin-left: auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.idle {
+  --tone: #8a8f98;
+}
+.running {
+  --tone: #2563eb;
+}
+.done {
+  --tone: #12805c;
+}
+.attention {
+  --tone: #b4501a;
+}
+.error {
+  --tone: #b42318;
+}
+
+.running .pill {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .running .pill {
+    animation: none;
+  }
+}
+
 .title {
   font-size: 1.1rem;
   margin: 0;
@@ -109,9 +179,41 @@
   cursor: pointer;
 }
 
-.send:disabled {
+.send:disabled,
+.secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.secondary {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+}
+
+.errorRow {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Keyboard focus must stay visible on both controls. */
+.send:focus-visible,
+.secondary:focus-visible,
+.input:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .notice {

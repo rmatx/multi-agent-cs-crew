@@ -117,8 +117,48 @@ I can't process refunds, cancellations, or payments here.
 ends `done{status:"needs_input"}`. The results area shows "I need a bit more information
 before I can answer." No invented status, no guessed date, no partial order.
 
-**On `error`** the plain-language message is shown with the escalation line ("Handing this to
-a human."). Retry is the customer re-sending; there is no silent auto-retry.
+**On `error`** the plain-language message is shown inline with a **Retry** button, offered
+only when the server marked the error `retryable`. Retry replays the *same request object*
+that was sent — the page holds `lastRequest` because the composer is cleared on submit, so
+re-reading the form would replay whatever the user has since typed. There is no silent
+auto-retry and no retry-diff view.
+
+### Crew status (banner, pill, timestamp)
+
+A status banner sits above the chat and is the single at-a-glance readout of crew state.
+Every **status** word — the banner label, its hint, and the `Run` / `Running…` button text —
+comes from `lib/status.ts`, so those cannot drift apart. `Reset` and `Retry` are control names
+rather than statuses and are literals in the component.
+
+| FSM state | Banner | Pill | Hint |
+| --- | --- | --- | --- |
+| `idle` | Crew: idle | gray | Waiting for an order number and a question. |
+| `running` | Crew: running | blue (pulsing) | Looking that up. |
+| `done` + `resolved` | Crew: done | green | Answered from order data. |
+| `done` + `needs_input` / `escalated` | Crew: needs input | amber | Could not answer with what it has. |
+| `done` + `error` | Crew: error | red | The turn did not complete. |
+
+The amber tone is an addition to the agreed gray/blue/green/red vocabulary. A turn that ended
+without answering is not a failure, but colouring it green would claim a success that did not
+happen, so it gets its own tone rather than being collapsed into either neighbour.
+
+Colour is never the only carrier: the label text states the status too, and the banner is a
+`role="status"` live region so a screen reader announces changes.
+
+**Last updated** shows the local time of the most recent state change, next to the label. It
+exists so a user can tell the UI is live rather than wedged — with a local DuckDB read
+finishing in ~20 ms, `running` can otherwise flash past unseen.
+
+### Controls
+
+**Run** and **Reset** only. Pause, cancel and retry-diff are deferred.
+
+- **Run** — submits the composer. Disabled while a turn is in flight; label reads `Running…`
+  during it, matching the banner.
+- **Reset** — returns to `idle` and clears the transcript, citations, notices and
+  `lastRequest`. Disabled while running and while already idle.
+- **Retry** — appears inline with a retryable error only, as described above.
+- **Enter** in the composer runs the turn; **Shift+Enter** inserts a newline.
 
 **Grounding rule (binding).** *No fact appears in the UI that did not come from a tool
 result.* The client never formats, derives, or defaults an order fact: it renders server text
@@ -185,7 +225,25 @@ Run after each commit that touches the frontend:
 - [ ] Any new UI state or control is reflected in **Inputs**, **Run**, or **Results** above.
 - [ ] Everything deferred is still listed as deferred (CSAT, TracePanel UI, policy search,
       plus/returns/faq agents, SQLite sessions, escalation, money tools = never).
-- [ ] Spec **Audit** timestamp bumped.
+- [ ] **Spec-to-impl pass**: every name in this document exists in the code with the same
+      spelling (`startTurn`, `lastRequest`, `crewStatus`, `Run` / `Reset` / `Retry`), and any
+      TODO already addressed has been deleted rather than left standing.
+- [ ] Status wording still comes only from `lib/status.ts` — no status string literal added
+      to a component.
+- [ ] Spec **Audit** timestamp bumped and a row added to the change log below.
+
+### Change log
+
+Newest first. One row per change that touched the frontend contract.
+
+| Date | Item | Status | What changed |
+| --- | --- | --- | --- |
+| 2026-08-13 | Crew status banner | Done | Added banner, colour pill, and last-updated timestamp; all wording centralised in `lib/status.ts`. |
+| 2026-08-13 | Controls | Done | `Send` became `Run`; added `Reset` and an inline `Retry` for retryable errors. |
+| 2026-08-13 | Retry inputs | Done | Page holds `lastRequest` so Retry replays the submitted request, not the current form contents. |
+| 2026-08-13 | Contracts | No change | No DTO or payload shape edited — banner state is derived from the existing `StreamEvent` stream. |
+| 2026-08-13 | Duplicate React keys | Fixed | `append` captured the id before the state updater; previously both appends in a tick shared a key. |
+| 2026-08-13 | README | Done | Added local run steps, the seeded order table, and where the `claude-agent-sdk` runtime connects next. |
 
 ---
 
@@ -236,10 +294,10 @@ Run after each commit that touches the frontend:
 | Field | Value |
 | ----- | ----- |
 | Persona id | `frontend-eng` |
-| Action | `*develop-fe` (+ `*style-ui`, `*document-frontend`) |
+| Action | `*develop-fe` (+ `*style-ui`, `*document-frontend`); 2026-08-13 status-visibility pass: crew banner, Run/Reset/Retry, README, spec change log |
 | Timestamp | 2026-08-13 |
 | Resolved runtime | `claude-agent-sdk` (`AAMAD_TARGET_RUNTIME`, matches `aamad.config.yml` → `runtime.target`) |
-| Artifacts written | `frontend-functional-spec.md`, `packages/shared/src/dto.ts`, `app/`, `lib/`, `server/data/`, `.env.example`, `project-context/2.build/frontend.md` |
-| Verification | `npx tsc --noEmit` clean; `next build` clean; dev server + `curl` against real `/api/chat` for order ids 1 / 46101 / 99999999 / no-identity |
+| Artifacts written | `frontend-functional-spec.md`, `packages/shared/src/dto.ts`, `app/`, `lib/` (incl. `lib/status.ts`), `server/data/`, `.env.example`, `README.md`, `project-context/2.build/frontend.md` |
+| Verification | `npx tsc --noEmit` clean; `next build` clean; `curl` against real `/api/chat` for order ids 1 / 46101 / 42776 / 99999999 / no-identity; scripted browser pass covering keyboard-only entry, banner transitions idle→running→done, and Reset clearing the transcript (0 console errors) |
 | Prompt Trace | Not captured — no LLM call exists in this slice; the reply is composed deterministically from the DuckDB tool result |
 | Determinism | No model invoked; temperature/token controls N/A for Sprint 1 frontend + route |

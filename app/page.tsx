@@ -6,7 +6,8 @@
  * no order facts of its own.
  */
 
-import { useCallback, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import type { ChatRequest } from "@shared/dto";
 import { buildChatRequest, runTurn } from "@/lib/chatClient";
 import {
   conversationIdOf,
@@ -16,6 +17,7 @@ import {
   transition,
   type TurnAction,
 } from "@/lib/fsm";
+import { crewStatus, formatUpdated, runLabel } from "@/lib/status";
 import styles from "./page.module.css";
 
 type Turn = { id: number; role: "you" | "assistant"; text: string };
@@ -29,10 +31,21 @@ export default function ChatPage() {
   const [orderId, setOrderId] = useState("");
   const [userId, setUserId] = useState("");
   const [trace, setTrace] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  // The exact request last sent, so Retry replays the same inputs even though
+  // the composer is cleared on submit.
+  const [lastRequest, setLastRequest] = useState<ChatRequest | null>(null);
   const nextId = useRef(0);
 
   const running = isRunning(state);
   const error = errorOf(state);
+  const status = crewStatus(state);
+
+  // "Last updated" tracks every state change, which is what tells the user the
+  // UI is live rather than wedged.
+  useEffect(() => {
+    setUpdatedAt(new Date());
+  }, [state]);
 
   const append = useCallback((role: Turn["role"], text: string) => {
     nextId.current += 1;
@@ -43,7 +56,26 @@ export default function ChatPage() {
     setTranscript((prev) => [...prev, { id, role, text }]);
   }, []);
 
-  const handleSend = useCallback(async () => {
+  // Sends a request that has already been validated. Shared by Run and Retry so
+  // the two cannot drift apart.
+  const send = useCallback(
+    async (request: ChatRequest) => {
+      setCitations([]);
+      setLastRequest(request);
+
+      const observingDispatch = (action: TurnAction): void => {
+        if (action.kind === "event" && action.event.type === "citation") {
+          setCitations(action.event.ids);
+        }
+        dispatch(action);
+      };
+
+      await runTurn(request, observingDispatch);
+    },
+    [],
+  );
+
+  const handleRun = useCallback(async () => {
     if (running) return;
 
     const built = buildChatRequest({
@@ -65,23 +97,48 @@ export default function ChatPage() {
     }
     append("you", built.request.message);
     setMessage("");
+
+    await send(built.request);
+  }, [append, message, orderId, running, send, state, trace, userId]);
+
+  // Replays the last request verbatim — same order id, same question.
+  const handleRetry = useCallback(async () => {
+    if (running || lastRequest === null) return;
+    setNotice(null);
+    await send(lastRequest);
+  }, [lastRequest, running, send]);
+
+  const handleReset = useCallback(() => {
+    if (running) return;
+    dispatch({ kind: "reset" });
+    setTranscript([]);
     setCitations([]);
-
-    const observingDispatch = (action: TurnAction): void => {
-      if (action.kind === "event" && action.event.type === "citation") {
-        setCitations(action.event.ids);
-      }
-      dispatch(action);
-    };
-
-    await runTurn(built.request, observingDispatch);
-  }, [append, message, orderId, running, state, trace, userId]);
+    setNotice(null);
+    setMessage("");
+    setLastRequest(null);
+    nextId.current = 0;
+  }, [running]);
 
   const live = state.phase === "idle" ? "" : state.text;
   const doneStatus = state.phase === "done" ? state.status : null;
 
   return (
     <main className={styles.shell}>
+      <div
+        className={`${styles.banner} ${styles[status.tone]}`}
+        role="status"
+        aria-live="polite"
+      >
+        <span className={styles.pill} aria-hidden="true" />
+        <strong className={styles.bannerLabel}>Crew: {status.label}</strong>
+        <span className={styles.bannerHint}>{status.hint}</span>
+        {updatedAt !== null && (
+          <span className={styles.updated}>
+            Last updated <time dateTime={updatedAt.toISOString()}>{formatUpdated(updatedAt)}</time>
+          </span>
+        )}
+      </div>
+
       <header>
         <h1 className={styles.title}>NovaMart Support</h1>
         <p className={styles.welcome}>
@@ -144,15 +201,24 @@ export default function ChatPage() {
             <p className={styles.body}>{live}</p>
           </article>
         )}
-        {running && live.length === 0 && <p className={styles.status}>Looking that up…</p>}
+        {running && live.length === 0 && <p className={styles.status}>{status.hint}</p>}
       </section>
 
       <section className={styles.results} aria-label="Turn result">
-        {error !== null && <p className={styles.notice}>{error.message}</p>}
-        {doneStatus === "needs_input" && (
+        {error !== null && (
+          <div className={styles.errorRow}>
+            <p className={styles.notice}>{error.message}</p>
+            {error.retryable && lastRequest !== null && (
+              <button type="button" className={styles.secondary} onClick={() => void handleRetry()}>
+                Retry
+              </button>
+            )}
+          </div>
+        )}
+        {error === null && doneStatus === "needs_input" && (
           <p>I need a bit more information before I can answer.</p>
         )}
-        {doneStatus === "escalated" && <p>Handing this to a human.</p>}
+        {error === null && doneStatus === "escalated" && <p>Handing this to a human.</p>}
         {doneStatus === "resolved" && citations.length > 0 && (
           <p>Sources: {citations.join(", ")}</p>
         )}
@@ -173,19 +239,29 @@ export default function ChatPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                void handleSend();
+                void handleRun();
               }
             }}
             disabled={running}
           />
-          <button
-            type="button"
-            className={styles.send}
-            onClick={() => void handleSend()}
-            disabled={running}
-          >
-            {running ? "Sending…" : "Send"}
-          </button>
+          <div className={styles.controls}>
+            <button
+              type="button"
+              className={styles.send}
+              onClick={() => void handleRun()}
+              disabled={running}
+            >
+              {runLabel(state)}
+            </button>
+            <button
+              type="button"
+              className={styles.secondary}
+              onClick={handleReset}
+              disabled={running || state.phase === "idle"}
+            >
+              Reset
+            </button>
+          </div>
         </div>
       </section>
     </main>
