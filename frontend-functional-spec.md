@@ -230,6 +230,10 @@ Run after each commit that touches the frontend:
       TODO already addressed has been deleted rather than left standing.
 - [ ] Status wording still comes only from `lib/status.ts` — no status string literal added
       to a component.
+- [ ] **`project-context/2.build/frontend.md`** re-checked whenever a control or surface
+      changes: its Built list names the controls and surfaces that actually exist, and its
+      Deferred list still matches the one above. That artifact is a pointer, not a copy — a
+      one-line correction, not a restatement of this spec.
 - [ ] Spec **Audit** timestamp bumped and a row added to the change log below.
 
 ### Change log
@@ -238,6 +242,7 @@ Newest first. One row per change that touched the frontend contract.
 
 | Date | Item | Status | What changed |
 | --- | --- | --- | --- |
+| 2026-08-13 | Epic artifact sync | Done | `project-context/2.build/frontend.md` had drifted (still described a single `Send` button, no `lib/status.ts`); brought current and added a checklist item so it is re-checked with every control/surface change. |
 | 2026-08-13 | Crew status banner | Done | Added banner, colour pill, and last-updated timestamp; all wording centralised in `lib/status.ts`. |
 | 2026-08-13 | Controls | Done | `Send` became `Run`; added `Reset` and an inline `Retry` for retryable errors. |
 | 2026-08-13 | Retry inputs | Done | Page holds `lastRequest` so Retry replays the submitted request, not the current form contents. |

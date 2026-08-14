@@ -7,9 +7,12 @@ Detailed contract: **`frontend-functional-spec.md`** (repo root). Not duplicated
 - `packages/shared/src/dto.ts` — frozen DTOs copied verbatim from SAD §4 (`ChatRequest`,
   `StreamEvent`, `ReasonCode`, `EscalationPackage`) + tool-result/temporal summary shapes.
   Every other module imports these; none restate them.
-- `app/page.tsx` + `app/page.module.css` — single chat column: identity bar (orderId/userId,
-  trace toggle), message list with incremental tokens, results area, composer. Send disabled
-  while a turn is in flight. CSS modules (Tailwind is not on the approved library list).
+- `app/page.tsx` + `app/page.module.css` — single chat column: crew status banner (colour
+  pill, "last updated" clock, `role="status"`), identity bar, token-incremental message list,
+  results area, composer. Controls are **Run** / **Reset** plus an inline **Retry** on
+  retryable errors that replays the held `lastRequest`, not the current form. CSS modules.
+- `lib/status.ts` — one source of status wording and tone (gray/blue/green/red + amber
+  `attention` for a turn that ended without answering); banner and `Run` / `Running…` read it.
 - `lib/fsm.ts` — `idle → running → done{resolved|escalated|needs_input}`, typed off
   `StreamEvent`; illegal transitions unrepresentable.
 - `lib/chatClient.ts` — validation + drives the FSM from the stream.
@@ -27,21 +30,26 @@ Detailed contract: **`frontend-functional-spec.md`** (repo root). Not duplicated
 
 CSAT, TracePanel UI, policy search, `faq-policy` / `plus-specialist` / `returns-advisor`,
 escalation + ticket stubs, SQLite session durability, DemoOverlay lookup (`overlayHit` is
-reported `false`), `GET /api/conversations/:id/trace`. **Money tools: never.**
+reported `false`), `GET /api/conversations/:id/trace`, and the pause / cancel / retry-diff
+controls. **Money tools: never.**
 
 ## Verification run
 
-`npx tsc --noEmit` clean · `next build` clean · dev server + `curl POST /api/chat` for order
-ids 1, 46101, 99999999, and a no-identity request. With `AS_OF_DATE=2026-08-13`,
-`shiftDays=589`; order 1 streamed `2025-08-13`, order 46101 streamed `2026-08-13 (today)` —
-shifted, not 2024. Fixture byte-identical after the run.
+`npx tsc --noEmit` clean · `next build` compiled successfully (one Turbopack
+dynamic-filesystem-access warning from the DuckDB read; no errors) · dev server +
+`curl POST /api/chat` for order ids 1, 46101, 42776, 99999999, and a no-identity request:
+with `AS_OF_DATE=2026-08-13`, `shiftDays=589`, order 1 streamed `2025-08-13` and 46101
+`2026-08-13 (today)` — shifted, not 2024; fixture byte-identical after · browser pass:
+keyboard-only entry, idle → running → done transitions (incl. amber needs-input), Reset
+clearing the transcript, zero console errors.
 
 ## Audit
 
 | Field | Value |
 | ----- | ----- |
 | Persona id | `frontend-eng` |
-| Action | `*develop-fe`, `*style-ui`, `*document-frontend` |
+| Action | `*develop-fe`, `*style-ui`, `*document-frontend`; 2026-08-13 status-visibility pass (crew banner + pill + timestamp, `lib/status.ts`, Run/Reset/Retry, duplicate-React-key fix in `append`, README local run steps) |
 | Timestamp | 2026-08-13 |
 | Resolved runtime | `claude-agent-sdk` |
+| Verification | `npx tsc --noEmit` exits 0 and `next build` compiles (one Turbopack warning, no errors) at this pass; browser pass covering keyboard-only entry, banner transitions, Reset clearing the transcript, and zero console errors |
 | Open Questions | Tracked in `frontend-functional-spec.md` (notably the `duckdb` → `@duckdb/node-api` package substitution) |
