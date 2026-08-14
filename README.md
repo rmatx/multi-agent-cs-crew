@@ -48,8 +48,8 @@ NOVAMART_DUCKDB_PATH=/path/to/full.duckdb npm run dev   # use the 151 MB practic
 ```
 
 See [`frontend-functional-spec.md`](frontend-functional-spec.md) for the workflow contract
-and [`docs/novamart-sprint1-demo.mp4`](docs/novamart-sprint1-demo.mp4) for a 2-minute
-narrated walkthrough. Stills of the same path — input, result, not-found — are in
+and [`docs/novamart-demo-90s.mp4`](docs/novamart-demo-90s.mp4) for a 90-second narrated
+walkthrough. Stills of the same path — input, result, not-found — are in
 [`docs/screenshots/`](docs/screenshots/).
 
 ![Grounded order status](docs/screenshots/02-result.png)
