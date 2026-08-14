@@ -26,3 +26,6 @@ data/fixtures/*.duckdb
 
 # Runtime-generated stores (SQLite, ADR-10)
 data/*.sqlite
+
+# TypeScript incremental build info
+*.tsbuildinfo

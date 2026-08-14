@@ -1,0 +1,134 @@
+/* Single chat column, minimal chrome (aamad.config.yml visual_style: minimal). */
+
+.shell {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 100dvh;
+}
+
+.title {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.welcome {
+  color: var(--muted);
+  margin: 0;
+}
+
+.identityBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1 1 8rem;
+  min-width: 8rem;
+}
+
+.label {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.input,
+.textarea {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.45rem 0.55rem;
+  width: 100%;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 3.25rem;
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  flex: 1 1 auto;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.role {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.body {
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.results {
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.composerRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.send {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+.send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.notice {
+  color: #b4501a;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.status {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+@media (max-width: 30rem) {
+  .composerRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

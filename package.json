@@ -1,0 +1,38 @@
+{
+  "name": "multi-agent-cs-crew",
+  "version": "1.0.0",
+  "description": "Capstone project: a customer-facing multi-agent support chat crew, built with the [AAMAD](https://pypi.org/project/aamad/) multi-agent development framework.",
+  "directories": {
+    "doc": "docs",
+    "lib": "lib"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rmatx/multi-agent-cs-crew.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/rmatx/multi-agent-cs-crew/issues"
+  },
+  "homepage": "https://github.com/rmatx/multi-agent-cs-crew#readme",
+  "dependencies": {
+    "@duckdb/node-api": "^1.5.5-r.4",
+    "next": "^16.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "typescript": "^5.9.3"
+  }
+}
