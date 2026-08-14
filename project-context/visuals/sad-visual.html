@@ -281,6 +281,56 @@
   .note.ok h4 { color: var(--grounded); }
   .note p { font-size: 14.5px; }
 
+  /* ---------- scope band ---------- */
+  .scope { display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .scope { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 20px 22px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .panel.in  { border-left: 3px solid var(--grounded); }
+  .panel.out { gap: 22px; }
+
+  .scope-h {
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .scope-h.mvp   { color: var(--grounded); }
+  .scope-h.maybe { color: var(--muted); }
+  .scope-h.never { color: var(--abort); }
+
+  ul.flist { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; }
+  ul.flist li { display: grid; grid-template-columns: 108px 1fr; gap: 14px; align-items: baseline; }
+  @media (max-width: 560px) { ul.flist li { grid-template-columns: 1fr; gap: 2px; } }
+  .fid {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    color: var(--grounded);
+    white-space: nowrap;
+  }
+  .fwhat { font-size: 14.5px; }
+  .fwhat span { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+
+  .outgroup { display: flex; flex-direction: column; gap: 10px; }
+  ul.olist { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+  ul.olist li { display: grid; grid-template-columns: 104px 1fr; gap: 10px; font-size: 13px; color: var(--muted); }
+  ul.olist li .oid {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    color: var(--faint);
+    white-space: nowrap;
+  }
+  ul.olist.hard li { grid-template-columns: 1fr; }
+
   /* ---------- two-up ---------- */
   .cols {
     display: grid;
@@ -329,13 +379,14 @@
   </div>
   <div class="meta">
     <span class="chip chip-final">Final for build</span>
+    <span class="chip chip-final">No open questions</span>
     <span class="chip">Runtime · claude-agent-sdk</span>
-    <span class="chip">MVP scope</span>
-    <span>Quality pass 2026-08-08 · instructor-feedback pass 2026-08-10</span>
+    <span>Quality pass 2026-08-08 · instructor feedback 2026-08-10 · SAD-OQ-6 resolved 2026-08-13</span>
   </div>
 </header>
 
 <div class="stats">
+  <div class="stat safe"><b>13</b><span>P0 features = MVP</span></div>
   <div class="stat"><b>6</b><span>Agents</span></div>
   <div class="stat"><b>8</b><span>Tools total</span></div>
   <div class="stat safe"><b>0</b><span>Money tools</span></div>
@@ -343,6 +394,76 @@
   <div class="stat"><b>60s</b><span>Turn timeout</span></div>
   <div class="stat"><b>584d</b><span>Date shift @ asOf</span></div>
 </div>
+
+<!-- ============ 0. SCOPE ============ -->
+<section>
+  <div class="sec-head">
+    <h3>Scope</h3>
+    <h2>Thirteen P0 features are the MVP — everything else needs a new PRD revision</h2>
+    <p class="lede">The PRD freezes this explicitly: build P0; schedule P1 only if time allows; P2 and OUT are forbidden without revising the document. Each P0 feature traces to a market problem in the MRD, so nothing below was invented at architecture time.</p>
+  </div>
+
+  <div class="scope">
+    <div class="panel in">
+      <h4 class="scope-h mvp">In the MVP · P0 · all thirteen</h4>
+      <ul class="flist">
+        <li><span class="fid">F-CHAT-01</span><span class="fwhat"><b>Customer chat UI</b><span>Streaming browser chat, identity fields, a "talk to a human" button</span></span></li>
+        <li><span class="fid">F-TRIAGE-01</span><span class="fwhat"><b>Intent routing &amp; entity extraction</b><span>One of nine intents, or <code>other</code>; pulls order id, user id, device, app version</span></span></li>
+        <li><span class="fid">F-FAQ-01</span><span class="fwhat"><b>Grounded policy answers</b><span>Cited answers from the policy corpus above a 0.55 score, else escalate</span></span></li>
+        <li><span class="fid">F-ORDER-01</span><span class="fwhat"><b>Order lookup</b><span>WISMO and line items, read from DuckDB — never from model recall</span></span></li>
+        <li><span class="fid">F-PLUS-01</span><span class="fwhat"><b>Membership status &amp; FAQ</b><span>Trial versus paid, benefit rules, shipping entitlement</span></span></li>
+        <li><span class="fid">F-RET-01</span><span class="fwhat"><b>Returns advice</b><span>Eligibility and next steps, with no money movement and no pretended refund</span></span></li>
+        <li><span class="fid">F-ESC-01</span><span class="fwhat"><b>Escalation package &amp; ticket stub</b><span>A complete handoff so the customer never repeats themselves</span></span></li>
+        <li><span class="fid">F-TICKET-01</span><span class="fwhat"><b>App-issue intake</b><span>Device and version recorded as a signal — not the Scenario D analysis</span></span></li>
+        <li><span class="fid">F-CSAT-01</span><span class="fwhat"><b>Micro-survey</b><span>A CSAT prompt after any terminal state, resolved or escalated</span></span></li>
+        <li><span class="fid">F-TRACE-01</span><span class="fwhat"><b>Operator agent-trace panel</b><span>Which agent ran, which tools it called, how long it took</span></span></li>
+        <li><span class="fid">F-ORCH-01</span><span class="fwhat"><b>Orchestration guards</b><span>Hop budget, tool allowlists, turn timeout, cancellation</span></span></li>
+        <li><span class="fid">F-EVAL-01</span><span class="fwhat"><b>Scripted evaluation suite</b><span>Eight dialogues mapped to acceptance criteria</span></span></li>
+        <li><span class="fid">F-TIME-01</span><span class="fwhat"><b>Temporal model for a historical DB</b><span>Return windows and trials read as current against a 2024 dataset</span></span></li>
+      </ul>
+    </div>
+
+    <div class="panel out">
+      <div class="outgroup">
+        <h4 class="scope-h maybe">Time-permitting · P1 · not required to demo</h4>
+        <ul class="olist">
+          <li><span class="oid">F-AUTH-02</span><span>Email + order id soft-login</span></li>
+          <li><span class="oid">F-FAQ-02</span><span>Promo-aware answers</span></li>
+          <li><span class="oid">F-ORDER-02</span><span>"Similar open tickets"</span></li>
+          <li><span class="oid">F-I18N-01</span><span>Spanish responses</span></li>
+        </ul>
+      </div>
+
+      <div class="outgroup">
+        <h4 class="scope-h maybe">Deferred · P2 · future work</h4>
+        <ul class="olist">
+          <li><span class="oid">F-ANALYTICS-01</span><span>Scenario D causal dashboard</span></li>
+          <li><span class="oid">F-COP-01</span><span>L1 agent copilot UI</span></li>
+          <li><span class="oid">F-WRITE-01</span><span>Refund / cancel / membership writes</span></li>
+          <li><span class="oid">F-OMNI-01</span><span>Email, voice, social channels</span></li>
+          <li><span class="oid">F-ZENDESK-01</span><span>Export to Zendesk or Gorgias</span></li>
+          <li><span class="oid">F-PROD-DB-01</span><span>A true production database</span></li>
+        </ul>
+      </div>
+
+      <div class="outgroup">
+        <h4 class="scope-h never">Hard exclusions · OUT-01</h4>
+        <ul class="olist hard">
+          <li><span>Payment capture, refund execution, card data</span></li>
+          <li><span>Causal analysis of the v3.2.0 spike</span></li>
+          <li><span>Training on real PII; production secrets in git</span></li>
+          <li><span>Omnichannel inbox</span></li>
+          <li><span>Replacing human legal or safety review</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="note ok">
+    <h4>Two boundaries that blur in conversation</h4>
+    <p><code>support_tickets</code> exists in the database but is <strong>out of the MVP tool surface</strong> — only its category enum is used, and only in code. And returns are <strong>advisory</strong>: the agent explains eligibility and executes nothing. That second boundary is enforced by the tool registry, not by prompt wording, which is why it can be tested by counting registered tools.</p>
+  </div>
+</section>
 
 <!-- ============ 1. REQUEST PATH ============ -->
 <section>
