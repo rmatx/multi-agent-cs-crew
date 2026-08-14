@@ -1,0 +1,840 @@
+<title>NovaMart Support Crew — Architecture at a Glance</title>
+
+<style>
+  :root {
+    --paper:   #F7F9F9;
+    --surface: #FFFFFF;
+    --ink:     #12181A;
+    --muted:   #58686C;
+    --faint:   #84969A;
+    --line:    #D8E0E1;
+    --line-2:  #EAEFEF;
+    --grounded:#0D6B68;
+    --escalate:#9E6510;
+    --abort:   #A2382B;
+    --wash:    #EDF3F3;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:   #0D1113;
+      --surface: #141A1C;
+      --ink:     #E7EDEE;
+      --muted:   #94A3A6;
+      --faint:   #6C7C80;
+      --line:    #252E31;
+      --line-2:  #1B2224;
+      --grounded:#54C0B6;
+      --escalate:#D9A551;
+      --abort:   #E2735E;
+      --wash:    #172022;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:   #0D1113;
+    --surface: #141A1C;
+    --ink:     #E7EDEE;
+    --muted:   #94A3A6;
+    --faint:   #6C7C80;
+    --line:    #252E31;
+    --line-2:  #1B2224;
+    --grounded:#54C0B6;
+    --escalate:#D9A551;
+    --abort:   #E2735E;
+    --wash:    #172022;
+  }
+  :root[data-theme="light"] {
+    --paper:   #F7F9F9;
+    --surface: #FFFFFF;
+    --ink:     #12181A;
+    --muted:   #58686C;
+    --faint:   #84969A;
+    --line:    #D8E0E1;
+    --line-2:  #EAEFEF;
+    --grounded:#0D6B68;
+    --escalate:#9E6510;
+    --abort:   #A2382B;
+    --wash:    #EDF3F3;
+  }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 20px 96px;
+  }
+
+  .wrap { max-width: 1120px; margin: 0 auto; }
+
+  /* ---------- type ---------- */
+  .serif { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; }
+  .mono, code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+
+  .eyebrow {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  h1 {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(30px, 4.6vw, 46px);
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 10px 0 0;
+  }
+
+  h2 {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(21px, 2.4vw, 27px);
+    line-height: 1.2;
+    letter-spacing: -0.005em;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  h3 {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+
+  p { margin: 0; max-width: 68ch; }
+  .lede { color: var(--muted); font-size: 17px; }
+
+  code {
+    font-size: 0.88em;
+    background: var(--wash);
+    border-radius: 3px;
+    padding: 0.1em 0.36em;
+  }
+
+  a { color: var(--grounded); }
+
+  /* ---------- header ---------- */
+  header {
+    border-bottom: 1px solid var(--line);
+    padding: 56px 0 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .titleblock { display: flex; flex-direction: column; gap: 12px; }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    align-items: center;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .chip {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 3px 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    white-space: nowrap;
+  }
+  .chip-final { border-color: var(--grounded); color: var(--grounded); }
+
+  /* ---------- stat strip ---------- */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin: 34px 0 0;
+  }
+  .stat {
+    background: var(--surface);
+    padding: 16px 18px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .stat b {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-size: 27px;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat span {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .stat.safe b { color: var(--grounded); }
+
+  /* ---------- sections ---------- */
+  section {
+    padding: 52px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .sec-head { display: flex; flex-direction: column; gap: 9px; }
+  .rule { height: 1px; background: var(--line); }
+
+  /* ---------- figures ---------- */
+  figure {
+    margin: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 26px 24px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-x: auto;
+  }
+  figure svg { display: block; width: 100%; min-width: 640px; height: auto; color: var(--ink); }
+  figcaption {
+    font-size: 13.5px;
+    color: var(--muted);
+    max-width: 74ch;
+    border-top: 1px solid var(--line-2);
+    padding-top: 13px;
+  }
+
+  /* svg primitives */
+  .box   { fill: var(--surface); stroke: currentColor; stroke-width: 1.25; }
+  .box-w { fill: var(--wash);    stroke: currentColor; stroke-width: 1.25; }
+  .edge  { stroke: currentColor; stroke-width: 1.25; fill: none; }
+  .edge-dash { stroke: var(--muted); stroke-width: 1.25; fill: none; stroke-dasharray: 4 4; }
+  .edge-esc  { stroke: var(--escalate); stroke-width: 1.5; fill: none; }
+  .edge-red  { stroke: var(--abort); stroke-width: 1.25; fill: none; stroke-dasharray: 4 4; }
+  .t     { fill: currentColor; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif; font-size: 13px; }
+  .t-b   { fill: currentColor; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+  .t-s   { fill: var(--muted);  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif; font-size: 11px; }
+  .t-lbl { fill: var(--muted);  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; }
+  .t-esc { fill: var(--escalate); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; }
+  .t-red { fill: var(--abort);    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; }
+  .t-ok  { fill: var(--grounded); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; }
+  .box-ok  { fill: var(--surface); stroke: var(--grounded); stroke-width: 1.5; }
+  .box-esc { fill: var(--surface); stroke: var(--escalate); stroke-width: 1.5; }
+  .box-red { fill: var(--surface); stroke: var(--abort);    stroke-width: 1.5; }
+
+  /* ---------- tables ---------- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+  thead th {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .yes { color: var(--grounded); font-weight: 600; }
+  .no  { color: var(--faint); }
+  .tag {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+
+  /* ---------- callouts ---------- */
+  .note {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--escalate);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .note.ok { border-left-color: var(--grounded); }
+  .note h4 {
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--escalate);
+  }
+  .note.ok h4 { color: var(--grounded); }
+  .note p { font-size: 14.5px; }
+
+  /* ---------- two-up ---------- */
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
+    align-items: start;
+  }
+
+  /* ---------- build order ---------- */
+  ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  ol.steps li { background: var(--surface); padding: 14px 18px; display: grid; grid-template-columns: 30px 1fr; gap: 14px; align-items: baseline; }
+  ol.steps .n {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    color: var(--grounded);
+    font-variant-numeric: tabular-nums;
+  }
+  ol.steps .what { font-size: 14.5px; }
+  ol.steps .why { color: var(--muted); font-size: 13px; display: block; }
+
+  footer {
+    margin-top: 60px;
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    a { transition: color 120ms ease; }
+  }
+  a:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--grounded); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="titleblock">
+    <p class="eyebrow">System Architecture Document · NovaMart Capstone</p>
+    <h1>A six-agent support crew that answers from tools, or hands off — never invents.</h1>
+    <p class="lede">One Next.js process holds the chat UI, the API, and the agent runtime. Every customer turn ends in exactly one of three states, and only two of them write anything down.</p>
+  </div>
+  <div class="meta">
+    <span class="chip chip-final">Final for build</span>
+    <span class="chip">Runtime · claude-agent-sdk</span>
+    <span class="chip">MVP scope</span>
+    <span>Quality pass 2026-08-08 · instructor-feedback pass 2026-08-10</span>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="stat"><b>6</b><span>Agents</span></div>
+  <div class="stat"><b>8</b><span>Tools total</span></div>
+  <div class="stat safe"><b>0</b><span>Money tools</span></div>
+  <div class="stat"><b>4</b><span>Max hops / turn</span></div>
+  <div class="stat"><b>60s</b><span>Turn timeout</span></div>
+  <div class="stat"><b>584d</b><span>Date shift @ asOf</span></div>
+</div>
+
+<!-- ============ 1. REQUEST PATH ============ -->
+<section>
+  <div class="sec-head">
+    <h3>Layer 01 — the request</h3>
+    <h2>One message, one process, one stream back</h2>
+    <p class="lede">ADR-09 collapses UI and API into a single Next.js App Router app, so the whole path below runs in one Node process. The response is a single SSE envelope carrying tokens, hop events, citations and the terminal status.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 1000 400" role="img" aria-label="A customer message travels from the chat UI through Next.js route handlers to the orchestrator and the six agents; agents reach the tool layer, which reads DuckDB and the policy corpus and writes ticket stubs; a single SSE stream carries tokens and events back to the UI.">
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+        <marker id="a1m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+        </marker>
+      </defs>
+
+      <!-- SSE return path -->
+      <path class="edge-dash" d="M695,90 V44 H90 V86" marker-end="url(#a1m)"/>
+      <text class="t-lbl" x="400" y="36" text-anchor="middle">SSE stream · token / agent_hop / citation / escalation / done</text>
+
+      <!-- main row -->
+      <rect class="box" x="20"  y="90" width="140" height="76" rx="3"/>
+      <text class="t"   x="90"  y="122" text-anchor="middle">Chat UI</text>
+      <text class="t-s" x="90"  y="140" text-anchor="middle">React · streaming</text>
+
+      <rect class="box" x="300" y="90" width="170" height="76" rx="3"/>
+      <text class="t"   x="385" y="122" text-anchor="middle">Route handlers</text>
+      <text class="t-s" x="385" y="140" text-anchor="middle">Next.js BFF · validate</text>
+
+      <rect class="box" x="610" y="90" width="170" height="76" rx="3"/>
+      <text class="t"   x="695" y="118" text-anchor="middle">Orchestrator</text>
+      <text class="t-s" x="695" y="136" text-anchor="middle">hops ≤ 4 · 60s · abort</text>
+      <text class="t-s" x="695" y="152" text-anchor="middle">signal</text>
+
+      <rect class="box" x="850" y="90" width="140" height="76" rx="3"/>
+      <text class="t"   x="920" y="122" text-anchor="middle">Agents ×6</text>
+      <text class="t-s" x="920" y="140" text-anchor="middle">triage + 5</text>
+
+      <line class="edge" x1="160" y1="128" x2="292" y2="128" marker-end="url(#a1)"/>
+      <line class="edge" x1="470" y1="128" x2="602" y2="128" marker-end="url(#a1)"/>
+      <line class="edge" x1="780" y1="128" x2="842" y2="128" marker-end="url(#a1)"/>
+      <text class="t-lbl" x="226" y="120" text-anchor="middle">POST /api/chat</text>
+      <text class="t-lbl" x="536" y="120" text-anchor="middle">runTurn(state, msg)</text>
+      <text class="t-lbl" x="811" y="120" text-anchor="middle">Agent tool</text>
+
+      <!-- drops -->
+      <line class="edge" x1="385" y1="166" x2="385" y2="214" marker-end="url(#a1)"/>
+      <line class="edge" x1="695" y1="166" x2="695" y2="214" marker-end="url(#a1)"/>
+      <line class="edge" x1="920" y1="166" x2="920" y2="214" marker-end="url(#a1)"/>
+      <text class="t-lbl" x="912" y="196" text-anchor="end">allowlisted only</text>
+
+      <rect class="box-w" x="300" y="222" width="170" height="52" rx="3"/>
+      <text class="t-b"   x="385" y="244" text-anchor="middle">SessionStore</text>
+      <text class="t-s"   x="385" y="261" text-anchor="middle">SQLite · transcript</text>
+
+      <rect class="box-w" x="620" y="222" width="150" height="52" rx="3"/>
+      <text class="t-b"   x="695" y="244" text-anchor="middle">Prompt trace</text>
+      <text class="t-s"   x="695" y="261" text-anchor="middle">redacted, on disk</text>
+
+      <rect class="box-w" x="850" y="222" width="140" height="52" rx="3"/>
+      <text class="t-b"   x="920" y="244" text-anchor="middle">Tool layer</text>
+      <text class="t-s"   x="920" y="261" text-anchor="middle">typed contracts</text>
+
+      <!-- fan to stores -->
+      <line class="edge" x1="915" y1="274" x2="580" y2="324" marker-end="url(#a1)"/>
+      <line class="edge" x1="918" y1="274" x2="745" y2="324" marker-end="url(#a1)"/>
+      <line class="edge" x1="920" y1="274" x2="920" y2="324" marker-end="url(#a1)"/>
+
+      <rect class="box" x="480" y="330" width="180" height="54" rx="3"/>
+      <text class="t-b" x="570" y="352" text-anchor="middle">NovaMart DuckDB</text>
+      <text class="t-s" x="570" y="369" text-anchor="middle">read-only · 5 tables</text>
+
+      <rect class="box" x="680" y="330" width="140" height="54" rx="3"/>
+      <text class="t-b" x="750" y="352" text-anchor="middle">Policy corpus</text>
+      <text class="t-s" x="750" y="369" text-anchor="middle">markdown on disk</text>
+
+      <rect class="box" x="840" y="330" width="150" height="54" rx="3"/>
+      <text class="t-b" x="915" y="352" text-anchor="middle">Ticket stubs</text>
+      <text class="t-s" x="915" y="369" text-anchor="middle">SQLite · writable</text>
+    </svg>
+    <figcaption>The only writable stores are the session, the trace log and the ticket stub table. The practice catalog is opened read-only, which is what makes the temporal layer in Layer 03 necessary rather than optional.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ 2. HOPS ============ -->
+<section>
+  <div class="sec-head">
+    <h3>Layer 02 — orchestration</h3>
+    <h2>A hop is an agent transfer, not a tool call</h2>
+    <p class="lede">This is the rule the backend has to implement exactly, and the one most easily mis-read. Four agent transfers are the entire budget for a turn; the tool calls inside a transfer are free, however many there are.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 1000 450" role="img" aria-label="Triage routes to one of four specialists, each transfer costing one hop. All specialists call the shared tool layer at zero hop cost. Any specialist may transfer to escalation-handoff for one more hop, and triage routes payment or human requests straight to escalation.">
+      <defs>
+        <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+        <marker id="a2e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--escalate)"/>
+        </marker>
+        <marker id="a2m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+        </marker>
+      </defs>
+
+      <!-- triage -->
+      <rect class="box" x="390" y="18" width="220" height="64" rx="3"/>
+      <text class="t-b" x="500" y="44" text-anchor="middle">triage-router</text>
+      <text class="t-s" x="500" y="62" text-anchor="middle">coordinator · intent + entities</text>
+
+      <!-- routing edges -->
+      <line class="edge-esc" x1="470" y1="82" x2="150" y2="142" marker-end="url(#a2e)"/>
+      <line class="edge-esc" x1="486" y1="82" x2="374" y2="142" marker-end="url(#a2e)"/>
+      <line class="edge-esc" x1="514" y1="82" x2="604" y2="142" marker-end="url(#a2e)"/>
+      <line class="edge-esc" x1="530" y1="82" x2="828" y2="142" marker-end="url(#a2e)"/>
+      <text class="t-esc" x="500" y="128" text-anchor="middle">+1 hop each</text>
+
+      <!-- specialists -->
+      <rect class="box" x="40"  y="150" width="200" height="64" rx="3"/>
+      <text class="t-b" x="140" y="176" text-anchor="middle">faq-policy</text>
+      <text class="t-s" x="140" y="194" text-anchor="middle">grounded ≥ 0.55 or escalate</text>
+
+      <rect class="box" x="270" y="150" width="200" height="64" rx="3"/>
+      <text class="t-b" x="370" y="176" text-anchor="middle">order-specialist</text>
+      <text class="t-s" x="370" y="194" text-anchor="middle">WISMO · order facts</text>
+
+      <rect class="box" x="500" y="150" width="200" height="64" rx="3"/>
+      <text class="t-b" x="600" y="176" text-anchor="middle">plus-specialist</text>
+      <text class="t-s" x="600" y="194" text-anchor="middle">membership · trial state</text>
+
+      <rect class="box" x="730" y="150" width="200" height="64" rx="3"/>
+      <text class="t-b" x="830" y="176" text-anchor="middle">returns-advisor</text>
+      <text class="t-s" x="830" y="194" text-anchor="middle">advises · never refunds</text>
+
+      <!-- tool drops -->
+      <line class="edge-dash" x1="110" y1="214" x2="110" y2="256" marker-end="url(#a2m)"/>
+      <line class="edge-dash" x1="340" y1="214" x2="340" y2="256" marker-end="url(#a2m)"/>
+      <line class="edge-dash" x1="570" y1="214" x2="570" y2="256" marker-end="url(#a2m)"/>
+      <line class="edge-dash" x1="800" y1="214" x2="800" y2="256" marker-end="url(#a2m)"/>
+
+      <rect class="box-w" x="40" y="262" width="890" height="58" rx="3"/>
+      <text class="t-b" x="60" y="288">Tool layer</text>
+      <text class="t-s" x="60" y="306">get_user · get_order · get_order_items · list_orders_for_user · get_membership · search_policy</text>
+      <text class="t-lbl" x="910" y="288" text-anchor="end">0 hops</text>
+      <text class="t-s"   x="910" y="306" text-anchor="end">any number of calls</text>
+
+      <!-- escalation bus (right side) -->
+      <path class="edge-esc" d="M170,214 V236 H960 V378 H672" marker-end="url(#a2e)"/>
+      <path class="edge-esc" d="M400,214 V236"/>
+      <path class="edge-esc" d="M630,214 V236"/>
+      <path class="edge-esc" d="M860,214 V236"/>
+      <text class="t-esc" x="952" y="330" text-anchor="end">+1 hop</text>
+
+      <!-- direct terminal routes -->
+      <path class="edge-esc" d="M390,50 H20 V420 H420" marker-end="url(#a2e)"/>
+      <text class="t-esc" x="34" y="412">payment_question · human_request → terminal</text>
+
+      <!-- escalation box -->
+      <rect class="box-esc" x="420" y="348" width="250" height="66" rx="3"/>
+      <text class="t-b" x="545" y="374" text-anchor="middle">escalation-handoff</text>
+      <text class="t-s" x="545" y="392" text-anchor="middle">create_ticket_stub · summary</text>
+
+      <!-- legend -->
+      <line class="edge-esc" x1="40" y1="440" x2="72" y2="440"/>
+      <text class="t-s" x="80" y="444">agent transfer, +1 hop</text>
+      <line class="edge-dash" x1="250" y1="440" x2="282" y2="440"/>
+      <text class="t-s" x="290" y="444">tool call, hop unchanged</text>
+      <text class="t-s" x="520" y="444">hops already at 4 → the handoff is refused and escalation is forced with reason_code=repeat_failure</text>
+    </svg>
+    <figcaption>The forced escalation at the budget ceiling is itself exempt from the check — otherwise a hop-exhausted turn would have no legal exit. <code>returns-advisor</code> calling order tools is the same single hop, which is why returns does not route through the order specialist first.</figcaption>
+  </figure>
+
+  <div class="cols">
+    <div class="tablewrap">
+      <table>
+        <caption class="visually-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">Events and their effect on the hop counter</caption>
+        <thead>
+          <tr><th>Event</th><th class="num">hops</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>triage asks a clarifying question</td><td class="num no">unchanged</td></tr>
+          <tr><td>triage → order-specialist</td><td class="num yes">+1</td></tr>
+          <tr><td>order-specialist calls <code>get_order</code>, then <code>get_order_items</code></td><td class="num no">unchanged</td></tr>
+          <tr><td>returns-advisor calls <code>search_policy</code> <em>and</em> both order tools</td><td class="num no">unchanged</td></tr>
+          <tr><td>order-specialist → escalation-handoff</td><td class="num yes">+1</td></tr>
+          <tr><td>triage re-routes to a second specialist</td><td class="num yes">+1</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Intent</th><th>Lands on</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="tag">order_status</td><td>order-specialist</td></tr>
+          <tr><td class="tag">plus_membership</td><td>plus-specialist</td></tr>
+          <tr><td class="tag">returns_policy</td><td>returns-advisor</td></tr>
+          <tr><td class="tag">shipping_policy</td><td>faq-policy</td></tr>
+          <tr><td class="tag">app_issue</td><td>faq-policy → escalate if no workaround</td></tr>
+          <tr><td class="tag">account_question</td><td>faq-policy, or escalate on any mutation</td></tr>
+          <tr><td class="tag">payment_question</td><td><span style="color:var(--escalate)">escalation-handoff · terminal</span></td></tr>
+          <tr><td class="tag">human_request</td><td><span style="color:var(--escalate)">escalation-handoff · terminal</span></td></tr>
+          <tr><td class="tag">other</td><td>faq-policy → escalate if ungrounded</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TOOL MATRIX ============ -->
+<section>
+  <div class="sec-head">
+    <h3>Least privilege</h3>
+    <h2>The allowlist is the safety boundary</h2>
+    <p class="lede">Eight tools exist in the process. Seven are pure reads; one writes, and only the escalation agent can reach it. Nothing that moves money is registered at all, so "the agent refused to refund" is a property of the tool registry rather than of a prompt.</p>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Tool</th>
+          <th>triage</th><th>faq</th><th>order</th><th>plus</th><th>returns</th><th>escalation</th>
+          <th>Side effect</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="tag">get_user</td>              <td class="yes">●</td><td class="no">·</td><td class="no">·</td><td class="yes">●</td><td class="no">·</td><td class="no">·</td><td>none</td></tr>
+        <tr><td class="tag">get_order</td>             <td class="no">·</td><td class="no">·</td><td class="yes">●</td><td class="no">·</td><td class="yes">●</td><td class="no">·</td><td>none</td></tr>
+        <tr><td class="tag">get_order_items</td>       <td class="no">·</td><td class="no">·</td><td class="yes">●</td><td class="no">·</td><td class="yes">●</td><td class="no">·</td><td>none</td></tr>
+        <tr><td class="tag">list_orders_for_user</td>  <td class="no">·</td><td class="no">·</td><td class="yes">●</td><td class="no">·</td><td class="no">·</td><td class="no">·</td><td>none · limit 5</td></tr>
+        <tr><td class="tag">get_membership</td>        <td class="no">·</td><td class="no">·</td><td class="no">·</td><td class="yes">●</td><td class="no">·</td><td class="no">·</td><td>none</td></tr>
+        <tr><td class="tag">search_policy</td>         <td class="no">·</td><td class="yes">●</td><td class="no">·</td><td class="yes">●</td><td class="yes">●</td><td class="no">·</td><td>none</td></tr>
+        <tr><td class="tag">create_ticket_stub</td>    <td class="no">·</td><td class="no">·</td><td class="no">·</td><td class="no">·</td><td class="no">·</td><td class="yes">●</td><td><strong>writes stub store</strong></td></tr>
+        <tr><td class="tag">format_handoff_summary</td><td class="no">·</td><td class="no">·</td><td class="no">·</td><td class="no">·</td><td class="no">·</td><td class="yes">●</td><td>none</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <h4>Not registered in the MVP process</h4>
+    <p>Payments, refunds, order cancellation, membership mutation, shell, and arbitrary network tools. No built-in <code>Bash</code>, <code>Write</code>, <code>WebFetch</code> or <code>WebSearch</code> either. A turn that needs any of them can only escalate — that is the whole design, and NFR-SAFE-01 is checked by counting registered tools, not by reading transcripts.</p>
+  </div>
+</section>
+
+<!-- ============ 3. TEMPORAL ============ -->
+<section>
+  <div class="sec-head">
+    <h3>Layer 03 — time</h3>
+    <h2>A frozen 2024 catalog, demoed against a moving clock</h2>
+    <p class="lede">The practice database stops at <code>2025-01-01</code> and cannot be written to, yet the demo has to show a live 14-day return window and an active Plus trial. The shift happens inside the repository adapter, so raw dates never reach an agent prompt.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 1000 350" role="img" aria-label="A get_order call first checks the demo overlay; on a hit it returns a row whose dates are already relative to asOf, otherwise it reads DuckDB and passes the raw row through DateShiftMapper. Either way the agent only ever sees shifted timestamps, which it compares against AS_OF_DATE for eligibility.">
+      <defs>
+        <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+        <marker id="a3m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+        </marker>
+      </defs>
+
+      <rect class="box" x="20" y="120" width="170" height="60" rx="3"/>
+      <text class="t-b" x="105" y="147" text-anchor="middle">get_order(id)</text>
+      <text class="t-s" x="105" y="164" text-anchor="middle">tool call</text>
+
+      <line class="edge" x1="190" y1="150" x2="222" y2="150" marker-end="url(#a3)"/>
+
+      <polygon class="box" points="300,105 378,150 300,195 222,150"/>
+      <text class="t-s" x="300" y="147" text-anchor="middle">overlay</text>
+      <text class="t-s" x="300" y="162" text-anchor="middle">hit?</text>
+
+      <!-- yes branch -->
+      <path class="edge" d="M300,105 V70 H432" marker-end="url(#a3)"/>
+      <text class="t-ok" x="316" y="62">yes</text>
+      <rect class="box" x="440" y="40" width="200" height="60" rx="3"/>
+      <text class="t-b" x="540" y="66" text-anchor="middle">Overlay row</text>
+      <text class="t-s" x="540" y="84" text-anchor="middle">dates already asOf-relative</text>
+
+      <!-- no branch -->
+      <path class="edge" d="M300,195 V230 H382" marker-end="url(#a3)"/>
+      <text class="t-lbl" x="316" y="222">no</text>
+      <rect class="box" x="390" y="200" width="170" height="60" rx="3"/>
+      <text class="t-b" x="475" y="226" text-anchor="middle">DuckDB read</text>
+      <text class="t-s" x="475" y="244" text-anchor="middle">raw 2024 dates, RO</text>
+
+      <line class="edge" x1="560" y1="230" x2="582" y2="230" marker-end="url(#a3)"/>
+
+      <rect class="box" x="590" y="200" width="190" height="60" rx="3"/>
+      <text class="t-b" x="685" y="226" text-anchor="middle">DateShiftMapper</text>
+      <text class="t-s" x="685" y="244" text-anchor="middle">+ shiftDays (584 @ asOf)</text>
+
+      <!-- converge -->
+      <path class="edge" d="M640,70 H720 V110 H792" marker-end="url(#a3)"/>
+      <path class="edge" d="M780,230 H800 V192" marker-end="url(#a3)"/>
+
+      <rect class="box-ok" x="800" y="112" width="180" height="70" rx="3"/>
+      <text class="t-b" x="890" y="140" text-anchor="middle">Agent sees</text>
+      <text class="t-s" x="890" y="158" text-anchor="middle">shifted timestamps</text>
+      <text class="t-s" x="890" y="174" text-anchor="middle">only</text>
+
+      <line class="edge" x1="890" y1="112" x2="890" y2="88" marker-end="url(#a3)"/>
+      <rect class="box-w" x="790" y="24" width="200" height="60" rx="3"/>
+      <text class="t-b" x="890" y="50" text-anchor="middle">Eligibility vs asOf</text>
+      <text class="t-s" x="890" y="68" text-anchor="middle">14-day window · trial active</text>
+
+      <line class="edge-dash" x1="890" y1="182" x2="890" y2="266" marker-end="url(#a3m)"/>
+      <rect class="box-w" x="760" y="272" width="230" height="56" rx="3"/>
+      <text class="t-s" x="875" y="296" text-anchor="middle">operator trace carries</text>
+      <text class="t-s" x="875" y="313" text-anchor="middle">{ asOf, shiftDays, overlayHit }</text>
+
+      <rect class="edge-red" x="340" y="286" width="290" height="38" rx="3" fill="none"/>
+      <text class="t-red" x="485" y="310" text-anchor="middle">never UPDATE — practice DB is read-only</text>
+    </svg>
+    <figcaption>Measured on the real database: shifting on the order anchor pushes 79 memberships past <code>asOf</code>, which is exactly what an active membership must look like. Do not clamp shifted dates to today — clamping destroys the entire active-Plus population.</figcaption>
+  </figure>
+
+  <div class="cols">
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Measured on the practice DB</th><th class="num">Value</th></tr></thead>
+        <tbody>
+          <tr><td><code>max(orders.order_date)</code></td><td class="num">2025-01-01</td></tr>
+          <tr><td>shiftDays at <code>asOf = 2026-08-08</code></td><td class="num">584</td></tr>
+          <tr><td>Orders inside a 14-day window post-shift</td><td class="num">3,335 <span class="no">/ 47,199</span></td></tr>
+          <tr><td>Memberships still active at the anchor</td><td class="num">79 <span class="no">/ 5,513</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Knob</th><th>Default</th><th>Behavior</th></tr></thead>
+        <tbody>
+          <tr><td class="tag">ALIGN_MAX_DATE_TO_TODAY</td><td class="tag">true</td><td>shiftDays = asOf − max(order_date)</td></tr>
+          <tr><td class="tag">AS_OF_DATE</td><td class="tag no">unset</td><td>clock for eligibility and shift anchor</td></tr>
+          <tr><td class="tag">DATE_SHIFT_DAYS</td><td class="tag no">unset</td><td>overrides the auto shift</td></tr>
+          <tr><td class="tag">DEMO_OVERLAY_PATH</td><td class="tag">demo_overlay.json</td><td>takes precedence over DuckDB</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="note">
+    <h4>Why evals must pin the clock</h4>
+    <p>With <code>asOf</code> defaulting to today, <code>shiftDays</code> grows by one every day, so any expectation written against an absolute date rots silently. Every eval that touches a return window or an active trial sets <code>AS_OF_DATE</code>, pins <code>DATE_SHIFT_DAYS</code>, or uses an overlay persona.</p>
+  </div>
+</section>
+
+<!-- ============ 4. TERMINAL STATES ============ -->
+<section>
+  <div class="sec-head">
+    <h3>Layer 04 — budgets</h3>
+    <h2>Three ways a turn ends; one of them leaves no trace on the customer's record</h2>
+    <p class="lede">Budgets only mean something as transitions. Answered and Escalated are both legitimate successes — containment is a target, not a mandate. Aborted is the only exit that writes no ticket stub.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 1000 280" role="img" aria-label="A turn moves from Routing, optionally through Clarifying, into Working, where tool calls loop without cost. Working exits to Answered when grounded and permitted, to Escalated when restricted, ungrounded or hop-exhausted, and to Aborted on a sixty second timeout or client disconnect.">
+      <defs>
+        <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+        <marker id="a4ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--grounded)"/>
+        </marker>
+        <marker id="a4e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--escalate)"/>
+        </marker>
+        <marker id="a4r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--abort)"/>
+        </marker>
+      </defs>
+
+      <rect class="box" x="20" y="104" width="150" height="58" rx="3"/>
+      <text class="t-b" x="95" y="139" text-anchor="middle">Routing</text>
+
+      <rect class="box-w" x="215" y="16" width="160" height="54" rx="3"/>
+      <text class="t-b" x="295" y="41" text-anchor="middle">Clarifying</text>
+      <text class="t-s" x="295" y="58" text-anchor="middle">no hop cost</text>
+
+      <path class="edge" d="M120,104 V43 H207" marker-end="url(#a4)"/>
+      <text class="t-lbl" x="126" y="94">identity missing</text>
+      <path class="edge" d="M330,70 V96" marker-end="url(#a4)"/>
+      <text class="t-lbl" x="340" y="88">id supplied</text>
+
+      <rect class="box" x="300" y="104" width="170" height="58" rx="3"/>
+      <text class="t-b" x="385" y="130" text-anchor="middle">Working</text>
+      <text class="t-s" x="385" y="148" text-anchor="middle">specialist + tools</text>
+
+      <line class="edge" x1="170" y1="133" x2="292" y2="133" marker-end="url(#a4)"/>
+      <text class="t-lbl" x="231" y="125" text-anchor="middle">handoff</text>
+
+      <path class="edge-dash" d="M340,162 C336,206 434,206 430,162" marker-end="url(#a4)"/>
+      <text class="t-s" x="385" y="222" text-anchor="middle">tool call · hop unchanged</text>
+
+      <line class="edge" x1="470" y1="120" x2="672" y2="60"  marker-end="url(#a4ok)" stroke="var(--grounded)"/>
+      <line class="edge" x1="470" y1="133" x2="672" y2="133" marker-end="url(#a4e)"  stroke="var(--escalate)"/>
+      <line class="edge" x1="470" y1="146" x2="672" y2="212" marker-end="url(#a4r)"  stroke="var(--abort)"/>
+
+      <text class="t-ok"  x="572" y="82"  text-anchor="middle">grounded + permitted</text>
+      <text class="t-esc" x="572" y="126" text-anchor="middle">restricted · ungrounded · hops = 4</text>
+      <text class="t-red" x="572" y="192" text-anchor="middle">60s timeout · client disconnect</text>
+
+      <rect class="box-ok" x="680" y="20" width="300" height="60" rx="3"/>
+      <text class="t-b" x="700" y="46">Answered</text>
+      <text class="t-s" x="700" y="64">grounded reply + citations · CSAT prompt</text>
+
+      <rect class="box-esc" x="680" y="104" width="300" height="60" rx="3"/>
+      <text class="t-b" x="700" y="130">Escalated</text>
+      <text class="t-s" x="700" y="148">ticket stub written · terminal for the thread</text>
+
+      <rect class="box-red" x="680" y="188" width="300" height="60" rx="3"/>
+      <text class="t-b" x="700" y="214">Aborted</text>
+      <text class="t-s" x="700" y="232">no stub · tools cancelled · safe message</text>
+    </svg>
+    <figcaption>The escalation package is rejected at write time if it is incomplete, so a stub that exists is a stub that is usable. That binary check is what makes the PRD's "100% complete escalations" measurable rather than aspirational.</figcaption>
+  </figure>
+
+  <div class="note ok">
+    <h4>What makes an escalation package complete</h4>
+    <p><code>conversationId</code>, <code>intent</code>, <code>urgency</code>, <code>transcript_summary</code>, <code>reason_code</code> and <code>suggested_category</code> are non-empty; <code>entities</code>, <code>tools_tried</code> and <code>citations</code> are present but may be empty; <code>reason_code</code> is one of the seven allowed values. <code>entities</code> must carry an order or user id <em>unless</em> the reason is <code>customer_requested_human</code> or <code>ungrounded</code> — where the customer may never have given one.</p>
+  </div>
+</section>
+
+<!-- ============ ADRs ============ -->
+<section>
+  <div class="sec-head">
+    <h3>Decisions</h3>
+    <h2>Fourteen locks, and what each one buys</h2>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th class="num">ADR</th><th>Decision</th><th>Buys</th></tr></thead>
+      <tbody>
+        <tr><td class="num tag">01</td><td>TypeScript + Node LTS across FE and BE</td><td>one language, one toolchain</td></tr>
+        <tr><td class="num tag">02</td><td>Next.js App Router + React chat UI</td><td>streaming chat with minimal chrome</td></tr>
+        <tr><td class="num tag">03</td><td>Hierarchical triage coordinator + specialists</td><td>specialization as a grounding boundary</td></tr>
+        <tr><td class="num tag">04</td><td>SSE for tokens <em>and</em> trace events</td><td>a single envelope, not two channels</td></tr>
+        <tr><td class="num tag">05</td><td>Repository ports + DuckDB read adapter</td><td>swap the database without touching agents</td></tr>
+        <tr><td class="num tag">06</td><td>Ticket stubs live outside the practice DB</td><td>the catalog stays read-only</td></tr>
+        <tr><td class="num tag">07</td><td>No MCP servers in the MVP</td><td>tools stay in-process and auditable</td></tr>
+        <tr><td class="num tag">08</td><td>≤ 4 specialist hops, then forced escalation</td><td>a bounded, costed turn</td></tr>
+        <tr><td class="num tag">09</td><td>Next.js BFF — UI and API in one app</td><td>one process to deploy and demo</td></tr>
+        <tr><td class="num tag">10</td><td>SQLite for sessions and ticket stubs</td><td>survives a browser refresh mid-demo</td></tr>
+        <tr><td class="num tag">11</td><td>Section/keyword policy search, threshold 0.55</td><td>grounding without a vector database</td></tr>
+        <tr><td class="num tag">12</td><td>CI runs against a 3.2 MB five-table DuckDB fixture; unit tests mock ports</td><td>real SQL coverage in CI</td></tr>
+        <tr><td class="num tag">13</td><td><code>app_issue</code> → <code>suggested_category = other</code></td><td>no invented taxonomy</td></tr>
+        <tr><td class="num tag">14</td><td>Date shift + <code>AS_OF_DATE</code> + demo overlay</td><td>a 2024 dataset that demos as current</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ BUILD ORDER ============ -->
+<section>
+  <div class="sec-head">
+    <h3>Build sequence</h3>
+    <h2>Depth first — one grounded turn before six agents</h2>
+    <p class="lede">The order below is load-bearing: each step is only started once the previous one is green, because the risky parts of this system are the contract seam and the temporal layer, not the agent count.</p>
+  </div>
+
+  <ol class="steps">
+    <li><span class="n">01</span><span class="what">Freeze the DTO package<span class="why">ChatRequest, StreamEvent, EscalationPackage, ReasonCode — written at the end of Setup, before the frontend builds against a mock. The mock imports these types; it never restates them.</span></span></li>
+    <li><span class="n">02</span><span class="what">Sprint 1 vertical slice: one WISMO turn<span class="why">orderId → POST /api/chat → triage → order-specialist → get_order through the overlay and shift → streamed grounded status → done{resolved}. Exit: TTFT under 5s, hops = 1, zero money tools registered, trace shows asOf / shiftDays / overlayHit.</span></span></li>
+    <li><span class="n">03</span><span class="what">Eval runner, alongside the slice<span class="why">Two scripts at minimum: WISMO grounded with a pinned clock, and refund → escalate asserting a schema-valid package and zero money tool calls. Not deferred to QA.</span></span></li>
+    <li><span class="n">04</span><span class="what">Escalation + ticket stub + payment route<span class="why">Proves the safety boundary is real rather than documented.</span></span></li>
+    <li><span class="n">05</span><span class="what">faq-policy + search_policy at 0.55<span class="why">Proves grounding and escalate-over-invent.</span></span></li>
+    <li><span class="n">06</span><span class="what">returns-advisor reusing order tools<span class="why">Proves the hop accounting rule under a chained case.</span></span></li>
+    <li><span class="n">07</span><span class="what">plus-specialist + membership overlay<span class="why">Proves the temporal layer under a second read path.</span></span></li>
+    <li><span class="n">08</span><span class="what">SQLite stores, CSAT, trace panel<span class="why">Demo polish — deliberately last.</span></span></li>
+  </ol>
+
+  <div class="note ok">
+    <h4>Resolved 2026-08-13 · SAD-OQ-6 — scope the CI fixture by table, not by row</h4>
+    <p>The practice database is 151 MB, over GitHub's 100 MB hard limit, so ADR-12's "repo fixture copy" was not executable as written. Nearly all that weight is <code>events</code> (6.5M rows) and <code>sessions</code> (1.4M) — tables the MVP never reads. Copying only the five MVP-read tables, <strong>with every row intact</strong>, yields <code>novamart_ci.duckdb</code> at <strong>3.2&nbsp;MB</strong>: under even GitHub's 50 MB soft warning, and verified row-for-row against the full database.</p>
+    <p>Row-subsetting to demo personas turned out to be unnecessary. Whole tables keep the fixture a sample-free replica, so the temporal measurements above reproduce in CI unchanged, and the generator needs no persona input — which matters, because <code>demo_overlay.json</code> does not exist yet. Built by <code>scripts/build-ci-fixture.py</code>; <code>--check</code> verifies the committed fixture without rebuilding it.</p>
+  </div>
+</section>
+
+<footer>
+  <span>Source: project-context/1.define/sad.md</span>
+  <span>AAMAD_TARGET_RUNTIME=claude-agent-sdk</span>
+  <span>Status: FINAL-FOR-BUILD</span>
+</footer>
+
+</div>

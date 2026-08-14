@@ -393,7 +393,33 @@ stateDiagram-v2
 | `other`            | faq-policy → escalate if ungrounded    | —                   |
 
 
-**Chain exception**: `returns_policy` may call order tools inside returns-advisor (no second hop counted as separate agent if same agent); if order missing, triage may ask clarifying question first.
+#### Hop accounting (normative)
+
+**A hop is an agent transfer, not a tool call.** `SessionState.hops` increments on — and only
+on — a `triage-router → specialist` handoff or a `specialist → escalation-handoff` handoff.
+Tool calls made by an agent *within* its own turn never increment `hops`, regardless of how
+many tools it calls or how many repositories those tools touch.
+
+Consequences `@backend-eng` must implement exactly:
+
+| Event | `hops` |
+| ------- | ------ |
+| `triage-router` asks a clarifying question (no handoff) | unchanged |
+| `triage-router → order-specialist` | **+1** |
+| `order-specialist` calls `get_order`, then `get_order_items` | unchanged |
+| `returns-advisor` calls `search_policy` **and** `get_order` + `get_order_items` | unchanged |
+| `order-specialist → escalation-handoff` | **+1** |
+| Re-route by triage to a second specialist | **+1** |
+
+The budget is checked *before* a handoff: if `hops` is already `maxHops=4`, the orchestrator
+does not perform the handoff and instead forces `escalation-handoff` with
+`reason_code=repeat_failure`. The forced escalation handoff itself is exempt from the check
+(it is the terminal state, not a further hop) — otherwise a hop-exhausted turn would have no
+legal exit.
+
+**Chain exception (restated under this rule)**: `returns_policy` routes to `returns-advisor`
+as a single hop; that agent may then call order tools itself without further hop cost. If the
+order id is missing, triage asks a clarifying question first — which costs no hop.
 
 ---
 
@@ -514,6 +540,55 @@ type StreamEvent =
 ```
 
 
+
+##### `EscalationPackage` (normative shape — PRD §3.2 `escalation-handoff`)
+
+Input to `create_ticket_stub`; one row in the TicketStubStore. Every field marked required
+must be non-empty at write time — `create_ticket_stub` **rejects** a partial package rather
+than writing a degraded stub. This is the binary check behind PRD "100% complete escalations"
+(F-ESC-01 / F-TICKET-01) and `AC-EVAL-04`.
+
+```typescript
+type ReasonCode =
+  | "customer_requested_human"
+  | "ungrounded"
+  | "restricted_action"
+  | "low_confidence"
+  | "repeat_failure"
+  | "high_severity"
+  | "payment_or_refund";
+
+type EscalationPackage = {
+  // --- required ---
+  conversationId: string;
+  intent: string;                                  // from SessionState.intent; "other" if unresolved
+  entities: {                                      // what triage/specialists actually extracted
+    order_id?: number;
+    user_id?: number;
+    device?: string;
+    app_version?: string;
+  };
+  urgency: "low" | "medium" | "high" | "critical";
+  transcript_summary: string;                      // customer-safe; no raw tool JSON, no PII beyond ids
+  tools_tried: Array<{ tool: string; ok: boolean; summary: string }>;  // may be [] — must be present
+  citations: string[];                             // may be [] — must be present
+  reason_code: ReasonCode;
+  suggested_category: string;                      // `other` for app_issue (ADR-13)
+  // --- populated on write ---
+  ticket_stub_id: string;                          // returned by create_ticket_stub
+  created_at: string;                              // ISO; stamped with asOf-aware clock
+};
+```
+
+**Validator rule (QA-checkable)**: a package is *complete* iff `conversationId`, `intent`,
+`urgency`, `transcript_summary`, `reason_code`, and `suggested_category` are non-empty
+strings, `entities` / `tools_tried` / `citations` are present (empty allowed), and
+`reason_code` is a member of `ReasonCode`. `entities` must additionally contain at least one
+identifier (`order_id` or `user_id`) **unless** `reason_code` is `customer_requested_human`
+or `ungrounded`, where the customer may never have supplied one.
+
+`transcript_summary` is the only free-text field the customer's words reach; the redaction
+rules in §8 apply to it before persistence.
 
 ##### `GET /api/conversations/:id/trace`
 
@@ -831,6 +906,11 @@ User "Refund me now"
 
 Map tests to PRD AC IDs (`AC-ORDER-01`, etc.).
 
+**Timing**: the eval runner is *not* deferred to the QA epic. `@backend-eng` stands it up
+during the Sprint 1 vertical slice with the WISMO + refund-escalate scripts; `@qa-eng` then
+extends it to the full eight and owns AC traceability. See *Eval harness lands in Sprint 1*
+under Implementation Guidance.
+
 ---
 
 
@@ -869,6 +949,60 @@ Use this mapping as epic boundaries:
 
 
 **Recommended build order**: Setup → Backend contracts/DTO package → Backend runtime → Frontend (parallel after DTO) → Integration → QA → Security → Deliver.
+
+### Contract freeze gate (blocking)
+
+`packages/shared/src/dto.ts` — `ChatRequest`, `StreamEvent`, `EscalationPackage`,
+`ReasonCode`, and the tool result summary shapes — is written and **frozen** at the end of
+the Setup epic, before `@frontend-eng` builds against a mock stream. The mock SSE stream the
+Frontend epic develops against MUST import these types, not restate them.
+
+Schema drift after the freeze is a **blocking Integration risk**, not a merge conflict: a
+Frontend built against a drifting mock fails at wire-up, in the week with the least slack.
+Changes after the freeze require an explicit note in `integration.md` and a re-check of the
+FE mock. This is the mechanism behind the "FE/BE agree on SSE `StreamEvent` contract" line in
+the validation checklist.
+
+### Sprint 1 — thin vertical slice (definition of done)
+
+The six-agent surface is not built breadth-first. Sprint 1 proves **one grounded WISMO turn
+end to end**, and nothing else counts as Sprint 1 success:
+
+> identity (`orderId`) → `POST /api/chat` (SSE) → `triage-router` → `order-specialist` →
+> `get_order` via DemoOverlay / DateShiftMapper → streamed grounded status →
+> `done{status:"resolved"}`, with a Prompt Trace carrying hop and overlay metadata.
+
+Exit criteria: TTFT < 5s; zero money tools registered in the process; trace shows
+`{ asOf, shiftDays, overlayHit }`; `hops` = 1.
+
+Explicitly **not** in Sprint 1: `faq-policy`, `plus-specialist`, `returns-advisor`, the 0.55
+policy threshold, CSAT, the TracePanel UI (trace via `GET .../trace` or log file is enough),
+and SQLite session durability (in-memory session is acceptable if the DTO shape is honored).
+
+**Sprint 2 layer order**, each added only after the previous one is green:
+
+| # | Addition | Proves |
+| - | -------- | ------ |
+| 1 | `escalation-handoff` + `create_ticket_stub` + payment → escalate | Safety boundary is real, not documented |
+| 2 | `faq-policy` + `search_policy` + 0.55 threshold | Grounding + escalate-over-invent |
+| 3 | `returns-advisor` (reuses order tools, no extra hop) | Hop accounting rule above |
+| 4 | `plus-specialist` + membership overlay | Temporal layer under a second read path |
+| 5 | SQLite stores, CSAT, TracePanel UI | Demo polish |
+
+### Eval harness lands in Sprint 1, not at QA
+
+F-EVAL-01's eight scripts are the containment/grounding north star, so the *runner* is built
+with the vertical slice rather than at the QA epic. Minimum viable eval set at the end of
+Sprint 1:
+
+1. **WISMO grounded** — `AS_OF_DATE` pinned, asserts a tool-sourced fact in the reply.
+2. **Refund → escalate** — asserts `reason_code=payment_or_refund`, a schema-valid
+   `EscalationPackage`, and zero money tools called.
+3. **FAQ grounded** — asserts a citation is present (added with Sprint 2 layer 2).
+
+The remaining scripts fill in as agents land. Every eval that touches a return window or an
+active trial pins `AS_OF_DATE` or uses an overlay persona (`AC-EVAL-05`) — a wall-clock
+default makes `shiftDays` drift by one per day and silently rots absolute expectations.
 
 ---
 
@@ -946,43 +1080,59 @@ Use this mapping as epic boundaries:
 | SAD-OQ-3 | Model id | **Resolved (default)** — `MODEL_ID` env; record in Build Audit |
 | SAD-OQ-4 | TS language config | **Resolved** — typescript primary |
 | SAD-OQ-5 | Policy chunking | **Resolved** — section/keyword (ADR-11) |
-| SAD-OQ-6 | CI fixture artifact exceeds GitHub file limit | **Open — non-blocking for Define; must close in Setup epic** |
+| SAD-OQ-6 | CI fixture artifact exceeds GitHub file limit | **Resolved 2026-08-13** — table-scoped fixture, 3.2 MB |
 
-### SAD-OQ-6 — CI fixture artifact (raised 2026-08-08)
+### SAD-OQ-6 — CI fixture artifact (raised 2026-08-08, resolved 2026-08-13)
 
 ADR-12 and the environment matrix specify `data/fixtures/novamart_practice.duckdb` as a
 **repo fixture copy** for CI integration tests. The practice DB is **151 MB**
 (158,347,264 bytes), which exceeds GitHub's 100 MB per-file hard limit (warning at 50 MB).
-As written, ADR-12 cannot be executed.
+As written, ADR-12 could not be executed.
 
 The decision itself (integration tests run against a real DuckDB fixture; unit tests mock
-the ports) is unaffected — only the artifact is. Options, in recommended order:
+the ports) was never in question — only the artifact.
 
-1. **Slimmed CI fixture** (recommended). Build `data/fixtures/novamart_ci.duckdb` containing
-   only the five MVP-read tables (`users`, `orders`, `order_items`, `products`,
-   `memberships`), row-subset to the demo personas and eval scripts. `support_tickets` is
-   already out of the MVP tool surface, so excluding it costs no coverage. Expected to be
-   single-digit MB and committable. Generation script owned by the Setup epic; must be
-   deterministic and re-runnable.
-2. **Git LFS** for the full DB. Costs GitHub free-tier quota (1 GB storage, 1 GB/month
-   bandwidth) and every revision counts against it. Poor fit for Capstone scale.
-3. **CI-time download** from an external URL. Adds a network dependency and a secret to CI;
-   contradicts the reproducibility principle in `aamad-core`.
+**Resolution: scope the fixture by table, not by row.** The 151 MB is almost entirely
+`events` (6,510,093 rows) and `sessions` (1,383,467), neither of which the MVP tool surface
+reads. Copying only the five MVP-read tables — `users`, `orders`, `order_items`, `products`,
+`memberships`, **with every row intact** — produces `data/fixtures/novamart_ci.duckdb` at
+**3.2 MB**, under GitHub's 50 MB soft warning. `support_tickets` stays out; only its category
+enum is used, and only in code.
 
-**Interim state**: the full 151 MB DB is kept local and untracked
+Row-subsetting to demo personas, floated when this OQ was raised, is **rejected as
+unnecessary**: it would force a fixture rebuild whenever a persona or eval script referenced
+a new id, and the temporal measurements recorded above (`shiftDays=584`, 3,335 orders in
+window, 79 active memberships) would need separate CI expectations. Whole-table copies keep
+the fixture a sample-free replica, so a query that holds locally holds in CI. It also removes
+a dependency Setup could not have satisfied — `demo_overlay.json` does not exist yet.
+
+**Generator**: `scripts/build-ci-fixture.py` (Setup epic). Opens the source read-only, writes
+to a temp file, then atomically replaces the target. `--check` verifies the committed fixture
+against the source without rebuilding. Verified on build: per-table row counts and checksums
+match the full database exactly, including the 79-active-membership figure.
+
+**Known limitation**: the fixture is *content*-deterministic, not byte-reproducible — DuckDB
+stamps internal metadata on each write, so a rebuild yields a 3.2 MB binary diff even when
+nothing changed. Rebuild only when the practice DB changes; use `--check` in CI.
+
+Rejected alternatives: **Git LFS** for the full DB (consumes GitHub free-tier quota per
+revision; poor fit at Capstone scale) and **CI-time download** (adds a network dependency and
+a CI secret, contradicting the reproducibility principle in `aamad-core`).
+
+**Standing state**: the full 151 MB DB stays local and untracked
 (`.gitignore` → `data/fixtures/*.duckdb`, with `novamart_ci.duckdb` explicitly un-ignored).
-Local dev resolves it via `NOVAMART_DUCKDB_PATH` or the default fixture path.
+Local dev resolves it via `NOVAMART_DUCKDB_PATH` or the default fixture path; CI uses the
+committed 3.2 MB fixture.
 
-*No blocking architecture open questions remain for Define. SAD-OQ-6 is a Build/Setup-epic
-obligation and does not gate the Define phase gate.*
+*No open architecture questions remain.*
 
 ---
 
 ## Audit
 
-- **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize); **2026-08-08** (runtime retrofit)  
+- **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize); **2026-08-08** (runtime retrofit); **2026-08-10** (instructor-feedback pass); **2026-08-13** (SAD-OQ-6 resolved)  
 - **Persona id**: `system-arch`  
-- **Action**: `create-sad --mvp` + quality pass (PRD flow coverage, ADR locks) + runtime retrofit `cursor-sdk` → `claude-agent-sdk` + add flow diagrams (temporal layer, turn lifecycle) + raise SAD-OQ-6 (CI fixture artifact exceeds GitHub file limit)  
+- **Action**: `create-sad --mvp` + quality pass (PRD flow coverage, ADR locks) + runtime retrofit `cursor-sdk` → `claude-agent-sdk` + add flow diagrams (temporal layer, turn lifecycle) + raise SAD-OQ-6 (CI fixture artifact exceeds GitHub file limit) + instructor-feedback pass: normative hop accounting, `EscalationPackage` shape + validator rule, DTO contract freeze gate, Sprint 1 vertical slice + Sprint 2 layer order, eval runner moved into Sprint 1 + **SAD-OQ-6 resolved**: CI fixture scoped by table not by row (5 MVP tables, all rows, 3.2 MB) + `scripts/build-ci-fixture.py`  
 - AAMAD_TARGET_RUNTIME: claude-agent-sdk  
 - **Inputs**: `mrd.md`, `prd.md` (post quality pass), adapter rule  
 - **Output**: `project-context/1.define/sad.md`  
