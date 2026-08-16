@@ -349,7 +349,8 @@ stateDiagram-v2
   Clarifying --> Routing: identity supplied
   Routing --> Working: handoff to specialist
 
-  Working --> Working: tool call (hop < maxHops=4)
+  Working --> Working: tool call (in-agent — no hop)
+  Working --> Working: agent handoff (hops+1, only while hops < maxHops=4)
   Working --> Answered: grounded + permitted
   Working --> Escalating: restricted / ungrounded / human requested
   Working --> Escalating: hops exhausted (repeat_failure)
@@ -966,24 +967,37 @@ the validation checklist.
 ### Sprint 1 — thin vertical slice (definition of done)
 
 The six-agent surface is not built breadth-first. Sprint 1 proves **one grounded WISMO turn
-end to end**, and nothing else counts as Sprint 1 success:
+end to end, plus the escalation exit**, and nothing else counts as Sprint 1 success:
 
-> identity (`orderId`) → `POST /api/chat` (SSE) → `triage-router` → `order-specialist` →
-> `get_order` via DemoOverlay / DateShiftMapper → streamed grounded status →
-> `done{status:"resolved"}`, with a Prompt Trace carrying hop and overlay metadata.
+> **Slice A — grounded resolve.** identity (`orderId`) → `POST /api/chat` (SSE) →
+> `triage-router` → `order-specialist` → `get_order` via DemoOverlay / DateShiftMapper →
+> streamed grounded status → `done{status:"resolved"}`, with a Prompt Trace carrying hop and
+> overlay metadata.
+>
+> **Slice B — safe refusal.** payment / refund ask → `triage-router` →
+> `escalation-handoff` (**stub**) → schema-valid `EscalationPackage` +
+> `create_ticket_stub` → `done{status:"escalated"}`, `reason_code=payment_or_refund`.
+
+Slice B is deliberately thin: `escalation-handoff` in Sprint 1 needs only the
+`payment_or_refund` path, an in-memory `TicketStubStore`, and a package that passes the
+validator in §`EscalationPackage`. Full reason-code coverage and durable stubs are Sprint 2
+layer 1. The stub is in Sprint 1 because the Sprint 1 eval set asserts it (see below) — an
+eval cannot test an agent that has not been built.
 
 Exit criteria: TTFT < 5s; zero money tools registered in the process; trace shows
-`{ asOf, shiftDays, overlayHit }`; `hops` = 1.
+`{ asOf, shiftDays, overlayHit }`; `hops` = 1 on Slice A and `hops` = 1 on Slice B; the
+Slice B package validates.
 
-Explicitly **not** in Sprint 1: `faq-policy`, `plus-specialist`, `returns-advisor`, the 0.55
-policy threshold, CSAT, the TracePanel UI (trace via `GET .../trace` or log file is enough),
-and SQLite session durability (in-memory session is acceptable if the DTO shape is honored).
+Explicitly **not** in Sprint 1: `faq-policy`, `plus-specialist`, `returns-advisor`, the
+non-payment escalation reason codes, the 0.55 policy threshold, CSAT, the TracePanel UI
+(trace via `GET .../trace` or log file is enough), and SQLite session durability (in-memory
+session and in-memory ticket stubs are acceptable if the DTO shapes are honored).
 
 **Sprint 2 layer order**, each added only after the previous one is green:
 
 | # | Addition | Proves |
 | - | -------- | ------ |
-| 1 | `escalation-handoff` + `create_ticket_stub` + payment → escalate | Safety boundary is real, not documented |
+| 1 | `escalation-handoff` hardened — the remaining six `ReasonCode` values + durable `TicketStubStore` | Safety boundary is general, not one hard-coded branch |
 | 2 | `faq-policy` + `search_policy` + 0.55 threshold | Grounding + escalate-over-invent |
 | 3 | `returns-advisor` (reuses order tools, no extra hop) | Hop accounting rule above |
 | 4 | `plus-specialist` + membership overlay | Temporal layer under a second read path |
@@ -1130,9 +1144,9 @@ committed 3.2 MB fixture.
 
 ## Audit
 
-- **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize); **2026-08-08** (runtime retrofit); **2026-08-10** (instructor-feedback pass); **2026-08-13** (SAD-OQ-6 resolved)  
+- **Timestamp**: 2026-08-07 (created); **2026-08-08** (quality pass / finalize); **2026-08-08** (runtime retrofit); **2026-08-10** (instructor-feedback pass); **2026-08-13** (SAD-OQ-6 resolved); **2026-08-14** (instructor-feedback pass 2)  
 - **Persona id**: `system-arch`  
-- **Action**: `create-sad --mvp` + quality pass (PRD flow coverage, ADR locks) + runtime retrofit `cursor-sdk` → `claude-agent-sdk` + add flow diagrams (temporal layer, turn lifecycle) + raise SAD-OQ-6 (CI fixture artifact exceeds GitHub file limit) + instructor-feedback pass: normative hop accounting, `EscalationPackage` shape + validator rule, DTO contract freeze gate, Sprint 1 vertical slice + Sprint 2 layer order, eval runner moved into Sprint 1 + **SAD-OQ-6 resolved**: CI fixture scoped by table not by row (5 MVP tables, all rows, 3.2 MB) + `scripts/build-ci-fixture.py`  
+- **Action**: `create-sad --mvp` + quality pass (PRD flow coverage, ADR locks) + runtime retrofit `cursor-sdk` → `claude-agent-sdk` + add flow diagrams (temporal layer, turn lifecycle) + raise SAD-OQ-6 (CI fixture artifact exceeds GitHub file limit) + instructor-feedback pass: normative hop accounting, `EscalationPackage` shape + validator rule, DTO contract freeze gate, Sprint 1 vertical slice + Sprint 2 layer order, eval runner moved into Sprint 1 + **SAD-OQ-6 resolved**: CI fixture scoped by table not by row (5 MVP tables, all rows, 3.2 MB) + `scripts/build-ci-fixture.py` + **instructor-feedback pass 2**: stub `escalation-handoff` pulled into Sprint 1 as Slice B (resolves Sprint 1 scope vs. Sprint 1 eval set contradiction; Sprint 2 layer 1 rescoped to hardening), turn-lifecycle diagram corrected so tool calls no longer consume hop budget  
 - AAMAD_TARGET_RUNTIME: claude-agent-sdk  
 - **Inputs**: `mrd.md`, `prd.md` (post quality pass), adapter rule  
 - **Output**: `project-context/1.define/sad.md`  
