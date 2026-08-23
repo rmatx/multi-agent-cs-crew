@@ -10,7 +10,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:invariants": "node --test server/runtime/toolRegistry.test.ts"
   },
   "repository": {
     "type": "git",
@@ -24,6 +25,7 @@
   },
   "homepage": "https://github.com/rmatx/multi-agent-cs-crew#readme",
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.241",
     "@duckdb/node-api": "^1.5.5-r.4",
     "next": "^16.3.1",
     "react": "^19.2.8",

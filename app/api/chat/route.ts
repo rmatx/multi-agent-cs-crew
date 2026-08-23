@@ -1,17 +1,23 @@
 /**
  * POST /api/chat — SSE turn endpoint (SAD §4 "API contracts (normative)").
  *
- * Sprint 1 vertical slice ONLY: identity(orderId) → order lookup (read-only DuckDB +
- * DateShiftMapper) → streamed grounded status → done. There is deliberately NO LLM call in
- * this slice: the grounded sentence is composed deterministically from the tool result, so
- * the slice runs without an API key and evals stay reproducible.
+ * This handler does four things and nothing else: parse/validate the `ChatRequest`, resolve
+ * the temporal context, pick a `TurnEngine`, and pump its events onto the SSE wire. All turn
+ * behaviour lives behind `server/runtime/engine.ts`.
+ *
+ * Engine selection — `CHAT_ENGINE=deterministic|sdk`, DEFAULT `deterministic`:
+ *   deterministic  Sprint 1 slice. identity(orderId) → read-only DuckDB + DateShiftMapper →
+ *                  grounded sentence composed in code. No LLM, no key, no network.
+ *   sdk            claude-agent-sdk crew (opt-in, needs ANTHROPIC_API_KEY + MODEL_ID).
  *
  * Zero money tools exist in this process: no refund, cancel, or payment code path.
  */
 
-import type { ChatRequest, OrderSummary, StreamEvent } from "@shared/dto";
-import { daysSince, resolveTemporalMeta, shiftIsoDate } from "@/server/data/dateShift";
-import { getOrderItems, getRawOrder } from "@/server/data/duckdb";
+import type { ChatRequest, StreamEvent } from "@shared/dto";
+import { resolveTemporalMeta } from "@/server/data/dateShift";
+import { resolveBudgets, resolveEngineId } from "@/server/runtime/config";
+import type { TurnInput } from "@/server/runtime/engine";
+import { loadEngine } from "@/server/runtime/engines/select";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,33 +32,6 @@ function isChatRequest(body: unknown): body is ChatRequest {
   if (typeof body !== "object" || body === null) return false;
   const candidate = body as Record<string, unknown>;
   return typeof candidate["message"] === "string";
-}
-
-function money(value: number): string {
-  return `$${value.toFixed(2)}`;
-}
-
-/** Deterministic, tool-grounded reply. Every fact here comes from the order read. */
-function composeGroundedReply(order: OrderSummary, asOf: string): string[] {
-  const age = daysSince(order.orderDate, asOf);
-  const placed =
-    age === 0 ? "today" : age === 1 ? "yesterday" : `${age} days ago`;
-  const lines = [
-    `Order ${order.orderId} is ${order.status}.`,
-    `Placed ${order.orderDate} (${placed}). Order total ${money(order.totalAmount)}.`,
-  ];
-  if (order.items.length > 0) {
-    lines.push("Items:");
-    for (const item of order.items) {
-      lines.push(`- ${item.productName} x${item.quantity} — ${money(item.lineTotal)}`);
-    }
-  }
-  lines.push("I can't process refunds, cancellations, or payments here.");
-  return lines;
-}
-
-function chunk(text: string): string[] {
-  return text.split(/(\s+)/).filter((part) => part.length > 0);
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -75,8 +54,9 @@ export async function POST(request: Request): Promise<Response> {
 
   const chatRequest = body;
   const conversationId = chatRequest.conversationId ?? crypto.randomUUID();
-  const orderId = chatRequest.identity?.orderId;
   const trace = chatRequest.clientFlags?.trace === true;
+  const engineId = resolveEngineId();
+  const budgets = resolveBudgets();
 
   // Temporal context is resolved before any date leaves the server (F-TIME-01).
   let temporal;
@@ -92,64 +72,64 @@ export async function POST(request: Request): Promise<Response> {
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const send = (event: StreamEvent): void => controller.enqueue(frame(event));
+      // One turn, one abort signal: client disconnect OR the SAD turn timeout (SAD §2
+      // Cancellation). In-flight work observes it; no partial ticket stub is written.
+      const abort = new AbortController();
+      const onDisconnect = (): void => abort.abort(new Error("client_disconnect"));
+      request.signal.addEventListener("abort", onDisconnect, { once: true });
+      const timer = setTimeout(
+        () => abort.abort(new Error("turn_timeout")),
+        budgets.turnTimeoutMs,
+      );
+
+      let terminated = false;
+      const send = (event: StreamEvent): void => {
+        if (terminated) return; // nothing may follow `done`
+        if (event.type === "done") terminated = true;
+        controller.enqueue(frame(event));
+      };
+
       try {
         send({ type: "session", conversationId });
 
-        if (orderId === undefined || !Number.isInteger(orderId)) {
-          for (const part of chunk(
-            "I can look that up — what is your order number?",
-          )) {
-            send({ type: "token", text: part });
-          }
-          send({ type: "done", status: "needs_input" });
+        const loaded = await loadEngine(engineId);
+        if (!loaded.ok) {
+          send({ type: "error", code: loaded.code, message: loaded.message, retryable: false });
+          send({ type: "done", status: "escalated" });
           return;
         }
 
-        if (trace) {
-          send({ type: "agent_hop", agentId: "order-specialist", hop: 1 });
-          send({ type: "tool_call", agentId: "order-specialist", tool: "get_order" });
-        }
-
-        const raw = await getRawOrder(orderId);
-        if (raw === null) {
-          for (const part of chunk(
-            `I couldn't find order ${orderId}. Please double-check the number, or I can hand you to a human.`,
-          )) {
-            send({ type: "token", text: part });
-          }
-          send({ type: "done", status: "needs_input" });
-          return;
-        }
-
-        const items = await getOrderItems(orderId);
-        // Raw dates never reach the client: shift inside the adapter boundary.
-        const order: OrderSummary = {
-          ...raw,
-          orderDate: shiftIsoDate(raw.orderDate, temporal.shiftDays),
-          items,
+        const input: TurnInput = {
+          conversationId,
+          message: chatRequest.message,
+          identity: chatRequest.identity ?? {},
+          trace,
+          temporal,
+          signal: abort.signal,
         };
 
-        for (const line of composeGroundedReply(order, temporal.asOf)) {
-          for (const part of chunk(line)) send({ type: "token", text: part });
-          send({ type: "token", text: "\n" });
-        }
+        await loaded.engine.runTurn(input, send);
 
-        send({
-          type: "citation",
-          ids: [`duckdb:orders:${order.orderId}`, `duckdb:order_items:${order.orderId}`],
-        });
-        send({ type: "done", status: "resolved" });
+        // An engine that returned without a terminal frame is a defect, not a customer
+        // problem — close the turn safely rather than leaving the stream hanging.
+        if (!terminated) {
+          send({ type: "done", status: "needs_input" });
+        }
       } catch (err) {
         console.error("chat turn failed", err);
+        const aborted = abort.signal.aborted;
         send({
           type: "error",
-          code: "turn_failed",
-          message: "Something went wrong on our side. Please try again.",
+          code: aborted ? "turn_aborted" : "turn_failed",
+          message: aborted
+            ? "That took too long, so I stopped. Please try again, or ask for a human."
+            : "Something went wrong on our side. Please try again.",
           retryable: true,
         });
         send({ type: "done", status: "escalated" });
       } finally {
+        clearTimeout(timer);
+        request.signal.removeEventListener("abort", onDisconnect);
         controller.close();
       }
     },
@@ -166,6 +146,7 @@ export async function POST(request: Request): Promise<Response> {
       "X-Novamart-Shift-Days": String(temporal.shiftDays),
       "X-Novamart-Overlay-Hit": String(temporal.overlayHit),
       "X-Novamart-Conversation-Id": conversationId,
+      "X-Novamart-Engine": engineId,
     },
   });
 }
