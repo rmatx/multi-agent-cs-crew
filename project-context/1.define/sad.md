@@ -326,7 +326,8 @@ type SessionState = {
 | Turn / hop budget   | `maxHops=4`                                                                                      | Then `reason_code=repeat_failure`                                          |
 | Time budget         | `turnTimeoutMs=60000`                                                                            | Cancel in-flight tools; safe user message                                  |
 | Token / cost budget | Configurable `maxOutputTokens` per turn                                                          | Halt + Diagnostic on overrun                                               |
-| Temperature         | Low for specialists (≤0.3); triage ≤0.2                                                          | Determinism for evals                                                      |
+| Effort              | `MODEL_EFFORT` default `low` (low / medium / high / xhigh / max)                                  | Determinism lever for evals. **Temperature is unavailable**: it was removed from the Anthropic Messages API on the target models (Opus 5, Sonnet 5, Opus 4.7/4.8 reject it with HTTP 400) and `@anthropic-ai/claude-agent-sdk` exposes no temperature option, so no value could reach the model. Reproducibility comes from `effort` + pinned `AS_OF_DATE` + the keyless deterministic engine |
+| Thinking            | `thinking` + `effort`; fixed `MAX_THINKING_TOKENS` budget applies to **older** models only (e.g. `claude-haiku-4-5`) | SDK `maxThinkingTokens` is deprecated and model-dependent — on Opus 4.6 any non-zero value behaves as an on/off switch rather than a cap |
 | MCP                 | **None required**                                                                                | Future Work                                                                |
 | Sessions / resume   | Conversation id in SQLite SessionStore                                                           | No cross-user memory; file-backed for demo refresh (ADR-10) |
 | Retries             | Tool read: **1** retry on transient failure; no retry on validation errors                       | Idempotent reads                                                           |
@@ -456,7 +457,8 @@ apps/web/   (or repo-root Next app)
   lib/chatClient.ts
   server/      (orchestrator, agents, tools, data — Node-only)
 packages/shared/src/dto.ts
-data/fixtures/novamart_practice.duckdb
+data/fixtures/novamart_practice.duckdb   # local authoritative dataset (151 MB, gitignored)
+data/fixtures/novamart_ci.duckdb         # committed CI / fresh-clone fixture (3 MB, code default)
 data/demo_overlay.json        # F-TIME-01 personas
 data/policy/*.md
 data/sessions.sqlite          # runtime
@@ -705,6 +707,8 @@ TICKET_STUB_DB_PATH=
 SESSION_DB_PATH=
 ANTHROPIC_API_KEY=
 MODEL_ID=
+MODEL_EFFORT=low
+MAX_THINKING_TOKENS=
 MAX_HOPS=4
 TURN_TIMEOUT_MS=60000
 OPERATOR_KEY=
@@ -735,9 +739,14 @@ PORT=
 
 | Env | Purpose | Topology |
 | --- | ------- | -------- |
-| **local** | Dev + eval | **Single Next.js process** (ADR-09); `NOVAMART_DUCKDB_PATH` or default fixture |
-| **demo** | Capstone showcase | One container/VM; SQLite under `data/`; DuckDB mounted/copied |
-| **ci** | lint/test/build | Unit: mocked ports; Integration: **`data/fixtures/novamart_practice.duckdb`** (ADR-12); LLM mocked |
+| **local** | Dev + eval | **Single Next.js process** (ADR-09); authoritative dataset **`data/fixtures/novamart_practice.duckdb`** (151 MB, gitignored, untracked) via `NOVAMART_DUCKDB_PATH`; falls back to the committed CI fixture on a fresh clone |
+| **demo** | Capstone showcase | One container/VM; SQLite under `data/`; practice DuckDB mounted/copied (not committed) |
+| **ci** | lint/test/build | Unit: mocked ports; Integration: **`data/fixtures/novamart_ci.duckdb`** — the committed 3 MB fresh-clone fixture and the code default (SAD-OQ-6, ADR-12); LLM mocked |
+
+The two databases are not interchangeable: `novamart_practice.duckdb` is the authoritative
+local/dev dataset and cannot be committed (151 MB exceeds GitHub's 100 MB file limit), while
+`novamart_ci.duckdb` is the committed CI / fresh-clone fixture and the default path in code,
+overridable with `NOVAMART_DUCKDB_PATH`.
 
 
 
@@ -1095,11 +1104,12 @@ default makes `shiftDays` drift by one per day and silently rots absolute expect
 | SAD-OQ-4 | TS language config | **Resolved** — typescript primary |
 | SAD-OQ-5 | Policy chunking | **Resolved** — section/keyword (ADR-11) |
 | SAD-OQ-6 | CI fixture artifact exceeds GitHub file limit | **Resolved 2026-08-13** — table-scoped fixture, 3.2 MB |
+| SAD-OQ-7 | Determinism lever with temperature removed from the API | **Resolved 2026-08-23** — `effort` (`MODEL_EFFORT` default `low`) + pinned `AS_OF_DATE` + keyless deterministic engine; temperature is unavailable on the target models (closes BE-OQ-2 / SU-OQ-2) |
 
 ### SAD-OQ-6 — CI fixture artifact (raised 2026-08-08, resolved 2026-08-13)
 
-ADR-12 and the environment matrix specify `data/fixtures/novamart_practice.duckdb` as a
-**repo fixture copy** for CI integration tests. The practice DB is **151 MB**
+ADR-12 and the environment matrix originally specified `data/fixtures/novamart_practice.duckdb`
+as a **repo fixture copy** for CI integration tests (the matrix was corrected on 2026-08-23). The practice DB is **151 MB**
 (158,347,264 bytes), which exceeds GitHub's 100 MB per-file hard limit (warning at 50 MB).
 As written, ADR-12 could not be executed.
 
@@ -1152,4 +1162,20 @@ committed 3.2 MB fixture.
 - **Output**: `project-context/1.define/sad.md`  
 - **Quality gate**: FINAL-FOR-BUILD — critical flows covered; OQs closed; stack feasible  
 - **Handoff**: Build `@project-mgr` setup next; optional user stories / SFS.
+
+### Amendment — 2026-08-23T20:44:17Z
+
+- **Persona id**: `@system.arch`
+- **Action**: `*create-sad` (surgical amendment)
+- **AAMAD_TARGET_RUNTIME**: `claude-agent-sdk` (resolved)
+- **Changed**: (1) §2 runtime-configuration table — the `Temperature` control was replaced by
+  `Effort` (`MODEL_EFFORT`, default `low`) plus a `Thinking` row, because temperature was removed
+  from the Anthropic Messages API on the target models and is not exposed by
+  `@anthropic-ai/claude-agent-sdk`, making the previous ≤0.2/≤0.3 mandate unimplementable
+  (closes BE-OQ-2 / SU-OQ-2); `MODEL_EFFORT` / `MAX_THINKING_TOKENS` added to the env-var name
+  list. (2) §5 environment matrix — the `ci` row now names the committed
+  `data/fixtures/novamart_ci.duckdb` fixture instead of the 151 MB untracked practice DB,
+  removing an intra-document contradiction with SAD-OQ-6 and matching the code default in
+  `server/data/duckdb.ts` (closes SU-OQ-3). Recorded as SAD-OQ-7 in Open Questions.
+- **Not changed**: ADR numbering, section structure, all other artifacts and code.
 
