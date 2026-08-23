@@ -1,0 +1,402 @@
+<title>NovaMart Backend Runtime</title>
+
+<style>
+  :root {
+    --paper:    #F7F9F9;
+    --surface:  #FFFFFF;
+    --wash:     #EDF3F3;
+    --ink:      #12181A;
+    --muted:    #58686C;
+    --faint:    #6C7C80;
+    --line:     #D8E0E1;
+    --grounded: #0D6B68;
+    --escalate: #9E6510;
+    --abort:    #A2382B;
+    --shadow:   0 1px 2px rgba(18,24,26,.05), 0 8px 24px -16px rgba(18,24,26,.18);
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:    #0D1113;
+      --surface:  #141A1C;
+      --wash:     #172022;
+      --ink:      #E7EDEE;
+      --muted:    #94A3A6;
+      --faint:    #84969A;
+      --line:     #252E31;
+      --grounded: #54C0B6;
+      --escalate: #D9A551;
+      --abort:    #E2735E;
+      --shadow:   0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:    #0D1113;
+    --surface:  #141A1C;
+    --wash:     #172022;
+    --ink:      #E7EDEE;
+    --muted:    #94A3A6;
+    --faint:    #84969A;
+    --line:     #252E31;
+    --grounded: #54C0B6;
+    --escalate: #D9A551;
+    --abort:    #E2735E;
+    --shadow:   0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 60rem; margin: 0 auto; display: flex; flex-direction: column; gap: 3.25rem; }
+
+  /* ---------- masthead ---------- */
+  .masthead { display: flex; flex-direction: column; gap: .9rem; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--faint);
+    display: flex; flex-wrap: wrap; gap: .5rem .9rem; align-items: center;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(2rem, 4.6vw, 3rem);
+    line-height: 1.12;
+    font-weight: 600;
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: -.01em;
+  }
+  .standfirst {
+    font-family: var(--serif);
+    font-size: clamp(1.05rem, 2vw, 1.2rem);
+    line-height: 1.55;
+    color: var(--muted);
+    margin: 0;
+    max-width: 46ch;
+  }
+
+  /* ---------- state strip ---------- */
+  .state {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .state div { background: var(--surface); padding: .95rem 1.1rem; display: flex; flex-direction: column; gap: .3rem; }
+  .state dt {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--faint); margin: 0;
+  }
+  .state dd { margin: 0; font-size: .95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ok   { color: var(--grounded); }
+  .cost { color: var(--escalate); }
+
+  /* ---------- sections ---------- */
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+  h2 {
+    font-family: var(--serif);
+    font-size: 1.5rem; font-weight: 600; margin: 0; letter-spacing: -.005em;
+    padding-bottom: .55rem;
+    border-bottom: 1px solid var(--line);
+  }
+  p { margin: 0; max-width: 68ch; }
+  .note { color: var(--muted); font-size: .95rem; }
+  code {
+    font-family: var(--mono);
+    font-size: .86em;
+    background: var(--wash);
+    padding: .1em .38em;
+    border-radius: 2px;
+    border: 1px solid var(--line);
+  }
+
+  /* ---------- figures ---------- */
+  figure { margin: 0; display: flex; flex-direction: column; gap: .8rem; }
+  .frame {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 1.5rem 1.25rem;
+    overflow-x: auto;
+    box-shadow: var(--shadow);
+  }
+  .frame svg { display: block; width: 100%; min-width: 34rem; max-width: 100%; height: auto; }
+  figcaption { font-size: .88rem; color: var(--muted); max-width: 68ch; }
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- layer list ---------- */
+  .layers { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .layers li { background: var(--surface); padding: .8rem 1.1rem; display: grid; grid-template-columns: 2.4rem 1fr; gap: .9rem; align-items: baseline; }
+  .layers .n { font-family: var(--mono); font-size: .72rem; color: var(--abort); font-weight: 700; letter-spacing: .04em; }
+  .layers .what { font-size: .93rem; }
+  .layers .what b { font-family: var(--mono); font-size: .86em; font-weight: 600; }
+
+  /* ---------- verification ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  caption { text-align: left; font-size: .88rem; color: var(--muted); padding-bottom: .6rem; }
+  th, td { text-align: left; padding: .6rem .7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--faint); font-weight: 500;
+  }
+  td:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .caveat {
+    border-left: 2px solid var(--escalate);
+    background: var(--wash);
+    padding: .9rem 1.1rem;
+    border-radius: 0 3px 3px 0;
+    font-size: .93rem;
+  }
+  .caveat b { color: var(--escalate); }
+
+  footer { color: var(--faint); font-size: .82rem; font-family: var(--mono); border-top: 1px solid var(--line); padding-top: 1rem; }
+
+  a { color: var(--grounded); }
+  :focus-visible { outline: 2px solid var(--grounded); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">
+      <span>NovaMart Support Crew</span>
+      <span>·</span>
+      <span>AAMAD Build phase</span>
+      <span>·</span>
+      <span>23 Aug 2026</span>
+    </div>
+    <h1>The backend, as built</h1>
+    <p class="standfirst">Two engines behind one seam. The free one answers today; the model-backed one is wired, typechecked, and switched off.</p>
+  </header>
+
+  <dl class="state">
+    <div><dt>Runtime</dt><dd>claude-agent-sdk</dd></div>
+    <div><dt>Active engine</dt><dd class="ok">deterministic</dd></div>
+    <div><dt>Cost per turn</dt><dd class="ok">$0.00</dd></div>
+    <div><dt>Orders in DB</dt><dd>47,199</dd></div>
+    <div><dt>Money tools</dt><dd class="ok">0 of 0</dd></div>
+  </dl>
+
+  <section>
+    <h2>One request, two possible engines</h2>
+    <p>The route handler does the work that must happen either way — parse, validate, resolve the demo clock, pump the stream — then hands off to whichever engine <code>CHAT_ENGINE</code> selects. Both return the same frame types, so the browser cannot tell them apart.</p>
+
+    <figure>
+      <div class="frame">
+        <svg viewBox="0 0 880 372" role="img" aria-label="A chat request enters the Next.js route handler, which parses and validates it, resolves the demo clock, then selects between the deterministic engine reading DuckDB and the opt-in SDK engine running a coordinator and specialists. Both emit the same SSE frames back to the browser.">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+            <marker id="ar-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--grounded)"/>
+            </marker>
+            <marker id="ar-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--escalate)"/>
+            </marker>
+          </defs>
+
+          <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">
+
+            <!-- browser -->
+            <rect x="8" y="150" width="104" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="60" y="172" text-anchor="middle" fill="currentColor" font-size="12">browser</text>
+            <text x="60" y="188" text-anchor="middle" fill="var(--muted)" font-size="10">page.tsx</text>
+
+            <line x1="112" y1="176" x2="168" y2="176" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar)"/>
+            <text x="140" y="167" text-anchor="middle" fill="var(--muted)" font-size="10">POST</text>
+
+            <!-- route handler -->
+            <rect x="170" y="122" width="150" height="108" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <text x="245" y="143" text-anchor="middle" fill="currentColor" font-size="12">route.ts</text>
+            <line x1="170" y1="152" x2="320" y2="152" stroke="var(--line)" stroke-width="1"/>
+            <text x="183" y="169" fill="var(--muted)" font-size="10.5">parse + validate</text>
+            <text x="183" y="185" fill="var(--muted)" font-size="10.5">resolve clock</text>
+            <text x="183" y="201" fill="var(--muted)" font-size="10.5">pump SSE</text>
+            <text x="183" y="217" fill="var(--muted)" font-size="10.5">cancel on abort</text>
+
+            <!-- seam -->
+            <line x1="320" y1="176" x2="372" y2="176" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar)"/>
+            <text x="346" y="167" text-anchor="middle" fill="var(--muted)" font-size="10">select</text>
+
+            <rect x="374" y="156" width="96" height="40" rx="3" fill="var(--wash)" stroke="currentColor" stroke-width="1.4"/>
+            <text x="422" y="172" text-anchor="middle" fill="currentColor" font-size="10.5">CHAT_ENGINE</text>
+            <text x="422" y="186" text-anchor="middle" fill="var(--faint)" font-size="9.5">TurnEngine seam</text>
+
+            <!-- branch up: deterministic -->
+            <path d="M 470 168 L 500 168 L 500 74 L 536 74" fill="none" stroke="var(--grounded)" stroke-width="1.8" marker-end="url(#ar-g)"/>
+            <text x="508" y="64" fill="var(--grounded)" font-size="10">default · free</text>
+
+            <rect x="538" y="42" width="152" height="64" rx="3" fill="none" stroke="var(--grounded)" stroke-width="1.8"/>
+            <text x="614" y="63" text-anchor="middle" fill="var(--grounded)" font-size="12">deterministic</text>
+            <text x="614" y="79" text-anchor="middle" fill="var(--muted)" font-size="10">reply composed</text>
+            <text x="614" y="93" text-anchor="middle" fill="var(--muted)" font-size="10">in code · no LLM</text>
+
+            <line x1="690" y1="74" x2="742" y2="74" stroke="var(--grounded)" stroke-width="1.6" marker-end="url(#ar-g)"/>
+            <text x="716" y="65" text-anchor="middle" fill="var(--muted)" font-size="9.5">reads</text>
+
+            <rect x="744" y="46" width="128" height="56" rx="3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="0"/>
+            <text x="808" y="66" text-anchor="middle" fill="currentColor" font-size="11">DuckDB</text>
+            <text x="808" y="81" text-anchor="middle" fill="var(--muted)" font-size="9.5">read-only · 47,199</text>
+            <text x="808" y="94" text-anchor="middle" fill="var(--muted)" font-size="9.5">+ DateShift +599d</text>
+
+            <!-- branch down: sdk -->
+            <path d="M 470 184 L 500 184 L 500 278 L 536 278" fill="none" stroke="var(--escalate)" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#ar-e)"/>
+            <text x="508" y="298" fill="var(--escalate)" font-size="10">opt-in · billed</text>
+
+            <rect x="538" y="246" width="152" height="64" rx="3" fill="none" stroke="var(--escalate)" stroke-width="1.8" stroke-dasharray="5 4"/>
+            <text x="614" y="267" text-anchor="middle" fill="var(--escalate)" font-size="12">sdk</text>
+            <text x="614" y="283" text-anchor="middle" fill="var(--muted)" font-size="10">coordinator +</text>
+            <text x="614" y="297" text-anchor="middle" fill="var(--muted)" font-size="10">specialists</text>
+
+            <line x1="690" y1="278" x2="742" y2="278" stroke="var(--escalate)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ar-e)"/>
+            <text x="716" y="269" text-anchor="middle" fill="var(--muted)" font-size="9.5">tools</text>
+
+            <rect x="744" y="250" width="128" height="56" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="808" y="270" text-anchor="middle" fill="currentColor" font-size="11">same DuckDB</text>
+            <text x="808" y="285" text-anchor="middle" fill="var(--muted)" font-size="9.5">via MCP read</text>
+            <text x="808" y="298" text-anchor="middle" fill="var(--muted)" font-size="9.5">tools</text>
+
+            <!-- return path -->
+            <path d="M 60 202 L 60 344 L 806 344 L 806 310" fill="none" stroke="currentColor" stroke-width="1.3" marker-start="url(#ar)"/>
+            <path d="M 806 106 L 806 130 L 660 130" fill="none" stroke="none"/>
+            <rect x="286" y="330" width="316" height="28" rx="3" fill="var(--paper)" stroke="none"/>
+            <text x="444" y="348" text-anchor="middle" fill="var(--muted)" font-size="10.5">session · token · citation · done — identical frames</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption><b>The seam is the whole design.</b> Today's logic moved into <code>engines/deterministic.ts</code> unchanged, so the working demo could not regress. The SDK engine was added beside it, never in front of it — and because both emit the same frames, the frontend needed zero edits.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Who may call what</h2>
+    <p>Delegation is enforced by what each agent is handed, not by what its prompt asks it to do. Only the coordinator holds the delegation tool, so a specialist cannot re-route — the rule holds even if a specialist is talked into trying.</p>
+
+    <figure>
+      <div class="frame">
+        <svg viewBox="0 0 880 330" role="img" aria-label="The triage-router coordinator holds the only delegation tool and hands off to order-specialist, which may call get_order and get_order_items, or to escalation-handoff, which may call create_ticket_stub and format_handoff_summary. Specialists hold no delegation tool. Three further agents are drafted but unregistered, and refund, cancel and payment tools do not exist in the process.">
+          <defs>
+            <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">
+
+            <!-- coordinator -->
+            <rect x="14" y="118" width="160" height="70" rx="3" fill="var(--wash)" stroke="currentColor" stroke-width="1.8"/>
+            <text x="94" y="142" text-anchor="middle" fill="currentColor" font-size="12.5">triage-router</text>
+            <text x="94" y="159" text-anchor="middle" fill="var(--muted)" font-size="10">coordinator</text>
+            <text x="94" y="175" text-anchor="middle" fill="var(--grounded)" font-size="10">holds Agent tool</text>
+
+            <!-- hop label -->
+            <path d="M 174 140 L 214 140 L 214 74 L 258 74" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"/>
+            <path d="M 174 166 L 214 166 L 214 236 L 258 236" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"/>
+            <text x="222" y="106" fill="var(--muted)" font-size="10">hop 1</text>
+            <text x="222" y="212" fill="var(--muted)" font-size="10">hop 1</text>
+
+            <!-- order specialist -->
+            <rect x="260" y="44" width="168" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <text x="344" y="68" text-anchor="middle" fill="currentColor" font-size="12">order-specialist</text>
+            <text x="344" y="86" text-anchor="middle" fill="var(--faint)" font-size="9.5">no Agent tool</text>
+
+            <line x1="428" y1="74" x2="470" y2="74" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar2)"/>
+
+            <rect x="472" y="40" width="188" height="70" rx="3" fill="none" stroke="var(--grounded)" stroke-width="1.4"/>
+            <text x="566" y="62" text-anchor="middle" fill="var(--grounded)" font-size="10.5">get_order</text>
+            <text x="566" y="79" text-anchor="middle" fill="var(--grounded)" font-size="10.5">get_order_items</text>
+            <text x="566" y="97" text-anchor="middle" fill="var(--muted)" font-size="9.5">read-only</text>
+
+            <!-- escalation -->
+            <rect x="260" y="206" width="168" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <text x="344" y="230" text-anchor="middle" fill="currentColor" font-size="12">escalation-handoff</text>
+            <text x="344" y="248" text-anchor="middle" fill="var(--faint)" font-size="9.5">terminal · no Agent tool</text>
+
+            <line x1="428" y1="236" x2="470" y2="236" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar2)"/>
+
+            <rect x="472" y="202" width="188" height="70" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="566" y="224" text-anchor="middle" fill="currentColor" font-size="10.5">create_ticket_stub</text>
+            <text x="566" y="241" text-anchor="middle" fill="currentColor" font-size="10.5">format_handoff_summary</text>
+            <text x="566" y="259" text-anchor="middle" fill="var(--muted)" font-size="9.5">writes stub only</text>
+
+            <!-- money tools: absent -->
+            <rect x="694" y="118" width="172" height="94" rx="3" fill="none" stroke="var(--abort)" stroke-width="1.5" stroke-dasharray="4 4"/>
+            <text x="780" y="142" text-anchor="middle" fill="var(--abort)" font-size="11">refund · cancel</text>
+            <text x="780" y="158" text-anchor="middle" fill="var(--abort)" font-size="11">payment</text>
+            <line x1="712" y1="170" x2="848" y2="170" stroke="var(--line)" stroke-width="1"/>
+            <text x="780" y="188" text-anchor="middle" fill="var(--abort)" font-size="10">no such function</text>
+            <text x="780" y="202" text-anchor="middle" fill="var(--abort)" font-size="10">exists in process</text>
+
+            <!-- unregistered drafts -->
+            <rect x="14" y="252" width="160" height="60" rx="3" fill="none" stroke="var(--faint)" stroke-width="1.2" stroke-dasharray="3 4"/>
+            <text x="94" y="273" text-anchor="middle" fill="var(--faint)" font-size="10">faq-policy</text>
+            <text x="94" y="288" text-anchor="middle" fill="var(--faint)" font-size="10">plus-specialist</text>
+            <text x="94" y="303" text-anchor="middle" fill="var(--faint)" font-size="10">returns-advisor</text>
+            <text x="94" y="243" text-anchor="middle" fill="var(--faint)" font-size="9.5">drafted, unregistered</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption><b>Three of six agents are registered.</b> The other three are deliberately inert: Sprint 1 puts them out of scope and their tools don't exist, so registering them would only invite ungrounded answers. Hops count agent transfers, never tool calls, and increment solely in the <code>SubagentStart</code> hook — a budget the model cannot talk its way past.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Why the crew cannot move money</h2>
+    <p>The brief said no refunds, cancellations, or payments. That is enforced five times over, at layers that fail independently — none of them a line of prompt text asking the model to behave.</p>
+    <ol class="layers">
+      <li><span class="n">L1</span><span class="what"><b>Nothing bound.</b> No refund, cancel, or payment function is written anywhere in the process.</span></li>
+      <li><span class="n">L2</span><span class="what"><b>Read-only driver.</b> DuckDB is opened in read-only mode; a write cannot reach the data.</span></li>
+      <li><span class="n">L3</span><span class="what"><b>Startup assertion.</b> The registered tool set must equal a hard-coded literal, or the server refuses to start.</span></li>
+      <li><span class="n">L4</span><span class="what"><b>PreToolUse denial.</b> Money vocabulary and non-allowlisted tools are refused at call time.</span></li>
+      <li><span class="n">L5</span><span class="what"><b>canUseTool gate.</b> A second, independent runtime check that does not share code with L4.</span></li>
+    </ol>
+    <p class="note">The guarantee is tested, not asserted: injecting an <code>issue_refund</code> tool into the registry takes the suite from 9 passing to 7 passing and 2 failing. Then it goes back.</p>
+  </section>
+
+  <section>
+    <h2>What was verified</h2>
+    <table>
+      <caption>Every check below was run against the built code, not inferred from it.</caption>
+      <thead>
+        <tr><th scope="col">Check</th><th scope="col">Method</th><th scope="col">Result</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Type safety</td><td><code>tsc --noEmit</code> across the runtime</td><td class="ok">exit 0</td></tr>
+        <tr><td>Money-tool invariant</td><td>Exact-set unit test, plus an injected refund tool</td><td class="ok">9 / 9</td></tr>
+        <tr><td>Order lookup</td><td>Live <code>POST /api/chat</code>, order 1, keyless</td><td class="ok">resolved</td></tr>
+        <tr><td>Missing identity</td><td>Request with no <code>identity</code></td><td class="ok">needs_input</td></tr>
+        <tr><td>Unknown order</td><td>Order id 99999999</td><td class="ok">needs_input</td></tr>
+        <tr><td>Malformed body</td><td>Non-JSON payload</td><td class="ok">HTTP 400</td></tr>
+        <tr><td>Data provenance</td><td>MD5 of orders table vs. streamed reply</td><td class="ok">match</td></tr>
+        <tr><td>Agent behaviour</td><td>Requires a live model call</td><td class="cost">not run</td></tr>
+      </tbody>
+    </table>
+    <p class="caveat"><b>The SDK path is wired, not proven.</b> It compiles, preflights, and fails cleanly without a key — but its first live turn asked the customer to confirm a lookup instead of performing it. A prompt fix is in place and remains untested, because testing it costs money and the switch is currently off.</p>
+  </section>
+
+  <footer>as built 2026-08-23 · commit efabe86 · AAMAD_TARGET_RUNTIME=claude-agent-sdk</footer>
+
+</div>
