@@ -70,6 +70,12 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  // Set by `cancel()` when the consumer goes away. The controller is closed underneath us at
+  // that point, so every later enqueue would throw — see `send`.
+  let consumerGone = false;
+  // Assigned once the turn's AbortController exists, so `cancel()` can stop in-flight work.
+  let abortTurn: (() => void) | undefined;
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       // One turn, one abort signal: client disconnect OR the SAD turn timeout (SAD §2
@@ -77,16 +83,31 @@ export async function POST(request: Request): Promise<Response> {
       const abort = new AbortController();
       const onDisconnect = (): void => abort.abort(new Error("client_disconnect"));
       request.signal.addEventListener("abort", onDisconnect, { once: true });
+      abortTurn = onDisconnect;
       const timer = setTimeout(
         () => abort.abort(new Error("turn_timeout")),
         budgets.turnTimeoutMs,
       );
 
       let terminated = false;
+      let streamDead = false;
+
+      // `send` MUST NOT throw. It is called from inside engine code, so a dead stream that
+      // threw here would surface as an engine defect: the throw unwinds into the engine's own
+      // catch, gets traced as `turn_error`, and the engine then emits an error frame that
+      // throws again. That is the ERR_INVALID_STATE ("Controller is already closed") seen in
+      // the 2026-08-23 traces — always AFTER a successful `turn_result`, i.e. a turn that in
+      // fact worked, reported as a failure. A disconnected client is a normal end to a turn,
+      // not a fault, so drop the frame and let the turn wind down quietly.
       const send = (event: StreamEvent): void => {
         if (terminated) return; // nothing may follow `done`
         if (event.type === "done") terminated = true;
-        controller.enqueue(frame(event));
+        if (streamDead || consumerGone) return;
+        try {
+          controller.enqueue(frame(event));
+        } catch {
+          streamDead = true;
+        }
       };
 
       try {
@@ -130,8 +151,24 @@ export async function POST(request: Request): Promise<Response> {
       } finally {
         clearTimeout(timer);
         request.signal.removeEventListener("abort", onDisconnect);
-        controller.close();
+        // Same reasoning as `send`: closing an already-closed controller throws, and this is
+        // a `finally`, so the throw would replace whatever really happened in the turn.
+        if (!streamDead && !consumerGone) {
+          try {
+            controller.close();
+          } catch {
+            streamDead = true;
+          }
+        }
       }
+    },
+
+    // The consumer went away (browser navigation, curl exiting, a proxy dropping the
+    // connection). The controller is closed from under us here, so record it and abort the
+    // in-flight turn rather than letting it run on to completion for nobody.
+    cancel(): void {
+      consumerGone = true;
+      abortTurn?.();
     },
   });
 

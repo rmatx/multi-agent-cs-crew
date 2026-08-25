@@ -17,7 +17,7 @@ import {
   transition,
   type TurnAction,
 } from "@/lib/fsm";
-import { crewStatus, formatUpdated, runLabel } from "@/lib/status";
+import { crewStatus, formatUpdated, runLabel, type EngineId } from "@/lib/status";
 import styles from "./page.module.css";
 
 type Turn = { id: number; role: "you" | "assistant"; text: string };
@@ -35,11 +35,31 @@ export default function ChatPage() {
   // The exact request last sent, so Retry replays the same inputs even though
   // the composer is cleared on submit.
   const [lastRequest, setLastRequest] = useState<ChatRequest | null>(null);
+  // Which turn engine the server is running. Read once from /api/health so the banner cannot
+  // call a keyless coded lookup a "crew" — see `enginePrefix` in lib/status.ts.
+  const [engine, setEngine] = useState<EngineId>(null);
   const nextId = useRef(0);
 
   const running = isRunning(state);
   const error = errorOf(state);
-  const status = crewStatus(state);
+  const status = crewStatus(state, engine);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/health")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        const next = body?.engine;
+        if (cancelled || (next !== "sdk" && next !== "deterministic")) return;
+        setEngine(next);
+      })
+      .catch(() => {
+        /* banner falls back to the neutral prefix */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // "Last updated" tracks every state change, which is what tells the user the
   // UI is live rather than wedged.
@@ -130,7 +150,7 @@ export default function ChatPage() {
         aria-live="polite"
       >
         <span className={styles.pill} aria-hidden="true" />
-        <strong className={styles.bannerLabel}>Crew: {status.label}</strong>
+        <strong className={styles.bannerLabel}>{status.prefix}: {status.label}</strong>
         <span className={styles.bannerHint}>{status.hint}</span>
         {updatedAt !== null && (
           <span className={styles.updated}>

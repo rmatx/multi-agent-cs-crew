@@ -251,13 +251,46 @@ the client, and no effect whatsoever on the default path. Verified below.
 
 ## Known gaps
 
-1. **The sdk engine has never been executed.** No `ANTHROPIC_API_KEY` in this environment. It
-   typechecks, its module graph loads inside a running Next server, and its failure path is
-   verified — but no turn has ever gone through the model. Treat every sdk-path behaviour
-   below the preflight as *unvalidated*: message-shape handling, the citation harvest regex
-   over MCP responses, hop counting under a real `SubagentStart`, and the `final`-mode text
-   assembly all need a first live run.
-2. **Temperature no longer exists — resolved 2026-08-23.** Not an SDK gap: `temperature` was
+1. **The sdk engine is now executed and validated — corrected 2026-08-25.** This entry
+   previously read "has never been executed"; that was already stale when written (traces
+   dated 2026-08-23 exist) and is now firmly wrong. Both Sprint 1 slices run live against
+   `claude-haiku-4-5` and pass 24/24 assertions in `npm run eval:sdk`, five consecutive runs.
+   Evidence: [`docs/sample-sdk-turn.md`](../../docs/sample-sdk-turn.md). The first live runs
+   found three real defects, all fixed:
+   - **Stream-lifecycle race.** The route's `finally` closed the SSE controller while the
+     engine was still emitting, so `controller.enqueue` threw `ERR_INVALID_STATE` *from inside
+     engine code*. The throw was caught by the engine's own handler and traced as
+     `turn_error`, making a turn that had already succeeded look like a failure (2 of 3 traces
+     on 2026-08-23). `send` and `close` are now non-throwing, and `cancel()` aborts the turn
+     when the consumer disconnects.
+   - **Delegation ran asynchronously.** SDK ≥ 0.3.x defaults `Agent` to `run_in_background:
+     true`; the tool returned `{status:"async_launched"}` and the coordinator answered without
+     ever receiving the specialist's findings — stating order facts no tool had returned,
+     which `SAFETY_RULES` forbids. `canUseTool` now rewrites the input to force
+     `run_in_background: false`. The prompt asks for it too, but the control is structural.
+   - **Duplicate `turn_result`.** A turn can surface more than one `result` message; the first
+     now wins.
+   Two consequences of forcing synchronous delegation are recorded here rather than buried:
+   `TURN_TIMEOUT_MS` default is raised 60s → 120s (a measured two-hop turn runs ~50s, and the
+   old budget aborted turns after the work was done), and the SDK background-agent tools
+   (`SendMessage`, `ListAgents`, `TaskOutput`, `TaskStop`, `Monitor`) are added to
+   `FORBIDDEN_BUILTIN_TOOLS` — an observed turn burned a model turn calling `SendMessage` on a
+   specialist that had already returned.
+2. **WISMO over-escalation — measured and fixed 2026-08-25.** Recorded because the first fix
+   was declared done on too little evidence, and that is the failure mode worth remembering.
+   After delegation was made synchronous, `order-specialist` returned correct facts and the
+   coordinator still opened a human ticket on some turns — answering a question it had already
+   answered. A first prompt change plus five consecutive green eval runs looked like a fix; it
+   was not. Sampling single-slice turns directly showed **2 escalations in 7 (~29%)**. Root
+   cause: "Where is my order?" implies tracking, this build has no shipment/carrier tool, and
+   neither prompt said so — the coordinator read a permanent property of the system as a gap a
+   human could close. Both prompts now state that absence explicitly. Re-measured: **0
+   escalations in 10** (at the prior rate that outcome has p ≈ 0.03), with refund→escalation
+   still **5/5** and `npm run eval:sdk` 24/24. Ten samples bound the residual rate below
+   roughly 30%, not to zero, so a regression here should be caught by sampling rather than by
+   a single green run.
+
+3. **Temperature no longer exists — resolved 2026-08-23.** Not an SDK gap: `temperature` was
    removed from the Messages API itself on Opus 5 / Sonnet 5 / Opus 4.7+ (sending it returns
    400), so no value could reach the model by any route. `MODEL_TEMPERATURE` has been deleted
    rather than left inert, and the Prompt Trace no longer records a temperature it never
@@ -266,21 +299,26 @@ the client, and no effect whatsoever on the default path. Verified below.
    written and needs a one-line amendment (BE-OQ-2, SU-OQ-2).
    Related: the SDK's `maxThinkingTokens` is **deprecated** and model-dependent — replaced by
    `thinking` + `effort` (BE-OQ-6).
-3. **`zod` is a transitive dependency.** `tools.ts` imports `zod` because the SDK's `tool()`
-   helper requires a Zod raw shape. `zod@4.4.3` arrives via `@anthropic-ai/claude-agent-sdk`,
-   not as a direct dependency. Installing dependencies was out of scope for this task —
-   `@project.mgr` should promote it to a direct dependency in `package.json`.
-4. **`needs_input` on the sdk path is a heuristic.** No hop + a final reply ending in `?` is
-   read as the clarifying-question path. The deterministic engine decides this structurally.
-   A proper fix is a structured output contract on the coordinator's terminal message.
-5. **Sessions are per-turn.** No transcript is carried across turns on either engine; SAD
+4. **`zod` is a direct dependency — resolved 2026-08-25.** `tools.ts` imports `zod` for the
+   SDK's `tool()` helper. It previously resolved only as a peer of
+   `@anthropic-ai/claude-agent-sdk`, one SDK bump away from breaking; `zod@^4.4.3` is now
+   declared in `package.json`.
+5. **`needs_input` on the sdk path is structural — resolved 2026-08-25.** The old rule was
+   "no hop + a reply ending in `?`". It was wrong twice: it could not tell a clarifying
+   question from an answer that happened to end in a question mark, and under
+   `SDK_STREAM_MODE=live` it read an always-empty buffer, so the branch was unreachable. The
+   coordinator now declares the state with a control marker that the engine strips before any
+   token reaches the customer (`server/runtime/needsInput.ts`). The marker is stripped across
+   delta boundaries, covered by 9 unit tests including an exhaustive split-at-every-index
+   sweep, and `npm run eval:sdk` asserts no fragment ever reaches the wire.
+6. **Sessions are per-turn.** No transcript is carried across turns on either engine; SAD
    Sprint 1 permits in-memory session state, and SQLite durability is Sprint 2 layer 5.
-6. **Ticket stubs are in-memory** and die with the process (SAD Sprint 1 Slice B allows it).
-7. **`GET /api/conversations/:id/trace` is not built.** Operator visibility is the JSONL log
+7. **Ticket stubs are in-memory** and die with the process (SAD Sprint 1 Slice B allows it).
+8. **`GET /api/conversations/:id/trace` is not built.** Operator visibility is the JSONL log
    plus the `X-Novamart-*` response headers, which SAD Sprint 1 accepts.
-8. **No rate limiting, no `X-Operator-Key` auth.** SAD §4 lists 429 and operator-key auth;
+9. **No rate limiting, no `X-Operator-Key` auth.** SAD §4 lists 429 and operator-key auth;
    both are stubbed as out-of-MVP for `@security.eng` to rule on.
-9. **Turbopack warning on the DuckDB read** is unchanged and now also appears via
+10. **Turbopack warning on the DuckDB read** is unchanged and now also appears via
    `app/api/health/route.ts` — a dynamic `path.join(process.cwd(), …)`, warning only.
 
 ## Verification
@@ -378,7 +416,7 @@ after the run. `git status` shows only the intended files — no `.duckdb`, no `
 | BE-OQ-2 | ~~SAD §2 mandates temperature ≤0.2, but SDK `0.3.241` `Options` exposes no temperature knob.~~ **RESOLVED 2026-08-23** — not an SDK gap: `temperature` was removed from the Messages API itself on Opus 5 / Sonnet 5 / Opus 4.7+ (sending it returns 400), so no temperature could reach the model by any route. Determinism is now pinned with `effort` (`MODEL_EFFORT`, default `low`). `MODEL_TEMPERATURE` has been deleted rather than left inert, and the Prompt Trace no longer records a temperature it never applied. SAD §2's "temperature ≤0.2" line is now unimplementable as written and needs a one-line amendment from `@system.arch` to name `effort` instead. | Resolved in code; SAD wording open — `@system.arch` |
 | BE-OQ-3 | `needs_input` detection on the sdk path is a heuristic. Adopt a structured terminal-message contract for the coordinator? | Open — `@integration.eng` |
 | BE-OQ-4 | SAD §4 specifies `GET /api/conversations/:id/trace` with `X-Operator-Key`, and a 429 rate limit. Both are deferred. Confirm they are Sprint 2, not a Sprint 1 exit gap. | Open — `@qa.eng` / `@security.eng` |
-| BE-OQ-5 | The Sprint 1 exit criteria require an eval harness (SAD "Eval harness lands in Sprint 1"). Not built in this task — the WISMO script is effectively covered by the smoke run above, the refund→escalate script needs a live sdk run. | Open — carried to `@qa.eng` |
+| BE-OQ-5 | The Sprint 1 exit criteria require an eval harness (SAD "Eval harness lands in Sprint 1"). | **Closed 2026-08-25** — `scripts/eval-sdk.mjs` (`npm run eval:sdk`) drives both slices against a running server and asserts on the SSE wire and the JSONL trace: 24 checks, 5 consecutive green runs on `CHAT_ENGINE=sdk`. Includes a runtime zero-money-tool check, which is a distinct claim from the registration-time invariant in `npm run test:invariants`. |
 | BE-OQ-6 | `MAX_THINKING_TOKENS` previously fed the SDK's **deprecated** `maxThinkingTokens` option, whose meaning is model-dependent — on Opus 4.6 any non-zero value is a plain on/off switch, so the old default of `1024` never capped thinking at 1024 tokens as its comment claimed. Now replaced by `thinking` + `effort`; `MAX_THINKING_TOKENS` is retained but applies to OLDER models only (e.g. `claude-haiku-4-5`) and must stay unset on Opus 4.6+ / Sonnet 4.6+ / Opus 5 / Sonnet 5, which require adaptive thinking. Confirm the intended model tier. | Open — `@system.arch` / `@qa.eng` |
 
 **No SAD conflicts found.** The three-of-six registered roster is not a deviation: SAD Sprint 1

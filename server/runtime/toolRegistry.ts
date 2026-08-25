@@ -56,7 +56,15 @@ export const REGISTERED_TOOL_NAMES = [
 
 export type RegisteredToolName = (typeof REGISTERED_TOOL_NAMES)[number];
 
-/** Built-in SDK tools. MVP grants NONE of these to any agent (SAD §2 tool permissions). */
+/**
+ * Built-in SDK tools. MVP grants NONE of these to any agent (SAD §2 tool permissions).
+ *
+ * The trailing group is the background-agent family. The SDK launches subagents in the
+ * background by default and offers these for messaging and polling them; the coordinator
+ * delegates SYNCHRONOUSLY here (forced in `sdk.ts` `canUseTool`), so they have no legitimate
+ * use and their presence actively misleads it — an observed turn burned a model turn calling
+ * `SendMessage` on a specialist that had already returned.
+ */
 export const FORBIDDEN_BUILTIN_TOOLS = [
   "Bash",
   "BashOutput",
@@ -70,6 +78,11 @@ export const FORBIDDEN_BUILTIN_TOOLS = [
   "Read",
   "Glob",
   "Grep",
+  "SendMessage",
+  "ListAgents",
+  "TaskOutput",
+  "TaskStop",
+  "Monitor",
 ] as const;
 
 /** The one delegation tool the coordinator holds. Specialists never receive it. */

@@ -79,7 +79,10 @@ export function resolveBudgets(): TurnBudgets {
   return {
     maxHops: intFromEnv("MAX_HOPS", 4),
     maxModelTurns: intFromEnv("MAX_MODEL_TURNS", 12),
-    turnTimeoutMs: intFromEnv("TURN_TIMEOUT_MS", 60_000),
+    // 120s, not 60s: delegation is forced synchronous (see `sdk.ts` canUseTool), and a
+    // measured two-hop turn (order lookup then escalation) runs ~50s wall clock. The old
+    // 60s budget aborted those turns after the work had already been done.
+    turnTimeoutMs: intFromEnv("TURN_TIMEOUT_MS", 120_000),
     maxOutputTokens: intFromEnv("MAX_OUTPUT_TOKENS", 4_096),
     effort: effortFromEnv("MODEL_EFFORT", "low"),
     thinkingBudgetTokens: optionalIntFromEnv("MAX_THINKING_TOKENS"),

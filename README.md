@@ -54,26 +54,43 @@ walkthrough. Stills of the same path — input, result, not-found — are in
 
 ![Grounded order status](docs/screenshots/02-result.png)
 
-## Where the agent runtime connects next
+## Two engines: the app and the crew
 
-This slice deliberately has **no model call**. `app/api/chat/route.ts` looks the order up
-through the repository port and composes the reply deterministically. That single function
-is the seam.
+`CHAT_ENGINE` selects the turn engine. They are different claims and the difference matters
+when reading a demo:
 
-The target runtime is **`claude-agent-sdk`** — not CrewAI. `aamad.config.yml` sets
-`runtime.target`, and `.claude/rules/adapter-crewai.md` is an inactive framework artifact
-that must not be followed. Wiring it up means:
+| `CHAT_ENGINE` | What runs | Needs a key |
+|---|---|---|
+| `deterministic` (default) | Order lookup through the repository port + `DateShiftMapper`, reply composed in code. No model call. | No |
+| `sdk` | The `claude-agent-sdk` crew: `triage-router` coordinating `order-specialist` and `escalation-handoff` through the `Agent` tool. | Yes |
 
-1. `triage-router` becomes the main agent; the five specialists become `AgentDefinition`
-   entries in `ClaudeAgentOptions.agents`, invoked through the `Agent` tool (ADR-03).
-2. The current in-route lookup becomes the `get_order` / `get_order_items` **tools**, bound
-   per agent by allowlist. The repository port and `DateShiftMapper` stay exactly as they
-   are — agents never see a raw date.
-3. Model tokens replace the composed string on the same `StreamEvent` stream, so the
-   frozen DTO contract and the client FSM need no change.
+The deterministic engine exists so the demo and CI stay keyless and reproducible. **It is not
+the product.** The capstone claim is the crew, and the crew is the `sdk` engine. `/api/health`
+reports which one is live, so a walkthrough never has to be taken on trust:
 
-Nothing in `packages/shared/src/dto.ts` should have to change when that lands. If it does,
-the contract-freeze gate in the SAD has been breached and it belongs in `integration.md`.
+```bash
+curl -s localhost:3000/api/health
+# {"engine":"deterministic","sdkEngineConfigured":true,...}
+```
+
+Running the crew:
+
+```bash
+export ANTHROPIC_API_KEY=...        # see .env.example, never committed
+export MODEL_ID=claude-haiku-4-5
+CHAT_ENGINE=sdk npm run dev
+npm run eval:sdk                    # both Sprint 1 slices, 24 assertions
+```
+
+`npm run eval:sdk` drives two fixtures against a running server and asserts on both the SSE
+wire and the JSONL trace: WISMO resolves through `order-specialist` with real tool reads, and
+a refund request escalates through `escalation-handoff` with a ticket stub — never to a money
+tool, because none is registered. A captured run is in
+[`docs/sample-sdk-turn.md`](docs/sample-sdk-turn.md).
+
+Both engines share one seam (`server/runtime/engine.ts`) and one wire contract. Nothing in
+`packages/shared/src/dto.ts` changes between them; if it ever has to, the contract-freeze gate
+in the SAD has been breached and it belongs in `integration.md`.
 
 ## Layout
 

@@ -18,11 +18,20 @@ export type StatusTone = "idle" | "running" | "done" | "attention" | "error";
 
 export type CrewStatus = {
   tone: StatusTone;
-  /** Banner text. Always "Crew: <label>". */
+  /** Banner text, e.g. "running". */
   label: string;
   /** One short line under the banner explaining what the label means. */
   hint: string;
+  /**
+   * What the banner may honestly call itself. There is only a crew on the `sdk` engine; the
+   * deterministic engine is a coded lookup with no agent in it, and labelling that "Crew"
+   * claims the capstone's headline feature on a path that does not implement it.
+   */
+  prefix: string;
 };
+
+/** Turn engine reported by `/api/health`. `null` until that resolves. */
+export type EngineId = "deterministic" | "sdk" | null;
 
 const STATUS: Record<StatusTone, { label: string; hint: string }> = {
   idle: { label: "idle", hint: "Waiting for an order number and a question." },
@@ -32,9 +41,15 @@ const STATUS: Record<StatusTone, { label: string; hint: string }> = {
   error: { label: "error", hint: "The turn did not complete." },
 };
 
-export function crewStatus(state: TurnState): CrewStatus {
+export function crewStatus(state: TurnState, engine: EngineId = null): CrewStatus {
   const tone = toneOf(state);
-  return { tone, ...STATUS[tone] };
+  return { tone, ...STATUS[tone], prefix: enginePrefix(engine) };
+}
+
+function enginePrefix(engine: EngineId): string {
+  if (engine === "sdk") return "Crew";
+  if (engine === "deterministic") return "Support";
+  return "Status"; // engine not known yet — claim nothing
 }
 
 function toneOf(state: TurnState): StatusTone {

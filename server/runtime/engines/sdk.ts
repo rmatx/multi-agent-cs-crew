@@ -35,6 +35,7 @@ import {
   type TurnInput,
 } from "../engine";
 import { buildAgentDefinitions, coordinatorPrompt } from "../agents";
+import { createMarkerFilter, stripMarker } from "../needsInput";
 import {
   buildHooks,
   createHopBudget,
@@ -43,7 +44,13 @@ import {
   type ToolAttempt,
 } from "../hooks";
 import { createNovamartToolServer } from "../tools";
-import { MCP_SERVER_NAME, allAllowedToolNames, isMoneyToolName } from "../toolRegistry";
+import {
+  MCP_SERVER_NAME,
+  allAllowedToolNames,
+  isMoneyToolName,
+  DELEGATION_TOOL_ALIASES,
+  FORBIDDEN_BUILTIN_TOOLS,
+} from "../toolRegistry";
 import { createTracer, logPromptTrace } from "../trace";
 
 function buildUserPrompt(input: TurnInput): string {
@@ -160,6 +167,12 @@ export const sdkEngine: TurnEngine = {
     let buffered = "";
     let streamed = false;
     let sawResult = false;
+    // Set when the coordinator marks its reply as a clarifying question (live mode sees the
+    // marker mid-stream; final mode sees it in the buffered text).
+    let needsInput = false;
+    // Live mode only: releases coordinator text as it arrives while keeping a possible
+    // partial control marker out of the customer's view.
+    const markerFilter = createMarkerFilter();
 
     try {
       const run = query({
@@ -182,30 +195,40 @@ export const sdkEngine: TurnEngine = {
           // Least privilege: only MCP read tools + the delegation tool exist. No Bash, no
           // Write, no WebFetch, no filesystem.
           allowedTools: [...allowedTools, "Agent"],
-          disallowedTools: [
-            "Bash",
-            "BashOutput",
-            "KillShell",
-            "Read",
-            "Write",
-            "Edit",
-            "NotebookEdit",
-            "Glob",
-            "Grep",
-            "WebFetch",
-            "WebSearch",
-          ],
+          // Sourced from the registry, not a literal, so this list cannot drift from the
+          // per-agent allowlists or the invariant test.
+          disallowedTools: [...FORBIDDEN_BUILTIN_TOOLS],
           mcpServers: { [MCP_SERVER_NAME]: toolServer },
           hooks,
-          // Layer 5 of the money-tool defence, independent of the PreToolUse hook.
-          canUseTool: async (toolName) =>
-            isMoneyToolName(toolName)
-              ? {
-                  behavior: "deny" as const,
-                  message: "No money tool exists in this system.",
-                  interrupt: false,
-                }
-              : { behavior: "allow" as const, updatedInput: {} },
+          // Layer 5 of the money-tool defence, independent of the PreToolUse hook. Also the
+          // one place delegation is forced synchronous — see below.
+          canUseTool: async (toolName, toolInput) => {
+            if (isMoneyToolName(toolName)) {
+              return {
+                behavior: "deny" as const,
+                message: "No money tool exists in this system.",
+                interrupt: false,
+              };
+            }
+
+            // SDK >= 0.3.x runs subagents in the BACKGROUND by default: the `Agent` tool
+            // returns `{ status: "async_launched" }` immediately and the coordinator answers
+            // without ever seeing the specialist's result. For a support crew that is a
+            // grounding failure, not a performance choice — the coordinator would state
+            // order facts that no tool ever returned, which is exactly what SAFETY_RULES
+            // forbids. The prompt asks for synchronous delegation; this makes it structural,
+            // because a prompt instruction is not a control.
+            if ((DELEGATION_TOOL_ALIASES as readonly string[]).includes(toolName)) {
+              return {
+                behavior: "allow" as const,
+                updatedInput: { ...toolInput, run_in_background: false },
+              };
+            }
+
+            // `updatedInput` REPLACES the tool input, so it must be omitted rather than sent
+            // as `{}` when there is nothing to change.
+            return { behavior: "allow" as const };
+          },
           // Single voice: specialist text never reaches this loop in the first place.
           forwardSubagentText: false,
           includePartialMessages: streamMode === "live",
@@ -221,8 +244,11 @@ export const sdkEngine: TurnEngine = {
         if (streamMode === "live" && (message as { type?: string }).type === "stream_event") {
           const delta = mainAgentDelta(message);
           if (delta.length > 0) {
-            streamed = true;
-            emit({ type: "token", text: delta });
+            const releasable = markerFilter.push(delta);
+            if (releasable.length > 0) {
+              streamed = true;
+              emit({ type: "token", text: releasable });
+            }
           }
           continue;
         }
@@ -234,6 +260,10 @@ export const sdkEngine: TurnEngine = {
         }
 
         if ((message as { type?: string }).type === "result") {
+          // First result wins. A turn can surface more than one `result` message (seen in the
+          // 2026-08-23 trace 86a9ba42: numTurns 2 then 1), and acting on the later one would
+          // overwrite the real answer and double the `turn_result` trace line.
+          if (sawResult) continue;
           sawResult = true;
           const result = message as {
             subtype?: string;
@@ -277,9 +307,23 @@ export const sdkEngine: TurnEngine = {
         return;
       }
 
-      if (streamMode === "final" && buffered.length > 0) {
-        for (const part of chunk(buffered)) emit({ type: "token", text: part });
-        streamed = true;
+      if (streamMode === "final") {
+        const stripped = stripMarker(buffered);
+        if (stripped.found) needsInput = true;
+        buffered = stripped.text.trimEnd();
+        if (buffered.length > 0) {
+          for (const part of chunk(buffered)) emit({ type: "token", text: part });
+          streamed = true;
+        }
+      } else {
+        // Live mode: whatever is still held back cannot be a marker now that the stream is
+        // done, so it is real customer text and must not be swallowed.
+        const rest = markerFilter.flush();
+        if (rest.length > 0) {
+          streamed = true;
+          emit({ type: "token", text: rest });
+        }
+        if (markerFilter.found()) needsInput = true;
       }
 
       if (!streamed || !sawResult) {
@@ -306,9 +350,10 @@ export const sdkEngine: TurnEngine = {
         return;
       }
 
-      // Heuristic, and flagged as such in backend.md: a coordinator turn that made no hop
-      // and ends in a question is the clarifying-question path (SAD: costs no hop).
-      const askedForMore = budget.hops === 0 && buffered.trimEnd().endsWith("?");
+      // Structured, not inferred: the coordinator declares a clarifying question with the
+      // control marker (stripped above). The hop check stays as a guard — a turn that
+      // delegated has by definition done work, so it is not merely awaiting the customer.
+      const askedForMore = needsInput && budget.hops === 0;
       emit({ type: "done", status: askedForMore ? "needs_input" : "resolved" });
     } catch (err) {
       console.error("sdk engine turn failed", err);
