@@ -751,7 +751,7 @@ drafts in `stubs.ts` preserve. The CI-fixture default matches SAD-OQ-6 as resolv
 | Persona id | `backend-eng` |
 | Actions | `*develop-be`, `*define-agents`, `*implement-endpoint`, `*stub-nonmvp`, `*document-backend` |
 | Timestamp | 2026-08-23T19:28:47Z (`date -u`) |
-| Resolved runtime | `claude-agent-sdk` — from `AAMAD_TARGET_RUNTIME` in `.claude/settings.json` `env`, agreeing with `aamad.config.yml:12` `runtime.target`. Only `.claude/rules/adapter-claude-agent-sdk.md` was loaded; the `crewai` and `cursor-sdk` adapter files were not read. |
+| Resolved runtime | `AAMAD_TARGET_RUNTIME=claude-agent-sdk` — from `AAMAD_TARGET_RUNTIME` in `.claude/settings.json` `env`, agreeing with `aamad.config.yml:12` `runtime.target`. Only `.claude/rules/adapter-claude-agent-sdk.md` was loaded; the `crewai` and `cursor-sdk` adapter files were not read. |
 | SDK version | `@anthropic-ai/claude-agent-sdk@0.3.241` (already installed; nothing installed, upgraded or removed) |
 | Resolved model | **none** — `MODEL_ID` is unset in this environment and is required, not defaulted, so no sdk turn can run. Recorded per-run in the Prompt Trace once set. |
 | Temperature | **n/a** — removed from the Messages API on current models; `MODEL_TEMPERATURE` deleted 2026-08-23. Determinism uses `effort` (see Known gaps 2) |

@@ -134,6 +134,46 @@ STUB-E0420689 with reason `customer_requested_human` and the handed-off banner. 
 [`docs/screenshots/05-handoff-banner.png`](../../docs/screenshots/05-handoff-banner.png).
 Zero console errors other than a pre-existing missing `favicon.ico`.
 
+## Sources
+
+- `frontend-functional-spec.md` (repo root) — the detailed UI/workflow contract this artifact
+  deliberately does not duplicate
+- `project-context/1.define/sad.md` — §3 Frontend Architecture (stack, UI requirements, the
+  "trace hidden by default; `?trace=1` or toggle" rule), §4 `StreamEvent` contract
+- `project-context/1.define/prd.md` — F-CHAT-01, F-CSAT-01, F-TRACE-01, AC-CHAT-01…05
+- `project-context/2.build/backend.md` — the frames the server actually emits
+- `project-context/2.build/integration.md` — envelope, `csat_prompt` position, OQ-6
+- `packages/shared/src/dto.ts` — the frozen types every component imports and none restate
+- `aamad.config.yml` — `ui.theme: system`, `ui.visual_style: minimal`
+- Browser verification runs, 2026-08-13 and 2026-08-28, both engines plus mock mode
+
+## Assumptions
+
+1. **Desktop-first, single column.** `visual_style: minimal` and one chat surface. Responsive
+   down to a narrow viewport by using flexible widths, but no mobile-specific layout was
+   designed or tested on a device.
+2. **The customer is the primary reader; the operator is secondary.** Trace is collapsed and
+   off unless asked for, per SAD §1 principle 1. Everything an operator needs beyond the panel
+   lives in the trace endpoint, not in this UI.
+3. **No design system or component library.** CSS modules and hand-written components — the
+   project's dependency budget is spent deliberately, and a UI kit was not worth it for one
+   page (the same reasoning that declined a markdown renderer).
+4. **Accessibility is best-effort AA**, per the SAD: semantic landmarks, `role="status"` on the
+   banner, keyboard-only operation verified by hand. No screen-reader pass and no automated
+   audit has been run.
+5. **The rendered transcript is per-page state.** The durable one lives in `sessions.sqlite`;
+   a reload loses the display, not the conversation.
+6. Verified in Chromium via Playwright. Safari and Firefox were not driven.
+
+## Open Questions
+
+| ID | Question | Owner |
+|---|---|---|
+| FE-OQ-1 | Should the React surfaces get component tests? `fsm.ts`, `status.ts` and `text.ts` are covered; `TracePanel` and `CsatPrompt` are verified only by browser driving, and a component harness would be this project's first test-framework dependency. | `@qa.eng` / operator |
+| FE-OQ-2 | Is a mobile layout in scope for the capstone demo, or is desktop-only acceptable? | Operator |
+| FE-OQ-3 | The assistant occasionally emits markdown, stripped at render (`lib/text.ts`). Should the UI render markdown properly instead, accepting a renderer and its sanitiser? | `@frontend.eng` |
+| FE-OQ-4 | Package substitution `duckdb` → `@duckdb/node-api`, carried from `frontend-functional-spec.md`. Recorded there; no UI consequence. | `@project.mgr` |
+
 ## Audit
 
 | Field | Value |
@@ -141,6 +181,7 @@ Zero console errors other than a pre-existing missing `favicon.ico`.
 | Persona id | `frontend-eng` |
 | Action | `*develop-fe`, `*style-ui`, `*add-placeholders`, `*document-frontend`; 2026-08-13 status-visibility pass (crew banner + pill + timestamp, `lib/status.ts`, Run/Reset/Retry, duplicate-React-key fix in `append`, README local run steps); **2026-08-28 Sprint 2 layer 5 pass** (TracePanel, CsatPrompt, Talk-to-a-human, deferred-feature stub, FSM trail, markdown stripper, first client-side tests) |
 | Timestamp | 2026-08-13; amended 2026-08-28 |
-| Resolved runtime | `claude-agent-sdk` |
+| Resolved runtime | `AAMAD_TARGET_RUNTIME=claude-agent-sdk` |
 | Verification | `npx tsc --noEmit` exits 0 and `next build` compiles (one Turbopack warning, no errors) at this pass; browser pass covering keyboard-only entry, banner transitions, Reset clearing the transcript, and zero console errors |
-| Open Questions | Tracked in `frontend-functional-spec.md` (notably the `duckdb` → `@duckdb/node-api` package substitution) |
+| Open Questions | Section above; the `duckdb` → `@duckdb/node-api` substitution is also tracked in `frontend-functional-spec.md` |
+| Compliance | `aamad validate --phase deliver` — Sources / Assumptions / Open Questions added 2026-08-29; they had been missing since Sprint 1 |

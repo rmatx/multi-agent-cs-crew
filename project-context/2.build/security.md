@@ -316,7 +316,7 @@ not something to bolt on during Deliver.
 | Actions | `*assess-security`, `*scan-secrets`, `*review-deps`, `*document-security` |
 | Timestamp | 2026-08-28 |
 | Assessed commit | `77abed5` (branch `sprint-2-crew`) |
-| Resolved runtime | `claude-agent-sdk` (env `AAMAD_TARGET_RUNTIME`, matches `aamad.config.yml`) |
+| Resolved runtime | `AAMAD_TARGET_RUNTIME=claude-agent-sdk` (env, matches `aamad.config.yml`) |
 | Adapter rule loaded | `.claude/rules/adapter-claude-agent-sdk.md` |
 | Findings | 2 High, 2 Medium, 2 Low, 5 Info-pass |
 | Blocking Deliver? | No for localhost/single-operator; **yes** for any shared deployment (see Handoff readiness) |

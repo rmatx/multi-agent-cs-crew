@@ -267,7 +267,7 @@ Full runbook: [`project-context/3.deliver/deploy.md`](deploy.md). The essentials
 | Persona | `@devops.eng` |
 | Action | `*document-user-guide` |
 | Timestamp | 2026-08-28; refreshed 2026-08-29 |
-| Resolved runtime | `claude-agent-sdk` (env `AAMAD_TARGET_RUNTIME`, matches `aamad.config.yml`) |
+| Resolved runtime | `AAMAD_TARGET_RUNTIME=claude-agent-sdk` (env, matches `aamad.config.yml`) |
 | Template | `.cursor/templates/user-guide-template.md` — all seven sections generated |
 | Config gate | `aamad.config.yml` → `documentation.require_user_guide: true` — satisfied |
 | Verification | Every command and id in §3–§5 executed against the running app on 2026-08-28, re-checked 2026-08-29 after the defect fixes; the troubleshooting table is drawn from failures actually observed during Build, not imagined |

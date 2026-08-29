@@ -588,7 +588,7 @@ Non-MVP tests and coverage, for the backlog.
 | Actions | `*test-unit`, `*test-integration`, `*qa`, `*verify-flow`, `*log-defects`, `*future-work` |
 | Timestamp | 2026-08-25 (Sprint 1); 2026-08-28 (Sprint 2 re-test); **2026-08-29 (full pass)** |
 | Commit under test | `09e8184` |
-| Resolved runtime | `claude-agent-sdk` (env `AAMAD_TARGET_RUNTIME`, matches `aamad.config.yml`) |
+| Resolved runtime | `AAMAD_TARGET_RUNTIME=claude-agent-sdk` (env, matches `aamad.config.yml`) |
 | Model at verification | `claude-sonnet-5`, `effort: low`, `SDK_STREAM_MODE=live` |
 | Unit | **143 / 143**, Node built-in runner, no test framework dependency |
 | Eval | **114 / 114** across 9 scripts, `AS_OF_DATE=2026-09-01` |

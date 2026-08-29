@@ -494,7 +494,7 @@ Checked against `.claude/rules/adapter-claude-agent-sdk.md`.
 | Persona | `@integration.eng` |
 | Actions | `*integrate-api`, `*verify-messageflow`, `*log-integration` |
 | Timestamp | 2026-08-27; re-verified 2026-08-28; `*integrate-api` contract pass 2026-08-29 |
-| Resolved runtime | `claude-agent-sdk` (env `AAMAD_TARGET_RUNTIME`, matches `aamad.config.yml` → `runtime.target`; no fallback, no warning) |
+| Resolved runtime | `AAMAD_TARGET_RUNTIME=claude-agent-sdk` (env, matches `aamad.config.yml` → `runtime.target`; no fallback, no warning) |
 | Adapter rule loaded | `.claude/rules/adapter-claude-agent-sdk.md` |
 | SDK version | `@anthropic-ai/claude-agent-sdk` 0.3.241 (declared `^0.3.241`) |
 | Model at verification | `claude-sonnet-5`, `effort: low`, adaptive thinking |

@@ -319,7 +319,7 @@ Named so nobody re-derives them as oversights:
 | Persona | `@devops.eng` |
 | Actions | `*prepare-release`, `*define-deploy`, `*configure-cicd`, `*document-deploy` |
 | Timestamp | 2026-08-28; re-run 2026-08-29 |
-| Resolved runtime | `claude-agent-sdk` (env `AAMAD_TARGET_RUNTIME`, matches `aamad.config.yml` → `runtime.target`) |
+| Resolved runtime | `AAMAD_TARGET_RUNTIME=claude-agent-sdk` (env, matches `aamad.config.yml` → `runtime.target`) |
 | Adapter rule loaded | `.claude/rules/adapter-claude-agent-sdk.md` |
 | Release | `1.0.0` |
 | Phase gate | Satisfied — `qa.md` present with no open defect, `security.md` present with no Critical findings |
