@@ -32,9 +32,9 @@ ticket for a person, every time, on both engines.
   today's calendar so windows and trials behave sensibly (see §5).
 - **Conversations are not private between people.** Anyone holding a conversation's id can
   continue it and read its history.
-- **One known defect** (INT-03): on the model-backed engine, an unknown order number produces a
-  correct, honest reply, but the turn is reported as finished rather than as waiting for you.
-  The text is right; the status badge is optimistic.
+- **No known defect is open against this release.** Three that were open on 2026-08-28 —
+  including one where an unknown order number was reported as a finished turn — were fixed on
+  2026-08-29 and are recorded in `qa.md`.
 
 ---
 
@@ -115,6 +115,7 @@ recalling what it said before.
 | Is my Plus trial still active? *(customer id `45344`)* | An active trial with days remaining |
 | Can I still return this order? *(order `46101` / `1`)* | Inside the 14-day window / 365 days ago and outside it |
 | I sent this back — how long until it's processed? *(order `45662`)* | 3–5 business days, plus real public holidays for that customer's country |
+| The app keeps crashing on Android 3.2.0 | The known workaround from the troubleshooting policy — update to 3.2.1 |
 | Please cancel my Plus membership | A ticket, and a clear statement that it has **not** been cancelled |
 | I want a refund | A ticket with the reason `money movement` |
 | What is the capital of France? | A refusal and a ticket — it will not answer from general knowledge |
@@ -138,6 +139,14 @@ The banner names the outcome, and the words are chosen to mean different things:
 | **needs input** | Waiting on **you** — usually a missing order number |
 | **handed off** | A **person** has this now. A ticket id is shown; quote it if you follow up |
 | **error** | The turn did not complete. **Retry** replays the same question |
+
+### What a handoff carries
+
+When a conversation goes to a person, the ticket takes the context with it: the order or
+customer id, what was tried, what was cited, and — if you mentioned them — **your device and
+app version**. You do not have to repeat those: if you wrote "Android 3.2.0" three turns
+earlier, the ticket has it. Nothing is guessed, so a detail you never gave is simply absent
+rather than invented.
 
 ### Talk to a human, any time
 
@@ -189,6 +198,8 @@ with the clock.
 | `401` from the same endpoint | Wrong or missing `X-Operator-Key` header |
 | Health returns 503 with `stores: "error"` | The data volume is unwritable. Check the mount and its ownership |
 | A ticket disappeared after a restart | It should not — tickets are durable. If it did, the volume was removed (`docker compose down -v`) |
+| An unknown order number shows "needs input" rather than "done" | Correct as of 2026-08-29. The lookup found nothing, so the turn is waiting on you for a corrected number — and no rating is requested for a question that was not answered |
+| A polite sign-off opens a support ticket | Fixed 2026-08-29. If you see it again, the message contained a content word the assistant read as a question — report it, it is a regression |
 
 ### Where to find logs
 
@@ -214,7 +225,7 @@ Full runbook: [`project-context/3.deliver/deploy.md`](deploy.md). The essentials
   -d`. State survives, because the image holds none. Add `-v` to wipe the data volume for a
   clean demo — that destroys every ticket and transcript.
 - **Before a demo:** check `/api/health`, pin `AS_OF_DATE`, and on the crew engine run
-  `npm run eval:sdk` (expect 102/102) before anyone is watching.
+  `npm run eval:sdk` (expect 114/114 across 9 scripts) before anyone is watching.
 
 ---
 
@@ -255,9 +266,10 @@ Full runbook: [`project-context/3.deliver/deploy.md`](deploy.md). The essentials
 | ----- | ----- |
 | Persona | `@devops.eng` |
 | Action | `*document-user-guide` |
-| Timestamp | 2026-08-28 |
+| Timestamp | 2026-08-28; refreshed 2026-08-29 |
 | Resolved runtime | `claude-agent-sdk` (env `AAMAD_TARGET_RUNTIME`, matches `aamad.config.yml`) |
 | Template | `.cursor/templates/user-guide-template.md` — all seven sections generated |
 | Config gate | `aamad.config.yml` → `documentation.require_user_guide: true` — satisfied |
-| Verification | Every command and id in §3–§5 was executed against the running app on 2026-08-28; the troubleshooting table is drawn from failures actually observed during Build, not imagined |
+| Verification | Every command and id in §3–§5 executed against the running app on 2026-08-28, re-checked 2026-08-29 after the defect fixes; the troubleshooting table is drawn from failures actually observed during Build, not imagined |
+| Refreshed | 2026-08-29 — removed the INT-03 known-defect note (fixed), corrected the eval figure to 114/114 across 9 scripts, documented what a handoff carries, added the app-issue row to the tour |
 | Self-check | Required sections present: Sources, Assumptions, Open Questions, Audit |

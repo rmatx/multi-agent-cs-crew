@@ -11,7 +11,7 @@ Epic reference: `.claude/rules/delivery-workflow.md` · SAD §5 Physical / Deplo
 
 | Prerequisite | Status |
 |---|---|
-| `qa.md` documents MVP verification | **Met** — Sprint 2 re-test recorded; 10 further acceptance criteria passing |
+| `qa.md` documents MVP verification | **Met** — full QA pass 2026-08-29: 55/55 acceptance criteria mapped (46 pass, 5 partial, 1 not covered), **no defect open** |
 | `security.md` from `@security.eng` | **Met** — 2 High, 2 Medium, 2 Low, 5 Info-pass, **no Critical** |
 | `backend.md`, `frontend.md`, `integration.md` | **Met** |
 | PRD + SAD including DevOps/Deployment Architecture | **Met** |
@@ -35,14 +35,22 @@ trace, CSAT, and the UI for all of it.
 
 ### Known gaps shipping with this release
 
-Recorded rather than fixed, each with its owner:
+**No defect is open against this release.** DEF-07, DEF-08 and INT-03 were all closed on
+2026-08-29, along with the device / app-version coverage gap that had three acceptance criteria
+failing for one reason. What ships knowingly incomplete is scope, not defects:
 
-- ~~**INT-03**~~ **Closed 2026-08-29**, along with DEF-07 and DEF-08 and the device /
-  app-version coverage gap. **No defect is open against this release.**
 - **SEC-01 / SEC-02** (`security.md`) — no authentication, and a conversation id is a bearer
-  token for that conversation's history. **These decide the deployment shape** — see Access
-  control below.
-- Layer 5 leftovers: no pause/cancel controls, no operator console around the trace endpoint.
+  token for that conversation's history. Accepted risks, **and they decide the deployment
+  shape** — see Access control below. This is the one entry an operator must read before
+  choosing where to run it.
+- **Five partial acceptance criteria** (`qa.md`): citation precision, per-hop latency in the
+  trace, and `alignMaxDateToToday` missing from the trace panel. All cosmetic or diagnostic;
+  none changes an answer a customer receives.
+- **Layer 5 leftovers**: no pause/cancel controls, and no operator console around the trace
+  endpoint — the route exists and is authenticated, but nothing renders it.
+- **Never measured**: the PRD's ≥5-concurrent-chats and turn p95 < 30 s targets. Nothing has
+  run more than one turn at a time. Recorded so nobody reads the green suites as evidence of
+  something they never tested.
 
 ---
 
@@ -70,6 +78,12 @@ app depends on `@duckdb/node-api`, a native addon deliberately kept out of the s
 (`serverExternalPackages`, ADR-05/09). Tracing a native `.node` binary into a standalone bundle
 is exactly the kind of thing that works on a laptop and fails in a container at 3am. The cost
 is image size; the benefit is that what runs in the container is what ran in `npm run dev`.
+
+**The policy corpus is un-ignored explicitly.** `.dockerignore` excludes `*.md`, which by
+Docker's matching rules should not reach `data/policy/*.md` — patterns do not cross a `/`. The
+cost of that recollection being wrong is a container that builds and then throws on the first
+policy question, because the corpus loader refuses to start empty. `!data/policy/*.md` removes
+the question.
 
 **The image is data-complete but state-empty.** It bakes in the three read-only assets the app
 cannot start without — the committed 3.2 MB CI fixture (ADR-12), the policy corpus, the single
@@ -304,11 +318,12 @@ Named so nobody re-derives them as oversights:
 | ----- | ----- |
 | Persona | `@devops.eng` |
 | Actions | `*prepare-release`, `*define-deploy`, `*configure-cicd`, `*document-deploy` |
-| Timestamp | 2026-08-28 |
+| Timestamp | 2026-08-28; re-run 2026-08-29 |
 | Resolved runtime | `claude-agent-sdk` (env `AAMAD_TARGET_RUNTIME`, matches `aamad.config.yml` → `runtime.target`) |
 | Adapter rule loaded | `.claude/rules/adapter-claude-agent-sdk.md` |
 | Release | `1.0.0` |
-| Phase gate | Satisfied — `qa.md` present, `security.md` present with no Critical findings |
+| Phase gate | Satisfied — `qa.md` present with no open defect, `security.md` present with no Critical findings |
+| Re-run 2026-08-29 | `*prepare-release` gate re-confirmed against the closed defects; `*define-deploy` corpus un-ignore; `*document-deploy` known-gaps rewritten now that none are defects; `*document-user-guide` corrected — it still listed INT-03 as a known defect and the eval as 102/102 |
 | Deploy authorization | **Not requested and not performed.** Configuration only; no image built, pushed, or deployed |
 | Files written | `Dockerfile`, `.dockerignore`, `docker-compose.yml`, `.nvmrc`, `.github/workflows/ci.yml`, `project-context/3.deliver/deploy.md`, `project-context/3.deliver/user-guide.md` |
 | Application logic | Unmodified. No source file under `app/`, `lib/`, `server/` or `packages/` was touched |

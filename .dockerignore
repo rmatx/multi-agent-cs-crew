@@ -30,3 +30,9 @@ project-context
 .cursor
 *.md
 !README.md
+
+# The policy corpus IS runtime data, and it is markdown. `*.md` above should not reach it —
+# Docker patterns do not cross a `/` — but the cost of being wrong is a container that builds
+# and then throws on the first policy question, because `loadPolicyChunks` refuses to start
+# with an empty corpus. Stating it explicitly is cheaper than depending on that recollection.
+!data/policy/*.md
