@@ -125,6 +125,10 @@ export async function GET(
       reason_code: stub.reason_code,
       urgency: stub.urgency,
       created_at: stub.created_at,
+      // AC-TICKET-01: the context the ticket reached a human with. Ids and a device string —
+      // no free text, so nothing here widens what §8 redaction already allows.
+      entities: stub.entities,
+      suggested_category: stub.suggested_category,
     })),
     traceRecordCount: lines.length,
   });

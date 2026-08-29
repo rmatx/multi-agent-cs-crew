@@ -59,7 +59,7 @@ Other useful commands:
 
 ```bash
 npm run typecheck                        # strict TypeScript
-npm test                                 # 92 unit tests (70 server + 22 client)
+npm test                                 # 143 unit tests
 npm run build && npm start               # production build
 NOVAMART_DUCKDB_PATH=/path/to/full.duckdb npm run dev   # use the 151 MB practice DB
 ```
@@ -144,10 +144,10 @@ Running the crew:
 export ANTHROPIC_API_KEY=...        # see .env.example, never committed
 export MODEL_ID=claude-sonnet-5
 CHAT_ENGINE=sdk AS_OF_DATE=2026-09-01 npm run dev
-npm run eval:sdk                    # all 8 F-EVAL-01 scripts, 102 assertions
+npm run eval:sdk                    # all 9 F-EVAL-01 scripts, 114 assertions
 ```
 
-`npm run eval:sdk` drives eight fixtures against a running server and asserts on both the SSE
+`npm run eval:sdk` drives nine fixtures against a running server and asserts on both the SSE
 wire and the JSONL trace — one script per registered path: WISMO, refund, return status,
 grounded policy, ungrounded question, membership, return eligibility, restricted action. Two
 assertions carry more weight than the rest. Slice G checks `hops === 1` on a return question,

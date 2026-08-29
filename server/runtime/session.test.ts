@@ -73,6 +73,32 @@ test("identity given once carries forward, and a new id replaces it", () => {
   assert.deepEqual(session.loadSession("conv-2").identity, { userId: 38, orderId: 46101 });
 });
 
+test("AC-TICKET-01: app context is remembered across turns and never erased", () => {
+  session.ensureSession("conv-app");
+  let ctx = session.loadSession("conv-app").appContext;
+  assert.deepEqual(ctx, {}, "nothing stated yet");
+
+  // Turn 1: the customer describes the crash.
+  ctx = session.rememberAppContext("conv-app", ctx, { device: "android", app_version: "3.2.0" });
+  assert.deepEqual(ctx, { device: "android", app_version: "3.2.0" });
+  assert.deepEqual(session.loadSession("conv-app").appContext, {
+    device: "android",
+    app_version: "3.2.0",
+  });
+
+  // Turn 2 mentions neither — the escalation two turns later still needs them.
+  ctx = session.rememberAppContext("conv-app", ctx, {});
+  assert.deepEqual(ctx, { device: "android", app_version: "3.2.0" });
+
+  // Turn 3 corrects the version: newer wins, device survives.
+  ctx = session.rememberAppContext("conv-app", ctx, { app_version: "3.2.1" });
+  assert.deepEqual(ctx, { device: "android", app_version: "3.2.1" });
+  assert.deepEqual(session.loadSession("conv-app").appContext, {
+    device: "android",
+    app_version: "3.2.1",
+  });
+});
+
 test("empty assistant text is not stored as a turn", () => {
   session.ensureSession("conv-3");
   session.appendMessage("conv-3", "assistant", "   ");

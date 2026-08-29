@@ -35,6 +35,7 @@ import {
 } from "@/server/data/holidays";
 import { resolveHolidayApiConfig } from "./config";
 import { createTicketStub, formatHandoffSummary, getTicketStub } from "./escalation";
+import { categoryForIntent } from "./escalationContext";
 import type { AgentTemporalView } from "./engine";
 import {
   MCP_SERVER_NAME,
@@ -46,6 +47,12 @@ import type { Tracer } from "./trace";
 
 export type ToolContext = {
   readonly conversationId: string;
+  /**
+   * Device / app version the customer has stated anywhere in this conversation, already
+   * merged across turns by the SessionStore (AC-TRIAGE-03 / AC-TICKET-01). Used ONLY to fill
+   * an escalation package — never passed to a model, never used to answer.
+   */
+  readonly appContext: { readonly device?: string; readonly app_version?: string };
   /** Agent-visible time only. Deliberately narrow — see the module header. */
   readonly temporal: AgentTemporalView;
   /** Applied inside this module before any row is returned; never surfaced to the model. */
@@ -549,9 +556,27 @@ export function createNovamartToolServer(ctx: ToolContext) {
       // tools_tried / citations: observations the runtime already made. Asking the model to
       // reproduce them cost ~10s of output tokens per escalation and was strictly less
       // accurate — it can forget a call, misremember an outcome, or cite what it never read.
+      // Runtime-derived, exactly like conversationId / tools_tried / citations below: the
+      // customer wrote "Android 3.2.0" and the runtime already has those words, so asking the
+      // model to re-type them adds a way to get them wrong (AC-TRIAGE-03, AC-TICKET-01).
+      // Model-supplied values win when present — it may have read them from an earlier turn
+      // this extractor cannot see.
       const result = createTicketStub(
         {
           ...args,
+          entities: {
+            // Model first, runtime last: `device` and `app_version` are OBSERVATIONS of what
+            // the customer wrote, and the runtime has their literal words while the model has
+            // a re-typing of them. Observed live: the model supplied "Android" where the
+            // extractor had normalised "android" — harmless here, and the same precedence
+            // would let a mis-remembered version through. The model still owns `order_id` and
+            // `user_id`, which it resolves from context the extractor cannot see.
+            ...args.entities,
+            ...ctx.appContext,
+          },
+          // AC-ESC-05 / ADR-13: a lookup table the PRD wrote out in full has no business
+          // being a probability.
+          suggested_category: categoryForIntent(args.intent, args.suggested_category),
           conversationId: ctx.conversationId,
           tools_tried: ledger.map(({ tool, ok: succeeded, summary }) => ({
             tool,
@@ -570,6 +595,11 @@ export function createNovamartToolServer(ctx: ToolContext) {
         event: "ticket_stub_created",
         ticket_stub_id: result.ticket_stub_id,
         reason_code: result.stub.reason_code,
+        // What the ticket actually carries. An operator asking "did this reach a human with
+        // enough context?" should not have to open the stub store to find out — and it is the
+        // only place AC-TICKET-01 is observable after the fact.
+        entities: result.stub.entities,
+        suggested_category: result.stub.suggested_category,
       });
       return ok({ ticket_stub_id: result.ticket_stub_id });
     },

@@ -17,11 +17,13 @@ import type { ChatRequest, StreamEvent } from "@shared/dto";
 import { resolveTemporalMeta } from "@/server/data/dateShift";
 import { resolveBudgets, resolveEngineId } from "@/server/runtime/config";
 import { checkRateLimit, clientKey } from "@/server/runtime/rateLimit";
+import { extractAppContext } from "@/server/runtime/escalationContext";
 import {
   appendMessage,
   ensureSession,
   loadSession,
   mergeIdentity,
+  rememberAppContext,
   saveIdentity,
 } from "@/server/runtime/session";
 import type { TurnInput } from "@/server/runtime/engine";
@@ -84,11 +86,19 @@ export async function POST(request: Request): Promise<Response> {
   // customer who gave a user id last turn still matches an overlay persona on this one.
   let session;
   let identity;
+  let appContext;
   try {
     ensureSession(conversationId);
     session = loadSession(conversationId);
     identity = mergeIdentity(session.identity, chatRequest.identity ?? {});
     saveIdentity(conversationId, identity);
+    // AC-TRIAGE-03 / AC-TICKET-01: a customer states their device once and escalates two
+    // turns later, so this is remembered on the session rather than only read per turn.
+    appContext = rememberAppContext(
+      conversationId,
+      session.appContext,
+      extractAppContext(chatRequest.message),
+    );
     appendMessage(conversationId, "user", chatRequest.message);
   } catch (err) {
     console.error("session store failed", err);
@@ -185,6 +195,7 @@ export async function POST(request: Request): Promise<Response> {
           conversationId,
           message: chatRequest.message,
           identity,
+          appContext,
           history: session.transcript.map(({ role, content }) => ({ role, content })),
           trace,
           temporal,

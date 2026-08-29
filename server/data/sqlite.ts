@@ -58,12 +58,39 @@ function open(dbPath: string): DatabaseSync {
  */
 type LazyDb = { (): Db; reset: () => void };
 
-function lazy(pathFn: () => string, schema: string): LazyDb {
+/**
+ * Additive column migration.
+ *
+ * `CREATE TABLE IF NOT EXISTS` does nothing to a table that already exists, so a column added
+ * to the schema above never reaches a database created before it — the demo would run happily
+ * and drop the new field on every write. `deploy.md` flagged exactly this as the first thing
+ * that breaks when the schema moves.
+ *
+ * ADDITIVE ONLY, deliberately. `ADD COLUMN` is safe in both directions: an older build ignores
+ * a column it does not know, and a newer one backfills null. A rename or a retype is not safe
+ * that way and would need a real migration path with a version table — the moment this project
+ * needs one, this function is the wrong tool and should be replaced rather than extended.
+ */
+function addMissingColumns(db: DatabaseSync, table: string, columns: Record<string, string>): void {
+  const existing = new Set(
+    (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name),
+  );
+  for (const [name, type] of Object.entries(columns)) {
+    if (!existing.has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`);
+  }
+}
+
+function lazy(
+  pathFn: () => string,
+  schema: string,
+  migrate?: (db: DatabaseSync) => void,
+): LazyDb {
   let db: Db | null = null;
   const get = (): Db => {
     if (db === null) {
       db = open(pathFn());
       db.exec(schema);
+      migrate?.(db);
     }
     return db;
   };
@@ -86,6 +113,8 @@ const SESSION_SCHEMA = `
     updated_at      TEXT NOT NULL,
     user_id         INTEGER,
     order_id        INTEGER,
+    device          TEXT,
+    app_version     TEXT,
     csat_score      INTEGER,
     csat_comment    TEXT,
     csat_at         TEXT
@@ -121,7 +150,10 @@ const STUB_SCHEMA = `
     ON ticket_stubs (conversation_id, reason_code);
 `;
 
-export const sessionDb = lazy(resolveSessionDbPath, SESSION_SCHEMA);
+export const sessionDb = lazy(resolveSessionDbPath, SESSION_SCHEMA, (db) =>
+  // AC-TICKET-01 added these after the first databases existed.
+  addMissingColumns(db, "sessions", { device: "TEXT", app_version: "TEXT" }),
+);
 export const ticketStubDb = lazy(resolveTicketStubDbPath, STUB_SCHEMA);
 
 /**

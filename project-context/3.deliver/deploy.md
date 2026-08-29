@@ -27,9 +27,9 @@ trace, CSAT, and the UI for all of it.
 | Evidence | Result |
 |---|---|
 | `npm run typecheck` | exit 0 |
-| `npm test` | **92 / 92** (70 server + 22 client) |
+| `npm test` | **143 / 143** |
 | `npm run test:invariants` | **9 / 9** — zero money tools registered |
-| `npm run eval:sdk` | **102 / 102** across 8 scripts, green on consecutive runs |
+| `npm run eval:sdk` | **114 / 114** across 9 scripts, green on consecutive runs |
 | `npx next build` | compiles; 4 API routes + the chat page |
 | Integration re-verification | **18 executed cases**, both engines |
 
@@ -37,9 +37,8 @@ trace, CSAT, and the UI for all of it.
 
 Recorded rather than fixed, each with its owner:
 
-- **INT-03** (`integration.md`) — on the sdk engine an unknown order returns a clarifying
-  question with `done{resolved}` and a CSAT card. Customer-visible text is correct; terminal
-  status is not. Owner `@backend.eng`.
+- ~~**INT-03**~~ **Closed 2026-08-29**, along with DEF-07 and DEF-08 and the device /
+  app-version coverage gap. **No defect is open against this release.**
 - **SEC-01 / SEC-02** (`security.md`) — no authentication, and a conversation id is a bearer
   token for that conversation's history. **These decide the deployment shape** — see Access
   control below.
@@ -228,11 +227,13 @@ git tag -a v1.0.0 -m "NovaMart support crew 1.0.0" && git push --tags
 
 - **The image is stateless.** All state is in the named volume, which `down` does not remove.
 - **The catalog is read-only.** No rollback can corrupt it, because nothing writes it.
-- **The SQLite schema is create-if-absent with no migrations.** Rolling *back* across a future
-  schema change would leave newer columns in place, which SQLite tolerates. Rolling *forward*
-  onto an older file adds tables and columns and does not drop data. If a future release ever
-  removes or retypes a column, that assumption breaks and this section needs a migration plan.
-  Today there is nothing to migrate.
+- **The SQLite schema is create-if-absent, with additive column migration** (added
+  2026-08-29, when `sessions` gained `device` and `app_version`). On open, missing columns are
+  added with `ALTER TABLE ADD COLUMN`. That is safe in both directions: an older build ignores
+  a column it does not know, and a newer one backfills null. Rolling back across such a change
+  leaves the newer columns in place, which SQLite tolerates. **A rename or a retype is not
+  safe this way** — the first release that needs one needs a real migration path with a
+  version table, and this section needs rewriting rather than extending.
 
 To roll back the data as well — for a clean demo — `docker compose down -v` removes the volume
 and the next start recreates empty stores. That destroys every ticket stub and transcript.

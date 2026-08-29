@@ -45,6 +45,7 @@ import {
   type ToolAttempt,
 } from "../hooks";
 import { createTicketStub, formatHandoffSummary } from "../escalation";
+import { categoryForIntent } from "../escalationContext";
 import { createNovamartToolServer } from "../tools";
 import {
   MCP_SERVER_NAME,
@@ -149,6 +150,7 @@ export const sdkEngine: TurnEngine = {
 
     const toolServer = createNovamartToolServer({
       conversationId: input.conversationId,
+      appContext: input.appContext,
       temporal,
       shiftDays: input.temporal.shiftDays,
       tracer,
@@ -430,6 +432,9 @@ export const sdkEngine: TurnEngine = {
             conversationId: input.conversationId,
             intent: "other",
             entities: {
+              // A forced escalation must not carry less context than a voluntary one
+              // (AC-TICKET-01).
+              ...input.appContext,
               ...(input.identity.orderId !== undefined ? { order_id: input.identity.orderId } : {}),
               ...(input.identity.userId !== undefined ? { user_id: input.identity.userId } : {}),
             },
@@ -443,7 +448,9 @@ export const sdkEngine: TurnEngine = {
             tools_tried: [...toolsTried],
             citations: [...new Set(citations)],
             reason_code: forcedReason,
-            suggested_category: "other",
+            // AC-ESC-05: intent is unresolved on a forced exit, and `other` is what the map
+            // returns for that — stated through the map rather than hard-coded beside it.
+            suggested_category: categoryForIntent("other"),
           },
           { asOf: input.temporal.asOf },
         );

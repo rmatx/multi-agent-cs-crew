@@ -530,6 +530,12 @@ patched. What moved, and what it meant for integration:
 | Two new endpoints | One authenticated and fail-closed, one not — the asymmetry is documented above |
 | Rate limit | New `429` path, checked before parsing |
 
+**Amendment 2026-08-29** — the operator trace's `ticketStubs` entries now also carry `entities`
+and `suggested_category`, so "did this reach a human with enough context?" is answerable from
+the endpoint rather than only from the stub store (AC-TICKET-01). Additive: no existing field
+changed shape, and `TurnTrace` in `turnService.ts` was updated in the same change, so the
+client's declared view and the route still agree — the thing INT-04 was about.
+
 **One thing did not change, and that is the finding.** No `StreamEvent` variant was added or
 altered beyond `csat_prompt`, no field changed shape, and the client needed no edit to keep
 working through a build that doubled the agent count and added three endpoints. That is the

@@ -23,6 +23,7 @@ import type { OrderSummary } from "@shared/dto";
 import { daysSince, shiftIsoDate } from "@/server/data/dateShift";
 import { getOrderItems, getRawOrder } from "@/server/data/duckdb";
 import { createTicketStub, formatHandoffSummary } from "../escalation";
+import { categoryForIntent } from "../escalationContext";
 import { isMoneyRequest } from "../moneyIntent";
 import { chunk, emitLines, type TurnEmit, type TurnEngine, type TurnInput } from "../engine";
 
@@ -69,7 +70,13 @@ function escalateMoneyRequest(
     {
       conversationId: input.conversationId,
       intent: "payment_question",
-      entities: { order_id: order.orderId, user_id: order.userId },
+      entities: {
+        // AC-TICKET-01: same runtime derivation as the sdk engine. A customer reporting a
+        // crash on the keyless path deserves the same ticket as one on the crew path.
+        ...input.appContext,
+        order_id: order.orderId,
+        user_id: order.userId,
+      },
       urgency: "medium",
       transcript_summary:
         `Customer asked about a refund, cancellation, or payment on order ${order.orderId} ` +
@@ -86,7 +93,9 @@ function escalateMoneyRequest(
       ],
       citations,
       reason_code: "payment_or_refund",
-      suggested_category: "billing",
+      // AC-ESC-05 through the normative map, not a hand-picked string. `payment_question`
+      // maps to `payment_issue`; "billing" was close and not what the PRD says.
+      suggested_category: categoryForIntent("payment_question"),
     },
     { asOf: input.temporal.asOf },
   );

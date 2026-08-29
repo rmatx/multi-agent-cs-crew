@@ -35,9 +35,19 @@ export type TranscriptEntry = {
 
 export type SessionIdentity = { userId?: number; orderId?: number };
 
+/**
+ * App context the customer stated at some point in the conversation (AC-TICKET-01).
+ *
+ * Kept on the session rather than only on the ticket, because a customer describes their
+ * device once — "the app crashes on Android 3.2.0" — and the escalation often happens two
+ * turns later, by which time the current message says "can you help then?".
+ */
+export type SessionAppContext = { device?: string; app_version?: string };
+
 export type Session = {
   readonly conversationId: string;
   readonly identity: SessionIdentity;
+  readonly appContext: SessionAppContext;
   readonly transcript: readonly TranscriptEntry[];
 };
 
@@ -49,7 +59,13 @@ function clamp(text: string): string {
   return text.length > MAX_MESSAGE_CHARS ? `${text.slice(0, MAX_MESSAGE_CHARS)}…` : text;
 }
 
-type SessionRow = { conversation_id: string; user_id: number | null; order_id: number | null };
+type SessionRow = {
+  conversation_id: string;
+  user_id: number | null;
+  order_id: number | null;
+  device: string | null;
+  app_version: string | null;
+};
 type MessageRow = { role: string; content: string; status: string | null; ts: string };
 
 /** Create the session row if absent. Safe to call on every turn. */
@@ -67,7 +83,9 @@ export function ensureSession(conversationId: string): void {
 export function loadSession(conversationId: string): Session {
   const db = sessionDb();
   const row = db
-    .prepare("SELECT conversation_id, user_id, order_id FROM sessions WHERE conversation_id = ?")
+    .prepare(
+      "SELECT conversation_id, user_id, order_id, device, app_version FROM sessions WHERE conversation_id = ?",
+    )
     .get(conversationId) as SessionRow | undefined;
 
   const messages = db
@@ -82,6 +100,12 @@ export function loadSession(conversationId: string): Session {
     identity: {
       ...(row?.user_id === null || row?.user_id === undefined ? {} : { userId: row.user_id }),
       ...(row?.order_id === null || row?.order_id === undefined ? {} : { orderId: row.order_id }),
+    },
+    appContext: {
+      ...(row?.device === null || row?.device === undefined ? {} : { device: row.device }),
+      ...(row?.app_version === null || row?.app_version === undefined
+        ? {}
+        : { app_version: row.app_version }),
     },
     // Query is newest-first so the LIMIT keeps the RECENT window; reverse for reading order.
     transcript: messages
@@ -187,4 +211,30 @@ export function formatTranscriptForPrompt(transcript: readonly TranscriptEntry[]
   return transcript
     .map((entry) => `${entry.role === "user" ? "Customer" : "You"}: ${entry.content}`)
     .join("\n");
+}
+
+
+/**
+ * Remember app context the customer has stated. Merge-only: a later turn that mentions no
+ * device must not erase the one they gave earlier, and a customer who names a NEW version has
+ * corrected themselves, so the newer value wins.
+ */
+export function rememberAppContext(
+  conversationId: string,
+  stored: SessionAppContext,
+  observed: SessionAppContext,
+): SessionAppContext {
+  const merged: SessionAppContext = {
+    ...(observed.device ?? stored.device ? { device: observed.device ?? stored.device } : {}),
+    ...(observed.app_version ?? stored.app_version
+      ? { app_version: observed.app_version ?? stored.app_version }
+      : {}),
+  };
+
+  if (merged.device !== stored.device || merged.app_version !== stored.app_version) {
+    sessionDb()
+      .prepare("UPDATE sessions SET device = ?, app_version = ?, updated_at = ? WHERE conversation_id = ?")
+      .run(merged.device ?? null, merged.app_version ?? null, nowIso(), conversationId);
+  }
+  return merged;
 }

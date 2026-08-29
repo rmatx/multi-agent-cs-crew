@@ -35,6 +35,11 @@ export type TurnInput = {
   readonly message: string;
   readonly identity: { readonly userId?: number; readonly orderId?: number };
   /**
+   * Device / app version the customer has stated anywhere in this conversation (AC-TICKET-01).
+   * Derived by the runtime from their own words, never asked of a model.
+   */
+  readonly appContext: { readonly device?: string; readonly app_version?: string };
+  /**
    * What was already said on this conversation, oldest first, EXCLUDING this turn's message.
    * Empty on the first turn. Engines may ignore it — the deterministic engine does, because it
    * composes from one order row and has no use for context — but the sdk coordinator reads it

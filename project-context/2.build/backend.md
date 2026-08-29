@@ -552,7 +552,38 @@ the client, and no effect whatsoever on the default path. Verified below.
    the Audit a lie. Unset now falls back; **set-but-invalid throws**, naming the variable, the
    value and the way out. `0` is accepted where it means something (`MAX_HOPS`,
    `TOOL_READ_RETRIES`) and rejected where it does not (`TURN_TIMEOUT_MS`).
-18. **Turbopack warning on the DuckDB read** is unchanged and now also appears via
+18. **App context reached no ticket — resolved 2026-08-29 (AC-TRIAGE-03 / AC-TICKET-01 /
+   AC-ESC-05).** `create_ticket_stub` had accepted `device` and `app_version` since Sprint 1
+   and **nothing ever populated them**: no prompt asked any agent to capture them, so an
+   app-crash ticket reached a human without the two fields an engineer needs first. Three
+   acceptance criteria were failing for that one reason.
+
+   Fixed as a **runtime derivation, not a prompt line** (`server/runtime/escalationContext.ts`,
+   import-free and unit tested). The customer wrote "Android 3.2.0"; the runtime already has
+   those words. This is the same doctrine `tools.ts` already applies to `conversationId`,
+   `tools_tried` and `citations` — observations, not judgements — and it extends to the
+   session, because a customer describes their device once and escalates two turns later.
+
+   The extractor refuses to guess: an absent field stays absent, and a bare two-part number
+   needs a `v`/`version` label so a total like `$175.05` or "3 to 5 business days" can never
+   be filed as an app version. Precedence puts the runtime **last**, which was a correction:
+   the first version let the model's re-typed value win, observed live as `"Android"` where
+   the extractor had `"android"`. Harmless there, and the same order would have let a
+   mis-remembered version through. The model still owns `order_id` and `user_id`, which it
+   resolves from context the extractor cannot see.
+
+   **AC-ESC-05 was bigger than ADR-13's corner.** The PRD writes out a full normative
+   intent→category map, and the deterministic engine had been sending a hand-picked
+   `"billing"` where the map says `payment_issue`. The whole map is now a lookup in code — a
+   table the PRD wrote out in full has no business being a probability.
+
+   One schema consequence: `sessions` gained two columns, and `CREATE TABLE IF NOT EXISTS`
+   does nothing to a table that already exists. `sqlite.ts` now runs an **additive** column
+   migration on open. Additive only, deliberately — `ADD COLUMN` is safe in both directions,
+   while a rename or retype is not and would need a real migration path with a version table.
+   `deploy.md` flagged this as the first thing to break when the schema moved; it moved, and
+   it did not break.
+19. **Turbopack warning on the DuckDB read** is unchanged and now also appears via
    `app/api/health/route.ts` — a dynamic `path.join(process.cwd(), …)`, warning only.
 
 ## Verification
@@ -566,7 +597,7 @@ the client, and no effect whatsoever on the default path. Verified below.
 
 `npm run test:invariants` — 9 passed, 0 failed (zero-money-tools exact-set suite).
 
-`npm test` — **135 passed, 0 failed** (41 before Sprint 2, 70 after layer 5, 125 after the QA pass, 135 with the DEF-07/DEF-08/INT-03 regression tests). New: 11 policy-scorer tests
+`npm test` — **143 passed, 0 failed** (41 before Sprint 2, 70 after layer 5, 125 after the QA pass, 135 with the DEF-07/DEF-08/INT-03 regression tests). New: 11 policy-scorer tests
 covering the 0.55 gate, section retrieval, off-corpus rejection and stemmer collisions; 5
 grounding-guard tests; 8 session/stub-store tests against a real SQLite file in a temp
 directory; 5 rate-limit tests; plus the orphan-tool invariant.

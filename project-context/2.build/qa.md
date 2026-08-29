@@ -410,7 +410,8 @@ second eval profile.
 The PRD defines **55** acceptance criteria. Every one is listed; nothing is omitted because it
 was inconvenient. "Not covered" below means exactly that, and each has a reason.
 
-**43 covered · 5 partial · 4 not covered · 3 fail-by-design/out-of-scope.**
+**46 covered · 5 partial · 1 not covered · 3 by-absence/out-of-scope.** *(Updated 2026-08-29
+after `@backend.eng` closed the device/app-version gap — was 43 / 5 / 4.)*
 
 | AC | Verified by | Status |
 |---|---|---|
@@ -421,7 +422,7 @@ was inconvenient. "Not covered" below means exactly that, and each has a reason.
 | AC-CHAT-05 | "Talk to a human" → ticket `STUB-E0420689`, `customer_requested_human` | Pass |
 | AC-TRIAGE-01 | Intent routing observed across 8 eval scripts + 18 integration cases | Pass |
 | AC-TRIAGE-02 | Missing id → one clarifying question → `needs_input` (S5); `needsInput.test.ts` | Pass |
-| AC-TRIAGE-03 | **Nothing instructs the coordinator to capture `device` / `app_version`** | **Not covered — gap** |
+| AC-TRIAGE-03 | `escalationContext.test.ts` + eval slice I; runtime-derived, both engines | **Pass 2026-08-29** |
 | AC-TRIAGE-04 | Intent→specialist map exercised by eval slices A, B, D, E, F, G, H | Pass |
 | AC-FAQ-01 | `policyScore.test.ts`; eval slice D asserts the 0.55 threshold in-trace | Pass |
 | AC-FAQ-02 | Citation ids in the reply and the trace panel; **precision not asserted** | Partial |
@@ -443,8 +444,8 @@ was inconvenient. "Not covered" below means exactly that, and each has a reason.
 | AC-ESC-02 | Ticket id in the reply and the result line | Pass |
 | AC-ESC-03 | `session.test.ts` durability + idempotency; survives restart | Pass |
 | AC-ESC-04 | Reason codes observed: `payment_or_refund`, `restricted_action`, `ungrounded`, `customer_requested_human`, `repeat_failure` | Pass |
-| AC-ESC-05 | `app_issue` → `suggested_category: other` **not observed** — depends on AC-TRIAGE-03 | **Not covered** |
-| AC-TICKET-01 | Schema accepts `device` / `app_version`; **nothing populates them** | **Not covered — gap** |
+| AC-ESC-05 | Full normative intent→category map in code; `escalationContext.test.ts` | **Pass 2026-08-29** |
+| AC-TICKET-01 | Session-persisted across turns + in the stub; `session.test.ts`, eval slice I | **Pass 2026-08-29** |
 | AC-TICKET-02 | Corpus has the Android 3.2.0 workaround; retrieval verified | Pass |
 | AC-TICKET-03 | No causal-analysis UI exists | Pass (by absence) |
 | AC-CSAT-01 | `csat_prompt` before `done`, never on `needs_input`; UI card | Pass |
@@ -470,16 +471,27 @@ was inconvenient. "Not covered" below means exactly that, and each has a reason.
 | AC-TIME-07 | `dateShift.test.ts` eligibility arithmetic; eval slice G | Pass |
 | AC-TIME-08 | **`dateShift.test.ts` — authored in this pass; was failing** | Pass (newly) |
 
-### The four not covered, and why
+### The gap that closed, and what remains
 
-- **AC-TRIAGE-03 / AC-TICKET-01 / AC-ESC-05 are one gap wearing three hats.** The
-  `EscalationPackage` schema accepts `device` and `app_version`, the app-troubleshooting corpus
-  names the Android 3.2.0 case, and `create_ticket_stub` will store both fields — but **no
-  prompt asks any agent to capture them**, so they are never populated. A customer reporting an
-  app crash produces a ticket without the two fields an engineer would need first. AC-ESC-05
-  (`app_issue` → `suggested_category: other`, ADR-13) cannot be observed for the same reason.
-  Owner `@backend.eng`; a coordinator/faq-policy prompt addition plus an eval slice would close
-  all three.
+**AC-TRIAGE-03 / AC-TICKET-01 / AC-ESC-05 — closed 2026-08-29.** They were one gap wearing
+three hats: the schema accepted `device` and `app_version`, the corpus documented the Android
+3.2.0 case, `create_ticket_stub` would store both — and no prompt asked any agent to capture
+them, so an app-crash ticket reached a human without the two fields an engineer needs first.
+
+`@backend.eng` closed it as a **runtime derivation rather than a prompt line**, which is the
+right call and the one this project keeps having to relearn: the customer already wrote
+"Android 3.2.0", the runtime already has those words, and asking a model to re-type them adds
+a way to get them wrong. Verified live — and the first version of the fix let the model's
+re-typed value win, which was caught by observing `"Android"` where the extractor had
+`"android"`. Harmless in that instance, and the same precedence would have let a
+mis-remembered version through.
+
+AC-ESC-05 turned out to be larger than the ADR-13 corner: the PRD writes out a **full
+normative intent→category map**, and the deterministic engine had been sending a hand-picked
+`"billing"` where the map says `payment_issue`. The whole map is now in code.
+
+**Still partial or open:**
+
 - **AC-FAQ-02 partial** — citation ids are present in both the reply and the trace; nothing
   asserts they are *relevant* (see the citation-precision observation above).
 - **AC-TRACE-01 partial** — hops and tools are listed in order; **latencies are not**. The
@@ -519,9 +531,8 @@ ledger the fix was first written against. See `backend.md` for what that cost.
 
 Non-MVP tests and coverage, for the backlog.
 
-1. **Close the three-hat gap** (AC-TRIAGE-03 / AC-TICKET-01 / AC-ESC-05): capture `device` and
-   `app_version` on app-issue turns, then an eval slice asserting both reach the ticket and
-   that `suggested_category` is `other`. This is the largest genuine coverage hole.
+1. ~~**Close the three-hat gap**~~ **Done 2026-08-29** — runtime-derived `device` /
+   `app_version`, session-persisted, plus the full AC-ESC-05 category map and eval slice I.
 2. **A pleasantry eval slice**, so DEF-08 cannot regress once fixed — the sign-off table above
    is the fixture.
 3. **Per-hop latency** in the trace, closing AC-TRACE-01, and `alignMaxDateToToday` in the
@@ -579,12 +590,12 @@ Non-MVP tests and coverage, for the backlog.
 | Commit under test | `09e8184` |
 | Resolved runtime | `claude-agent-sdk` (env `AAMAD_TARGET_RUNTIME`, matches `aamad.config.yml`) |
 | Model at verification | `claude-sonnet-5`, `effort: low`, `SDK_STREAM_MODE=live` |
-| Unit | **125 / 125**, 7.8 s, Node built-in runner, no test framework dependency |
-| Eval | **104 / 104** across 8 scripts, `AS_OF_DATE=2026-09-01` |
+| Unit | **143 / 143**, Node built-in runner, no test framework dependency |
+| Eval | **114 / 114** across 9 scripts, `AS_OF_DATE=2026-09-01` |
 | Smoke | 7 / 7 on the keyless engine |
 | Flow | Verified in a browser end to end, both engines, plus mock mode |
-| AC coverage | 55 criteria mapped: 43 pass, 5 partial, 4 not covered, 3 by-absence/out-of-scope |
-| Defects open | DEF-07 (low), DEF-08 (medium), INT-03 (medium) — all `@backend.eng` |
+| AC coverage | 55 criteria mapped: **46 pass, 5 partial, 1 not covered**, 3 by-absence/out-of-scope |
+| Defects open | **None.** DEF-07, DEF-08 and INT-03 were all closed by `@backend.eng` on 2026-08-29 |
 | Files written by `@qa.eng` | `server/data/dateShift.test.ts` (new), `server/runtime/hooks.test.ts` (new), `scripts/eval-sdk.mjs` (slice G assertions), `scripts/test-resolver.mjs` (relative-import resolution), `package.json` (test glob), this file. **No application logic was modified** |
 | Security handoff | `security.md` exists with no Critical findings; `@security.eng` ran before Deliver as `aamad.config.yml` requires |
 | Self-check | Required sections present: Sources, Assumptions, Open Questions, Audit. No Diagnostic raised |

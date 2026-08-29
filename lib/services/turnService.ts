@@ -49,6 +49,8 @@ export type TurnTrace = {
     reason_code: string;
     urgency: string;
     created_at: string;
+    entities: { order_id?: number; user_id?: number; device?: string; app_version?: string };
+    suggested_category: string;
   }>;
   traceRecordCount: number;
 };
