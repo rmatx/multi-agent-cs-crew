@@ -1,0 +1,128 @@
+/* CSAT card. Sits below the answer, visually lighter than it — the answer is what the
+   customer came for; this is an afterthought by design. */
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.7rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.question {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.dismiss {
+  margin-left: auto;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.dismiss:hover {
+  color: var(--fg);
+}
+
+.scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.score {
+  flex: 1 1 6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.4rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.score:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.score:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.chosen {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.scoreNumber {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreLabel {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.commentRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.commentLabel {
+  font-size: 0.78rem;
+  color: var(--muted);
+  flex: 1 0 100%;
+}
+
+.comment {
+  flex: 1 1 12rem;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+}
+
+.commentSend {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.commentSend:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.thanks {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.problem {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #b4291f;
+}

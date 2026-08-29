@@ -9,7 +9,7 @@
 import type { ChatRequest, StreamEvent } from "@shared/dto";
 import type { TurnAction } from "./fsm";
 import { mockStartTurn } from "./services/mockStream";
-import { startTurn } from "./services/turnService";
+import { startTurn, type TurnHeaders } from "./services/turnService";
 
 export type ValidationResult =
   | { ok: true; request: ChatRequest }
@@ -69,11 +69,12 @@ export async function runTurn(
   request: ChatRequest,
   dispatch: (action: TurnAction) => void,
   signal?: AbortSignal,
+  onHeaders?: (headers: TurnHeaders) => void,
 ): Promise<void> {
   dispatch({ kind: "submit" });
   const source: AsyncIterable<StreamEvent> = useMockStream()
     ? mockStartTurn(request)
-    : startTurn(request, signal);
+    : startTurn(request, signal, onHeaders);
 
   try {
     for await (const event of source) {

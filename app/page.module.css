@@ -60,6 +60,11 @@
 .attention {
   --tone: #b4501a;
 }
+/* A turn a person now owns. Distinct from amber `attention`, which asks the CUSTOMER for
+   something — see the tone note in lib/status.ts. */
+.handoff {
+  --tone: #6b4bb8;
+}
 .error {
   --tone: #b42318;
 }
@@ -233,4 +238,49 @@
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+
+/* Escape hatches under the composer. Visually quieter than Run — these are exits, not the
+   main path — but never hidden behind a menu. */
+.escapeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.human {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.human:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.human:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* A deferred feature, shown as unavailable rather than hidden. */
+.stub {
+  padding: 0.35rem 0.7rem;
+  border: 1px dashed var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: not-allowed;
+}
+
+.stubNote {
+  font-size: 0.75rem;
+  color: var(--muted);
 }

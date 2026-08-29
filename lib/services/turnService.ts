@@ -19,18 +19,47 @@ export type TurnTrace = {
 };
 
 /**
+ * Turn metadata that rides on the RESPONSE HEADERS rather than in the stream (SAD §4).
+ *
+ * It is on the headers because an operator must be able to reconstruct a turn without
+ * parsing the body — and because `asOf` / `shiftDays` describe the turn as a whole, not any
+ * one frame in it. The TracePanel reads it from here; the customer surface never shows it.
+ */
+export type TurnHeaders = {
+  conversationId: string | null;
+  engine: string | null;
+  asOf: string | null;
+  shiftDays: string | null;
+  overlayHit: string | null;
+};
+
+/**
  * POST /api/chat and yield parsed SSE events in order.
  * Aborting the signal cancels the turn server-side via client disconnect (SAD §2 Aborted).
+ *
+ * `onHeaders` fires once, before the first event, with the `X-Novamart-*` metadata. It is a
+ * callback rather than a synthetic first event because those headers are NOT part of the
+ * `StreamEvent` union, and widening a frozen wire contract (SAD contract-freeze gate) to
+ * carry client convenience is exactly the drift that gate exists to prevent.
  */
 export async function* startTurn(
   req: ChatRequest,
   signal?: AbortSignal,
+  onHeaders?: (headers: TurnHeaders) => void,
 ): AsyncIterable<StreamEvent> {
   const response = await fetch(CHAT_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify(req),
     ...(signal ? { signal } : {}),
+  });
+
+  onHeaders?.({
+    conversationId: response.headers.get("x-novamart-conversation-id"),
+    engine: response.headers.get("x-novamart-engine"),
+    asOf: response.headers.get("x-novamart-as-of"),
+    shiftDays: response.headers.get("x-novamart-shift-days"),
+    overlayHit: response.headers.get("x-novamart-overlay-hit"),
   });
 
   if (!response.ok || response.body === null) {
@@ -83,12 +112,25 @@ function parseFrame(frame: string): StreamEvent | null {
 }
 
 /**
- * STUB — the operator trace read. `GET /api/conversations/:id/trace` is Sprint 2 (SAD:
- * "TracePanel UI" and the trace route are out of the Sprint 1 slice). The temporal fields
- * it must expose — { asOf, shiftDays, overlayHit } — are already emitted by /api/chat.
+ * The operator trace read — `GET /api/conversations/:id/trace`, built 2026-08-28.
+ *
+ * NOT used by the chat page, and that is the point. The page's TracePanel renders the frames
+ * THIS client was sent; this reads the server's own record of a conversation, including turns
+ * the browser never saw, and it needs the shared operator secret. A browser is the wrong place
+ * to hold that secret, so this exists for an operator tool or a script — passing the key from
+ * client-side code would put it in the bundle and in every request the page makes.
  */
-export async function getTurnTrace(conversationId: string): Promise<TurnTrace> {
-  throw new Error(
-    `getTurnTrace(${conversationId}) is not implemented in Sprint 1: the operator trace route is deferred.`,
+export async function getTurnTrace(
+  conversationId: string,
+  operatorKey: string,
+): Promise<TurnTrace> {
+  const response = await fetch(
+    `/api/conversations/${encodeURIComponent(conversationId)}/trace`,
+    { headers: { "X-Operator-Key": operatorKey } },
   );
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? `Trace read failed (HTTP ${response.status}).`);
+  }
+  return (await response.json()) as TurnTrace;
 }
