@@ -1,0 +1,443 @@
+<title>The Wire Between Them</title>
+
+<style>
+  :root {
+    --paper:    #F7F9F9;
+    --surface:  #FFFFFF;
+    --wash:     #EDF3F3;
+    --ink:      #12181A;
+    --muted:    #58686C;
+    --faint:    #6C7C80;
+    --line:     #D8E0E1;
+    --grounded: #0D6B68;
+    --escalate: #9E6510;
+    --abort:    #A2382B;
+    --shadow:   0 1px 2px rgba(18,24,26,.05), 0 8px 24px -16px rgba(18,24,26,.18);
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:    #0D1113;
+      --surface:  #141A1C;
+      --wash:     #172022;
+      --ink:      #E7EDEE;
+      --muted:    #94A3A6;
+      --faint:    #84969A;
+      --line:     #252E31;
+      --grounded: #54C0B6;
+      --escalate: #D9A551;
+      --abort:    #E2735E;
+      --shadow:   0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:    #0D1113;
+    --surface:  #141A1C;
+    --wash:     #172022;
+    --ink:      #E7EDEE;
+    --muted:    #94A3A6;
+    --faint:    #84969A;
+    --line:     #252E31;
+    --grounded: #54C0B6;
+    --escalate: #D9A551;
+    --abort:    #E2735E;
+    --shadow:   0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 60rem; margin: 0 auto; display: flex; flex-direction: column; gap: 3.25rem; }
+
+  /* ---------- masthead ---------- */
+  .masthead { display: flex; flex-direction: column; gap: .9rem; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--faint);
+    display: flex; flex-wrap: wrap; gap: .5rem .9rem; align-items: center;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(2rem, 4.6vw, 3rem);
+    line-height: 1.12;
+    font-weight: 600;
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: -.01em;
+  }
+  .standfirst {
+    font-family: var(--serif);
+    font-size: clamp(1.05rem, 2vw, 1.2rem);
+    line-height: 1.55;
+    color: var(--muted);
+    margin: 0;
+    max-width: 46ch;
+  }
+
+  /* ---------- state strip ---------- */
+  .state {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .state div { background: var(--surface); padding: .95rem 1.1rem; display: flex; flex-direction: column; gap: .3rem; }
+  .state dt {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--faint); margin: 0;
+  }
+  .state dd { margin: 0; font-size: .95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ok   { color: var(--grounded); }
+  .cost { color: var(--escalate); }
+  .bad  { color: var(--abort); }
+
+  /* ---------- sections ---------- */
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+  h2 {
+    font-family: var(--serif);
+    font-size: 1.5rem; font-weight: 600; margin: 0; letter-spacing: -.005em;
+    padding-bottom: .55rem;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 {
+    font-family: var(--mono); font-size: .74rem; letter-spacing: .1em; text-transform: uppercase;
+    margin: 0; color: var(--faint); font-weight: 600;
+  }
+  p { margin: 0; max-width: 68ch; }
+  .note { color: var(--muted); font-size: .95rem; }
+  code {
+    font-family: var(--mono);
+    font-size: .86em;
+    background: var(--wash);
+    padding: .1em .38em;
+    border-radius: 2px;
+    border: 1px solid var(--line);
+  }
+
+  /* ---------- figures ---------- */
+  figure { margin: 0; display: flex; flex-direction: column; gap: .8rem; }
+  .frame {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 1.5rem 1.25rem;
+    overflow-x: auto;
+    box-shadow: var(--shadow);
+  }
+  .frame svg { display: block; width: 100%; min-width: 34rem; max-width: 100%; height: auto; }
+  figcaption { font-size: .88rem; color: var(--muted); max-width: 68ch; }
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- contract list ---------- */
+  .layers { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .layers li { background: var(--surface); padding: .8rem 1.1rem; display: grid; grid-template-columns: 8.5rem 1fr; gap: .9rem; align-items: baseline; }
+  .layers .n { font-family: var(--mono); font-size: .72rem; color: var(--faint); font-weight: 700; letter-spacing: .04em; }
+  .layers .what { font-size: .93rem; }
+  .layers .what b { font-weight: 600; }
+
+  /* ---------- tables ---------- */
+  .scroller { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  caption { text-align: left; font-size: .88rem; color: var(--muted); padding-bottom: .6rem; }
+  th, td { text-align: left; padding: .6rem .7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--faint); font-weight: 500;
+  }
+  td:first-child { font-variant-numeric: tabular-nums; color: var(--faint); font-family: var(--mono); font-size: .8rem; white-space: nowrap; }
+  td:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  /* ---------- findings ---------- */
+  .findings { display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .finding { background: var(--surface); padding: 1rem 1.15rem; display: flex; flex-direction: column; gap: .45rem; border-left: 2px solid var(--grounded); }
+  .finding.open { border-left-color: var(--escalate); }
+  .finding .head { display: flex; flex-wrap: wrap; gap: .45rem .8rem; align-items: baseline; }
+  .finding .id { font-family: var(--mono); font-size: .8rem; font-weight: 700; }
+  .finding .title { font-size: .95rem; font-weight: 600; }
+  .finding .tag {
+    font-family: var(--mono); font-size: .64rem; letter-spacing: .11em; text-transform: uppercase;
+    padding: .12rem .45rem; border-radius: 2px; border: 1px solid var(--line); background: var(--wash); color: var(--faint);
+  }
+  .finding .tag.closed { color: var(--grounded); }
+  .finding .tag.still { color: var(--escalate); }
+  .finding p { font-size: .9rem; color: var(--muted); }
+  .finding p b { color: var(--ink); font-weight: 600; }
+
+  .caveat {
+    border-left: 2px solid var(--escalate);
+    background: var(--wash);
+    padding: .9rem 1.1rem;
+    border-radius: 0 3px 3px 0;
+    font-size: .93rem;
+  }
+  .caveat b { color: var(--escalate); }
+
+  footer { color: var(--faint); font-size: .82rem; font-family: var(--mono); border-top: 1px solid var(--line); padding-top: 1rem; }
+
+  a { color: var(--grounded); }
+  :focus-visible { outline: 2px solid var(--grounded); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">
+      <span>NovaMart Support Crew</span>
+      <span>·</span>
+      <span>AAMAD Build phase</span>
+      <span>·</span>
+      <span>Integration epic</span>
+      <span>·</span>
+      <span>27 Aug 2026</span>
+    </div>
+    <h1>The wire between them</h1>
+    <p class="standfirst">One endpoint, one envelope, two engines that must not be tellable apart. Twelve cases run live against both — ten held, two did not.</p>
+  </header>
+
+  <dl class="state">
+    <div><dt>Endpoint</dt><dd>POST /api/chat</dd></div>
+    <div><dt>Transport</dt><dd>SSE, no EventSource</dd></div>
+    <div><dt>Engines verified</dt><dd class="ok">2 of 2</dd></div>
+    <div><dt>Cases run</dt><dd>12</dd></div>
+    <div><dt>Findings open</dt><dd class="cost">1 of 4</dd></div>
+  </dl>
+
+  <section>
+    <h2>One turn, end to end</h2>
+    <p>The browser validates, then the server validates the same rules again — a client-side rule is a convenience and never a control. From there the route does everything that must happen either way, hands the turn to whichever engine <code>CHAT_ENGINE</code> selects, and pumps frames back until <code>done</code>.</p>
+
+    <figure>
+      <div class="frame">
+        <svg viewBox="0 0 880 372" role="img" aria-label="The browser stack — page.tsx, chatClient validation, turnService reading the stream, and the turn FSM — posts to the Next.js route handler, which re-validates, sets five trace headers, guards the terminal frame and cancels on abort. It selects between the deterministic and sdk engines through the TurnEngine seam, and both return the same frame sequence to the browser.">
+          <defs>
+            <marker id="i-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+            <marker id="i-ar-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--grounded)"/>
+            </marker>
+            <marker id="i-ar-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--escalate)"/>
+            </marker>
+          </defs>
+
+          <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">
+
+            <!-- browser column -->
+            <rect x="8" y="40" width="186" height="196" rx="3" fill="var(--wash)" stroke="currentColor" stroke-width="1.6"/>
+            <text x="101" y="61" text-anchor="middle" fill="currentColor" font-size="12.5">browser</text>
+            <line x1="8" y1="70" x2="194" y2="70" stroke="var(--line)" stroke-width="1"/>
+            <text x="22" y="90" fill="var(--muted)" font-size="10.5">page.tsx</text>
+            <text x="22" y="112" fill="var(--muted)" font-size="10.5">chatClient.ts</text>
+            <text x="34" y="126" fill="var(--faint)" font-size="9.5">mirrors server rules</text>
+            <text x="22" y="148" fill="var(--muted)" font-size="10.5">turnService.ts</text>
+            <text x="34" y="162" fill="var(--faint)" font-size="9.5">fetch + reader, split \n\n</text>
+            <text x="22" y="184" fill="var(--muted)" font-size="10.5">fsm.ts</text>
+            <text x="34" y="198" fill="var(--faint)" font-size="9.5">idle → running → done</text>
+            <text x="22" y="220" fill="var(--faint)" font-size="9.5">status.ts renders the tone</text>
+
+            <!-- request arrow -->
+            <line x1="194" y1="96" x2="272" y2="96" stroke="currentColor" stroke-width="1.5" marker-end="url(#i-ar)"/>
+            <text x="233" y="86" text-anchor="middle" fill="var(--muted)" font-size="10">POST + body</text>
+
+            <!-- route -->
+            <rect x="274" y="40" width="186" height="196" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <text x="367" y="61" text-anchor="middle" fill="currentColor" font-size="12.5">route.ts</text>
+            <line x1="274" y1="70" x2="460" y2="70" stroke="var(--line)" stroke-width="1"/>
+            <text x="288" y="90" fill="var(--muted)" font-size="10.5">re-validate → 400 JSON</text>
+            <text x="288" y="112" fill="var(--muted)" font-size="10.5">5 × X-Novamart-* headers</text>
+            <text x="288" y="134" fill="var(--muted)" font-size="10.5">resolve asOf + shiftDays</text>
+            <text x="288" y="156" fill="var(--muted)" font-size="10.5">terminated on done</text>
+            <text x="288" y="178" fill="var(--muted)" font-size="10.5">cancel() on disconnect</text>
+            <text x="288" y="200" fill="var(--muted)" font-size="10.5">abort at 120s</text>
+            <text x="288" y="222" fill="var(--faint)" font-size="9.5">holds no turn logic</text>
+
+            <!-- seam -->
+            <line x1="460" y1="138" x2="514" y2="138" stroke="currentColor" stroke-width="1.5" marker-end="url(#i-ar)"/>
+            <text x="487" y="128" text-anchor="middle" fill="var(--muted)" font-size="10">select</text>
+
+            <rect x="516" y="116" width="112" height="44" rx="3" fill="var(--wash)" stroke="currentColor" stroke-width="1.5"/>
+            <text x="572" y="134" text-anchor="middle" fill="currentColor" font-size="10.5">CHAT_ENGINE</text>
+            <text x="572" y="149" text-anchor="middle" fill="var(--faint)" font-size="9.5">TurnEngine seam</text>
+
+            <!-- deterministic branch -->
+            <path d="M 628 130 L 656 130 L 656 84 L 690 84" fill="none" stroke="var(--grounded)" stroke-width="1.8" marker-end="url(#i-ar-g)"/>
+            <rect x="692" y="54" width="178" height="60" rx="3" fill="none" stroke="var(--grounded)" stroke-width="1.8"/>
+            <text x="781" y="76" text-anchor="middle" fill="var(--grounded)" font-size="12">deterministic</text>
+            <text x="781" y="93" text-anchor="middle" fill="var(--muted)" font-size="10">default · keyless</text>
+            <text x="781" y="107" text-anchor="middle" fill="var(--muted)" font-size="10">now escalates too — ADR-16</text>
+
+            <!-- sdk branch -->
+            <path d="M 628 146 L 656 146 L 656 194 L 690 194" fill="none" stroke="var(--escalate)" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#i-ar-e)"/>
+            <rect x="692" y="164" width="178" height="60" rx="3" fill="none" stroke="var(--escalate)" stroke-width="1.8" stroke-dasharray="5 4"/>
+            <text x="781" y="186" text-anchor="middle" fill="var(--escalate)" font-size="12">sdk</text>
+            <text x="781" y="203" text-anchor="middle" fill="var(--muted)" font-size="10">opt-in · billed</text>
+            <text x="781" y="217" text-anchor="middle" fill="var(--muted)" font-size="10">triage-router + specialists</text>
+
+            <!-- return path -->
+            <path d="M 101 236 L 101 322 L 781 322 L 781 224" fill="none" stroke="currentColor" stroke-width="1.3" marker-start="url(#i-ar)"/>
+            <path d="M 781 114 L 781 132" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="3 3"/>
+            <rect x="228" y="308" width="428" height="28" rx="3" fill="var(--surface)" stroke="none"/>
+            <text x="442" y="326" text-anchor="middle" fill="var(--muted)" font-size="10.5">text/event-stream · data: &lt;json&gt;\n\n · one StreamEvent per frame</text>
+            <text x="442" y="356" text-anchor="middle" fill="var(--faint)" font-size="10">same envelope from either engine — the browser cannot tell which answered</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption><b>No <code>EventSource</code>, on purpose.</b> It issues GET with no body, and a turn needs one. <code>turnService.ts</code> reads the stream itself and splits frames — which also drops <code>EventSource</code>'s automatic reconnect, the right trade here: silently replaying half a support turn is worse than failing it visibly.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>What the customer sees, and what the operator sees</h2>
+    <p>Two frames in the union are operator-only. <code>clientFlags.trace</code> gates them server-side, so the crew stays invisible on the customer path — the wire-level expression of “one assistant, not a crew”. Case 5 and case 6 are the same question asked with the flag on and off.</p>
+
+    <figure>
+      <div class="frame">
+        <svg viewBox="0 0 880 250" role="img" aria-label="With trace on, the frame sequence is session, agent_hop, two tool_calls, four tokens, citation, done. With trace off, the agent_hop and tool_call frames are withheld and the customer sees session, tokens, citation, done. Session is always first and done is always last in both.">
+          <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5">
+
+            <!-- lane labels -->
+            <text x="24" y="30" fill="var(--faint)" font-size="10" letter-spacing="1.2">CASE 5 — TRACE ON (OPERATOR)</text>
+            <text x="24" y="146" fill="var(--faint)" font-size="10" letter-spacing="1.2">CASE 6 — TRACE OFF (CUSTOMER)</text>
+
+            <!-- trace ON lane -->
+            <rect x="24" y="44" width="112" height="38" rx="3" fill="var(--wash)" stroke="var(--grounded)" stroke-width="1.6"/>
+            <text x="80" y="68" text-anchor="middle" fill="var(--grounded)">session</text>
+
+            <rect x="144" y="44" width="112" height="38" rx="3" fill="none" stroke="var(--escalate)" stroke-width="1.4"/>
+            <text x="200" y="68" text-anchor="middle" fill="var(--escalate)">agent_hop</text>
+
+            <rect x="264" y="44" width="112" height="38" rx="3" fill="none" stroke="var(--escalate)" stroke-width="1.4"/>
+            <text x="320" y="68" text-anchor="middle" fill="var(--escalate)">tool_call</text>
+
+            <rect x="384" y="44" width="112" height="38" rx="3" fill="none" stroke="var(--escalate)" stroke-width="1.4"/>
+            <text x="440" y="68" text-anchor="middle" fill="var(--escalate)">tool_call</text>
+
+            <rect x="504" y="44" width="112" height="38" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="560" y="68" text-anchor="middle" fill="currentColor">token ×4</text>
+
+            <rect x="624" y="44" width="112" height="38" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="680" y="68" text-anchor="middle" fill="currentColor">citation</text>
+
+            <rect x="744" y="44" width="112" height="38" rx="3" fill="var(--wash)" stroke="var(--grounded)" stroke-width="1.6"/>
+            <text x="800" y="68" text-anchor="middle" fill="var(--grounded)">done</text>
+
+            <text x="440" y="102" text-anchor="middle" fill="var(--faint)" font-size="9.5">both tool_call frames emitted inside one assistant turn — parallel dispatch, order preserved</text>
+
+            <!-- trace OFF lane -->
+            <rect x="24" y="160" width="112" height="38" rx="3" fill="var(--wash)" stroke="var(--grounded)" stroke-width="1.6"/>
+            <text x="80" y="184" text-anchor="middle" fill="var(--grounded)">session</text>
+
+            <rect x="144" y="160" width="352" height="38" rx="3" fill="none" stroke="var(--faint)" stroke-width="1.2" stroke-dasharray="4 4"/>
+            <text x="320" y="184" text-anchor="middle" fill="var(--faint)" font-size="10">withheld — agent_hop, tool_call ×2</text>
+
+            <rect x="504" y="160" width="112" height="38" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="560" y="184" text-anchor="middle" fill="currentColor">token ×4</text>
+
+            <rect x="624" y="160" width="112" height="38" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <text x="680" y="184" text-anchor="middle" fill="currentColor">citation</text>
+
+            <rect x="744" y="160" width="112" height="38" rx="3" fill="var(--wash)" stroke="var(--grounded)" stroke-width="1.6"/>
+            <text x="800" y="184" text-anchor="middle" fill="var(--grounded)">done</text>
+
+            <text x="440" y="228" text-anchor="middle" fill="var(--faint)" font-size="9.5">session always first · done always last, always sent · exactly one of each</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption><b>Three properties were verified rather than assumed.</b> <code>done</code> is always last — the route drops every frame after it and synthesises one if an engine returns without it. The server owns terminal status; the client holds no turn semantics of its own. And the trace frames are gated at the server, not hidden in the UI.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>When it goes wrong</h2>
+    <p>Four failure paths, each with a defined shape. The distinction that took a bug to learn: a customer closing the tab is a normal end to a turn, not a fault.</p>
+    <ol class="layers">
+      <li><span class="n">malformed body</span><span class="what"><b>HTTP 400, JSON — not SSE.</b> A request that never became a turn does not get a turn's envelope.</span></li>
+      <li><span class="n">mid-turn failure</span><span class="what"><b>In-band <code>error</code> frame, then <code>done</code>.</b> The stream stays well-formed all the way to the terminal frame.</span></li>
+      <li><span class="n">client disconnect</span><span class="what"><b><code>cancel()</code> aborts server-side.</b> Case 9 observed a <code>prompt_trace</code> and nothing else: no tool calls, no ticket stub, no spend.</span></li>
+      <li><span class="n">turn timeout</span><span class="what"><b><code>AbortController</code> at 120s.</b> An explicit budget, never an SDK default.</span></li>
+    </ol>
+    <p class="note"><code>send()</code> is total — it never throws. A dead stream drops frames instead of raising, because a throw from inside engine code unwinds into the engine's own catch and gets logged as a turn failure. That was the <code>ERR_INVALID_STATE</code> class of bug in the 2026-08-23 traces: turns that had already succeeded, recorded as failures.</p>
+  </section>
+
+  <section>
+    <h2>Twelve cases, both engines</h2>
+    <div class="scroller">
+      <table>
+        <caption>Executed 2026-08-27 against a running server. <code>claude-sonnet-5</code> · <code>SDK_STREAM_MODE=live</code> · CI fixture DuckDB. Every row is an observed result, not an expectation.</caption>
+        <thead>
+          <tr><th scope="col">#</th><th scope="col">Case</th><th scope="col">Observed</th><th scope="col">Result</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>01</td><td>Malformed JSON body</td><td><code>400 invalid_json</code></td><td class="ok">pass</td></tr>
+          <tr><td>02</td><td>Missing <code>message</code></td><td><code>400 invalid_request</code></td><td class="ok">pass</td></tr>
+          <tr><td>03</td><td>Response headers</td><td>five <code>X-Novamart-*</code> + SSE content type</td><td class="ok">pass</td></tr>
+          <tr><td>04</td><td><code>GET /api/health</code></td><td>ok / sdk / duckdb ok</td><td class="ok">pass</td></tr>
+          <tr><td>05</td><td>Envelope, trace on</td><td>session, agent_hop, tool_call ×2, token ×4, citation, done</td><td class="ok">pass</td></tr>
+          <tr><td>06</td><td>Envelope, trace off</td><td>session, token ×4, citation, done only</td><td class="ok">pass</td></tr>
+          <tr><td>07</td><td>Escalation frame</td><td><code>STUB-FEDA562C</code> / payment_or_refund / escalated</td><td class="ok">pass</td></tr>
+          <tr><td>08</td><td>Unknown order (sdk)</td><td>honest reply, but <code>done:resolved</code> on a question</td><td class="cost">DEF-04</td></tr>
+          <tr><td>09</td><td>Client disconnect</td><td>prompt_trace only — no tool calls, no stub</td><td class="ok">pass</td></tr>
+          <tr><td>10</td><td>Deterministic WISMO</td><td>74 frames, citation, resolved</td><td class="ok">pass</td></tr>
+          <tr><td>11</td><td>Deterministic refund</td><td>resolved, no escalation frame, no ticket</td><td class="bad">INT-01</td></tr>
+          <tr><td>12</td><td><code>asOf</code> correctness</td><td>UTC date, one day ahead of the server's own day</td><td class="bad">INT-02</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>What the run found</h2>
+    <p>This persona records findings; it does not fix them — writing to another persona's files would breach the AAMAD agent contract. Three were handed to their owners and closed the same day.</p>
+
+    <div class="findings">
+      <div class="finding">
+        <div class="head"><span class="id">INT-01</span><span class="title">The default engine never escalated</span><span class="tag closed">closed · same day</span></div>
+        <p>“I want a refund” on the keyless demo path returned the order summary and <code>resolved</code> — no escalation frame, no ticket. The reply text was honest, so this was a capability gap rather than a false statement, but on the <b>default</b> engine a customer asking for a refund was never routed to a person. <b>ADR-16</b> ruled escalation a <code>TurnEngine</code> obligation: engines may differ in how they decide, not in whether they route. A money-vocabulary matcher now opens the stub in code. Re-verified live, and “why was my order cancelled” still resolves rather than over-escalating.</p>
+      </div>
+
+      <div class="finding">
+        <div class="head"><span class="id">INT-02</span><span class="title">Today was derived from UTC, not the server's day</span><span class="tag closed">closed · same day</span></div>
+        <p>Observed at 21:29 CDT: <code>asOf=2026-08-28</code>. West of UTC, an order placed today reads as yesterday, every evening. The fix split the two concerns — <code>toIsoDate</code> stays UTC because the shift arithmetic is anchored on UTC-midnight dates; a new <code>todayIsoLocal()</code> feeds <code>resolveAsOf</code> only. <b>The first attempt made <code>toIsoDate</code> local outright</b>, which would have moved every shifted order date back a day west of Greenwich — a cosmetic off-by-one turned into a data defect, caught by asking which callers depended on the UTC anchoring.</p>
+      </div>
+
+      <div class="finding">
+        <div class="head"><span class="id">TRACE</span><span class="title">An external call the architecture didn't record</span><span class="tag closed">closed · same day</span></div>
+        <p><code>server/data/holidays.ts</code> cited a SAD amendment that did not exist, while the SAD still listed only the Anthropic API and the DuckDB file. The codebase was calling a third party the architecture had never admitted. <b>ADR-15</b> now records the Nager.Date dependency as <i>optional — degrades</i>, with its safety properties and the reason carrier tracking was rejected in its place.</p>
+      </div>
+
+      <div class="finding open">
+        <div class="head"><span class="id">DEF-04</span><span class="title">A clarifying question renders as a finished turn</span><span class="tag still">open · @qa.eng</span></div>
+        <p>On the sdk path, order <code>999999999</code> returns <code>done:resolved</code> while the reply asks the customer to double-check the number. <code>lib/status.ts</code> maps <code>resolved</code> to the green <b>done</b> tone with “Answered from order data.” The UI is faithfully reporting what the server sent — the divergence is upstream of the client. Confirmed on two models, so it is not model-specific.</p>
+      </div>
+    </div>
+
+    <p class="caveat"><b>One adapter requirement is only partially met.</b> <code>EscalationPackage</code> is validated at the boundary; <code>StreamEvent</code> is not. <code>parseFrame</code> accepts any object with a <code>type</code> field and casts, so a malformed frame would reach the FSM as an unknown variant. Zod is already a dependency. Open, with the client-side test gap — <code>lib/fsm.ts</code> and <code>lib/status.ts</code> are pure, trivially testable, and untested.</p>
+  </section>
+
+  <footer>verified 2026-08-27 · 12 cases, both engines · claude-agent-sdk 0.3.241 · AAMAD_TARGET_RUNTIME=claude-agent-sdk</footer>
+
+</div>

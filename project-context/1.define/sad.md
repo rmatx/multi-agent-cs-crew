@@ -71,6 +71,10 @@
 | ADR-12 | CI DuckDB = **repo fixture copy** + port mocks in unit tests | PRD OQ-3 resolved |
 | ADR-13 | `app_issue` → `suggested_category = other` | PRD AC-ESC-05 |
 | ADR-14 | **Temporal layer**: date-shift + `AS_OF_DATE` + demo overlay | Practice DB is 2024; keep 14-day/Plus demos real (PRD F-TIME-01) |
+| ADR-15 | **One external integration**: Nager.Date public-holiday calendar, keyless, read-only, degrade-never-throw | `orders` has no tracking number and no in-transit rows, so a carrier integration would have meant inventing shipments; `users.country` is real, so return-processing context is grounded (amended 2026-08-27) |
+| ADR-16 | **`escalate` is part of the `TurnEngine` contract, not the sdk engine's alone** | `deterministic` is the DEFAULT engine; a money-adjacent request must reach a human on every engine (PRD F-ESC-01), amended 2026-08-27 |
+| ADR-17 | **Terminal-state guarantees are enforced by the runtime, not by coordinator prompt text** | Both ADR-08's forced escalation and "escalate over invent" were prompt requests the model could and did decline; a guarantee the model may opt out of is not a guarantee (added 2026-08-28) |
+| ADR-18 | **Cross-engine parity is scoped to terminal STATUS, not to specialist coverage** | ADR-16 obliges both engines to route a money ask to a human; it does not oblige `deterministic` to reimplement policy search or membership reads, which would mean writing a second, keyless crew to prove the first one (added 2026-08-28) |
 
 
 ---
@@ -597,6 +601,18 @@ rules in §8 apply to it before persistence.
 
 Returns ordered hops for operator panel (F-TRACE-01). Auth: MVP = local-only / shared demo secret header `X-Operator-Key` from env.
 
+**Built 2026-08-28.** Returns `{ hops, turns, transcript, identity, csat, ticketStubs }`. It
+**fails closed**: with `OPERATOR_KEY` unset the endpoint is disabled (503) rather than open —
+an endpoint that becomes public when an env var is forgotten is worse than one switched off.
+The `:id` segment is sanitised before it reaches the filesystem.
+
+##### `POST /api/conversations/:id/csat`
+
+Records a 1–5 CSAT score with an optional comment (F-CSAT-01). Added 2026-08-28: `csat_prompt`
+is emitted immediately before `done` on any turn that reached a terminal state other than
+`needs_input`, and this is where the answer is written. Unauthenticated, like `/api/chat`, and
+for the same reason — it is a customer surface on a localhost MVP.
+
 ##### `GET /api/health`
 
 `{ status: "ok", runtime: "claude-agent-sdk", duckdb: "ok"|"error", version }`
@@ -608,6 +624,12 @@ type ErrorBody = { code: string; message: string; details?: unknown };
 ```
 
 HTTP: 400 validation, 404 unknown conversation, 429 rate limit (simple in-memory), 500 unexpected.
+
+**429 implemented 2026-08-28**: fixed window, 20 turns/minute/client, `RATE_LIMIT_PER_MIN` to
+tune and `0` to disable, checked before body parsing. It is a **cost guard, not access
+control** — `/api/chat` is unauthenticated and spends the operator's API key on the sdk
+engine, so a loop against it is a bill. Per-process and keyed on a spoofable client address;
+`@security.eng` should read it as such.
 
 #### Data architecture
 
@@ -799,8 +821,27 @@ flowchart TB
 | ------------------------------ | --------- | ------------ |
 | Anthropic API (via `claude-agent-sdk`) | outbound | Required |
 | DuckDB file                    | read      | Required     |
+| **Nager.Date public holidays** (`HOLIDAY_API_BASE_URL`) | **outbound** | **Optional — degrades** |
 | Zendesk / carriers / payments  | —         | **Excluded** |
 | Prod warehouse / Scenario D BI | —         | **Excluded** |
+
+**ADR-15 — the one external integration.** `get_processing_calendar` names upcoming public
+holidays in the customer's own country so an answer about a **return** can say why processing
+may run slow. It is context, never a promised date, and never a carrier lookup.
+
+Four properties make it safe to place behind a support agent, and all four are testable:
+
+1. **It never throws.** Timeout, 5xx, unreachable host and malformed body all resolve to
+   `calendar_available: false` with a named reason. The turn still answers from DuckDB. An
+   external dependency may degrade an answer; it must never break one.
+2. **No SSRF surface.** The host is an operator setting; only the year and a validated
+   two-letter country code are interpolated. Nothing model- or customer-supplied reaches the URL.
+3. **Bounded.** Explicit `AbortSignal` timeout (`HOLIDAY_TIMEOUT_MS`, default 3s).
+4. **Cached.** `{country}:{year}` for the process lifetime.
+
+Carrier tracking was considered first and rejected: `orders` carries no tracking number and no
+in-transit rows, so tracking would have required inventing shipments. `users.country` is real
+fixture data, which is why this integration is grounded and tracking would not have been.
 
 
 
@@ -843,7 +884,71 @@ User "Refund me now"
   → csat_prompt
 ```
 
+**ADR-16 — escalation is a `TurnEngine` obligation, not an sdk-engine feature.**
 
+Raised by `@integration.eng` as INT-01 (2026-08-27): on `CHAT_ENGINE=deterministic` the request
+above returned the order summary, terminal status `resolved`, **no `escalation` frame and no
+ticket stub**. The reply text was honest — *"I can't process refunds, cancellations, or payments
+here."* — so nothing false was stated, but no human was ever engaged.
+
+That is not acceptable for the **default** engine. PRD F-ESC-01 is a guarantee about the system,
+and a customer asking for a refund on the keyless demo path must still reach a person.
+
+Ruling: **both engines MUST emit `escalation` + `done{status:"escalated"}` for a money-adjacent
+request.** The engines may differ in *how* they decide — the sdk engine classifies intent with a
+model, the deterministic engine matches money vocabulary in code — but not in *whether* they
+route. Terminal status is therefore part of the cross-engine contract, which also settles the
+general question DEF-05 left open (`qa.md`).
+
+Explicitly NOT required of the deterministic engine: agent hops, tool-authored packages, or
+model-composed summaries. It builds the package in code, exactly as it composes its replies in
+code. Its escalation is deliberately narrower — money vocabulary only, not the seven reason
+codes — because a keyword matcher that tried to infer `low_confidence` or `ungrounded` would be
+guessing, and guessing is what the deterministic engine exists to avoid.
+
+
+
+**ADR-17 — terminal-state guarantees are enforced by the runtime, not by prompt text.**
+
+Two guarantees in this document were, until 2026-08-28, requests made of a model in prompt
+text. Both were observed being declined:
+
+- **ADR-08's forced escalation.** The `PreToolUse` hook denied a handoff over budget and told
+  the coordinator to delegate to `escalation-handoff` with `reason_code=repeat_failure`. At
+  `maxHops=1` the coordinator instead told the customer *"let me get that sorted for you now,
+  and I'll follow up shortly"* and ended the turn `resolved`. Nobody was going to follow up.
+- **"Escalate over invent" (§1 principle 4, PRD NFR-SAFE-01).** The coordinator is instructed
+  never to answer from its own knowledge. Asked the capital of France it answered "Paris"
+  without delegating; after a prompt fix it obeyed for several runs, then declined again
+  during an eval.
+
+The ruling: **where this document says a turn MUST end a certain way, the runtime must be able
+to end it that way without the model's cooperation.** Both are now code. When the hop budget
+is spent, the engine builds the `repeat_failure` package itself. When a turn reaches no
+specialist, opens no ticket and asks the customer nothing, it has answered unaided by
+definition — whatever it said — and the engine escalates it as `ungrounded`
+(`server/runtime/groundingGuard.ts`). Bare pleasantries are exempt, matched against the whole
+message so a greeting cannot carry a question in behind it.
+
+This is the same principle the tool allowlists already encode (§2: delegation is structural,
+not textual), extended from what an agent MAY DO to how a turn MAY END. It does not replace
+the prompt rules — those still make the model right most of the time, which is cheaper and
+produces better copy. It removes the model from the guarantee.
+
+**ADR-18 — cross-engine parity is scoped to terminal status.**
+
+ADR-16 settled that terminal status is part of the cross-engine contract. Sprint 2 registers
+five specialists on the sdk engine, which raises the obvious follow-on: must `deterministic`
+also answer policy questions, read memberships and advise on returns?
+
+No. ADR-16's obligation is that a money-adjacent request reaches a human **on every engine**,
+and that holds — `deterministic` matches money vocabulary in code and opens the same package.
+Requiring specialist parity would mean building a second, keyless crew whose only purpose is
+to demonstrate the first one, and the copy would diverge anyway. `deterministic` remains what
+it was built to be: a keyless, reproducible order-lookup path that routes money to a human, so
+CI and the offline demo never need a key. **The capstone claim is the crew, and the crew is
+the sdk engine.** `/api/health` reports which one is live so a walkthrough is never taken on
+trust.
 
 #### Error propagation
 
@@ -1004,13 +1109,23 @@ session and in-memory ticket stubs are acceptable if the DTO shapes are honored)
 
 **Sprint 2 layer order**, each added only after the previous one is green:
 
-| # | Addition | Proves |
-| - | -------- | ------ |
-| 1 | `escalation-handoff` hardened — the remaining six `ReasonCode` values + durable `TicketStubStore` | Safety boundary is general, not one hard-coded branch |
-| 2 | `faq-policy` + `search_policy` + 0.55 threshold | Grounding + escalate-over-invent |
-| 3 | `returns-advisor` (reuses order tools, no extra hop) | Hop accounting rule above |
-| 4 | `plus-specialist` + membership overlay | Temporal layer under a second read path |
-| 5 | SQLite stores, CSAT, TracePanel UI | Demo polish |
+| # | Addition | Proves | Status |
+| - | -------- | ------ | ------ |
+| 1 | `escalation-handoff` hardened — the remaining six `ReasonCode` values + durable `TicketStubStore` | Safety boundary is general, not one hard-coded branch | **Reason codes done** 2026-08-28 (`ungrounded`, `restricted_action`, `repeat_failure` verified live); durable store deferred to layer 5 |
+| 2 | `faq-policy` + `search_policy` + 0.55 threshold | Grounding + escalate-over-invent | **Done** 2026-08-28 |
+| 3 | `returns-advisor` (reuses order tools, no extra hop) | Hop accounting rule above | **Done** 2026-08-28 — asserted as `hops === 1` in eval slice G |
+| 4 | `plus-specialist` + membership overlay | Temporal layer under a second read path | **Done** 2026-08-28 |
+| 5 | SQLite stores, CSAT, TracePanel UI | Demo polish | **Backend done** 2026-08-28 — durable `sessions.sqlite` + `ticket_stubs.sqlite`, multi-turn transcript, `csat_prompt` + CSAT write endpoint, `GET /api/conversations/:id/trace` behind `X-Operator-Key`, and 429 rate limiting. **UI done** the same day — TracePanel (`?trace=1` or toggle), CSAT card, "Talk to a human" (F-CHAT-01), and the first client-side tests. **Sprint 2 complete.** |
+
+**On the overlay (layer 4).** Consequence 2 above justified `DemoOverlay` on the grounds that
+79 active memberships is a thin, narratively arbitrary pool. Measured against the committed
+fixture, the real rows carry all of it except one case: **no user's CURRENT membership is a
+live trial** — every trial either converted, leaving a paid row behind it, or expired on or
+before the order anchor, so after the shift the newest current trial ended *yesterday*. The
+overlay therefore ships with exactly one persona, for that one gap, on a real user id so
+`get_user` and the order history still resolve against DuckDB. Everything else the demo shows
+comes from real rows, because an overlay persona duplicating data the database already has
+would replace grounded evidence with invented evidence in the system built to prove grounding.
 
 ### Eval harness lands in Sprint 1, not at QA
 
@@ -1023,7 +1138,9 @@ Sprint 1:
    `EscalationPackage`, and zero money tools called.
 3. **FAQ grounded** — asserts a citation is present (added with Sprint 2 layer 2).
 
-The remaining scripts fill in as agents land. Every eval that touches a return window or an
+**All eight now exist** (`scripts/eval-sdk.mjs`, 2026-08-28): the three above plus membership
+status, return eligibility in one hop, an ungrounded question, a restricted action, and a
+grounded-policy citation check. 102 assertions, 8 scripts, run against a live server. Every eval that touches a return window or an
 active trial pins `AS_OF_DATE` or uses an overlay persona (`AC-EVAL-05`) — a wall-clock
 default makes `shiftDays` drift by one per day and silently rots absolute expectations.
 
@@ -1162,6 +1279,54 @@ committed 3.2 MB fixture.
 - **Output**: `project-context/1.define/sad.md`  
 - **Quality gate**: FINAL-FOR-BUILD — critical flows covered; OQs closed; stack feasible  
 - **Handoff**: Build `@project-mgr` setup next; optional user stories / SFS.
+
+### Amendment — 2026-08-28
+
+- **Persona id**: `@system.arch`
+- **Action**: `*create-sad` (surgical amendment)
+- **AAMAD_TARGET_RUNTIME**: `claude-agent-sdk` (resolved from env; matches `aamad.config.yml`)
+- **Trigger**: Sprint 2 layers 2–4 implemented — the six-agent roster in §2 is now the roster
+  the process actually registers. Two defects found while verifying it are architectural
+  rather than local, and are recorded as decisions instead of bug notes.
+- **Also changed, same day (layer 5 backend)**: §4 — the trace endpoint, the new CSAT endpoint
+  and the 429 implementation are recorded where their contracts already lived; the Sprint 2
+  layer table marks layer 5 done — backend first, then the TracePanel and CSAT UI. ADR-10's SQLite stores are built with `node:sqlite`, adding no
+  dependency.
+- **Changed**: (1) §1 ADR table — added **ADR-17** (terminal-state guarantees are enforced by
+  the runtime, not by coordinator prompt text) and **ADR-18** (cross-engine parity is scoped
+  to terminal status, not specialist coverage). (2) §6 — both rulings written out with the
+  observed behaviour that forced them: a hop-exhausted turn that promised a follow-up nobody
+  would make, and a coordinator answering a general-knowledge question from model memory.
+  (3) Implementation Guidance — the Sprint 2 layer table now carries per-layer status, with a
+  note on why `DemoOverlay` ships with exactly one persona. (4) Eval harness — F-EVAL-01's
+  eight scripts all exist.
+- **Not changed**: ADR-01…16, section structure, API contracts, the `StreamEvent` union, the
+  hop-accounting rules, the 0.55 threshold (ADR-11), and `maxHops=4`. ADR-17 changes WHERE two
+  existing guarantees are enforced, not what they guarantee; no wire change follows.
+- **Consequent work** (other personas): `@qa.eng` re-scopes DEF-04 (the `needs_input` marker
+  now covers any reply the turn waits on) and picks up the eight-script eval as the AC
+  traceability spine; `@integration.eng` re-checks the envelope with five specialists live.
+
+### Amendment — 2026-08-27
+
+- **Persona id**: `@system.arch`
+- **Action**: `*create-sad` (surgical amendment)
+- **AAMAD_TARGET_RUNTIME**: `claude-agent-sdk` (resolved from env; matches `aamad.config.yml`)
+- **Trigger**: two findings raised by `@integration.eng` in
+  `project-context/2.build/integration.md` — INT-01 and an undocumented external integration.
+- **Changed**: (1) §1 ADR table — added **ADR-15** (Nager.Date public-holiday calendar as the one
+  external integration) and **ADR-16** (escalation is a `TurnEngine` contract obligation).
+  (2) §5 External systems / integration points — the table now records the Nager.Date outbound
+  dependency, marked *Optional — degrades*, with its four safety properties and the reason
+  carrier tracking was rejected in its place. This closes a traceability defect: the code in
+  `server/data/holidays.ts` cited an amendment of 2026-08-25 that had never been made, so the
+  build was calling a third party the architecture did not record. (3) §6 Escalation data flow —
+  ADR-16 ruling recorded, resolving INT-01 and the general form of DEF-05 (`qa.md`): terminal
+  status IS part of the cross-engine contract.
+- **Not changed**: ADR-01…14, section structure, API contracts, the `StreamEvent` union, and all
+  other artifacts. ADR-16 obliges a behaviour the DTO already expresses; no wire change follows.
+- **Consequent work** (other personas): `@backend.eng` implements money-vocabulary escalation in
+  `server/runtime/engines/deterministic.ts`; `@qa.eng` closes DEF-05 and re-scopes DEF-04.
 
 ### Amendment — 2026-08-23T20:44:17Z
 

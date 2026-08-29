@@ -5,8 +5,9 @@ Capstone project: a customer-facing multi-agent support chat crew, built with th
 
 - **Authoring IDE**: Claude Code
 - **Target runtime**: `claude-agent-sdk` (TypeScript / Node LTS)
-- **Phase**: 1 (Define) complete — `FINAL-FOR-BUILD`. Phase 2 (Build) in progress — the
-  Sprint 1 vertical slice runs.
+- **Phase**: 1 (Define) complete — `FINAL-FOR-BUILD`. Phase 2 (Build) in progress — all six
+  agents registered and running; Sprint 2 layers 2–4 done, layer 5 (durable stores, CSAT,
+  trace panel) outstanding.
 
 ## Run it locally
 
@@ -39,13 +40,36 @@ AS_OF_DATE=2026-08-13 npm run dev
 Every eval must pin it too — with `asOf` defaulting to today, the date shift grows by one
 day per day and absolute expectations rot silently.
 
+Conversations are durable: `data/sessions.sqlite` keeps the transcript and the identity you
+gave, so a follow-up like "can I still return it?" knows which order you mean, and
+`data/ticket_stubs.sqlite` keeps open tickets across a restart. Both are gitignored and both
+are created on first run — no setup step.
+
+The operator surface is off unless you switch it on:
+
+```bash
+OPERATOR_KEY=some-secret CHAT_ENGINE=sdk npm run dev
+curl -H "X-Operator-Key: some-secret" localhost:3000/api/conversations/<id>/trace
+```
+
+It returns the hop path, per-turn cost, the transcript, the CSAT record and any tickets
+opened. With `OPERATOR_KEY` unset the endpoint is disabled (503) rather than open.
+
 Other useful commands:
 
 ```bash
 npm run typecheck                        # strict TypeScript
+npm test                                 # 92 unit tests (70 server + 22 client)
 npm run build && npm start               # production build
 NOVAMART_DUCKDB_PATH=/path/to/full.duckdb npm run dev   # use the 151 MB practice DB
 ```
+
+The operator trace panel is in the page itself: add `?trace=1` to the URL (or tick **Trace**)
+and it shows the hop path, the tools each agent called, the citations, and the turn's
+`{ asOf, shiftDays, overlayHit }`. With trace off it is empty rather than filtered — the server
+withholds those frames, and the UI does not work around that.
+
+![Operator trace and CSAT](docs/screenshots/04-trace-and-csat.png)
 
 See [`frontend-functional-spec.md`](frontend-functional-spec.md) for the workflow contract
 and [`docs/novamart-demo-90s.mp4`](docs/novamart-demo-90s.mp4) for a 90-second narrated
@@ -53,6 +77,47 @@ walkthrough. Stills of the same path — input, result, not-found — are in
 [`docs/screenshots/`](docs/screenshots/).
 
 ![Grounded order status](docs/screenshots/02-result.png)
+
+## The full crew walkthrough
+
+All six agents are registered. This is the demo path — start the server with a pinned clock so
+every date below is exact:
+
+```bash
+export ANTHROPIC_API_KEY=...        # see .env.example, never committed
+export MODEL_ID=claude-sonnet-5
+CHAT_ENGINE=sdk AS_OF_DATE=2026-09-01 SDK_STREAM_MODE=live npm run dev
+```
+
+Ask these in order. Every id is a real row in the committed fixture except where marked, and
+the **Routes to** column is what the operator trace will show with `?trace=1`.
+
+| Ask | Identity | Routes to | What proves it worked |
+| --- | --- | --- | --- |
+| Where is my order? | order `46101` | `order-specialist` | Placed today, $175.05, and an honest "no tracking detail exists here" |
+| What have I ordered recently? | user `9970` | `order-specialist` | Five orders, newest first, dates on today's calendar |
+| How long is the Plus free trial? | — | `faq-policy` | 14 days, with a `policy:plus#free-trial` citation |
+| What is the capital of France? | — | `faq-policy` → `escalation-handoff` | Refuses, opens a ticket, `reason_code=ungrounded` |
+| Is my Plus trial still active? | user `45344` | `plus-specialist` | Active, 5 days left — the one DemoOverlay persona |
+| What Plus plan am I on? | user `38` | `plus-specialist` | Paid monthly, active, open-ended — a real membership row |
+| Can I still return this order? | order `46101` | `returns-advisor` | Inside the 14-day window, with the policy quoted |
+| Can I still return this? | order `1` | `returns-advisor` → `escalation-handoff` | 365 days ago, outside the window, handed to a human |
+| I sent this back, how long until it is processed? | order `45662` | `returns-advisor` | 3–5 business days from policy, plus real US holidays |
+| Please cancel my Plus membership | user `38` | `escalation-handoff` | `reason_code=restricted_action`, and it never claims to have cancelled |
+| I want a refund | order `46101` | `escalation-handoff` | `reason_code=payment_or_refund` |
+
+Two things worth watching for, because they are the claims that matter:
+
+- **The crew never answers from model memory.** The France question is the test. If a turn
+  reaches no specialist and opens no ticket, the runtime escalates it as `ungrounded`
+  regardless of what the model wrote — that is a control in `server/runtime/groundingGuard.ts`,
+  not a line of prompt text.
+- **Nothing in the system can move money.** Ask for a refund however you like; there is no
+  refund function in the process, and `npm run test:invariants` fails the build if one appears.
+
+To see the crew working rather than take it on trust, add `?trace=1` in the browser or send
+`"clientFlags":{"trace":true}`, and read the per-turn record in
+`project-context/2.build/logs/<conversationId>.jsonl`.
 
 ## Two engines: the app and the crew
 
@@ -77,16 +142,19 @@ Running the crew:
 
 ```bash
 export ANTHROPIC_API_KEY=...        # see .env.example, never committed
-export MODEL_ID=claude-haiku-4-5
-CHAT_ENGINE=sdk npm run dev
-npm run eval:sdk                    # both Sprint 1 slices, 24 assertions
+export MODEL_ID=claude-sonnet-5
+CHAT_ENGINE=sdk AS_OF_DATE=2026-09-01 npm run dev
+npm run eval:sdk                    # all 8 F-EVAL-01 scripts, 102 assertions
 ```
 
-`npm run eval:sdk` drives two fixtures against a running server and asserts on both the SSE
-wire and the JSONL trace: WISMO resolves through `order-specialist` with real tool reads, and
-a refund request escalates through `escalation-handoff` with a ticket stub — never to a money
-tool, because none is registered. A captured run is in
-[`docs/sample-sdk-turn.md`](docs/sample-sdk-turn.md).
+`npm run eval:sdk` drives eight fixtures against a running server and asserts on both the SSE
+wire and the JSONL trace — one script per registered path: WISMO, refund, return status,
+grounded policy, ungrounded question, membership, return eligibility, restricted action. Two
+assertions carry more weight than the rest. Slice G checks `hops === 1` on a return question,
+which is the SAD chain exception holding: `returns-advisor` reads the order **and** the policy
+itself rather than costing a second handoff. And every script re-checks that **no money tool
+was invoked at runtime** — a different claim from `test:invariants`, which proves none is
+*registered*. A captured run is in [`docs/sample-sdk-turn.md`](docs/sample-sdk-turn.md).
 
 Both engines share one seam (`server/runtime/engine.ts`) and one wire contract. Nothing in
 `packages/shared/src/dto.ts` changes between them; if it ever has to, the contract-freeze gate

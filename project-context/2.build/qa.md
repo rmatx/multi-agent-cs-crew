@@ -119,7 +119,24 @@ shipment tool exists in this build, and neither prompt said so, so a permanent p
 system was read as a gap a human could close. Fix: both prompts state the absence explicitly.
 Re-measured 0/10.
 
-**DEF-04 — `needs_input` under-fires on the sdk path. Severity: low. OPEN.**
+**DEF-04 — `needs_input` under-fires on the sdk path. Severity: low → re-scoped as INT-03,
+2026-08-28.** `@integration.eng` re-verified this on the six-agent build and raised its
+severity to medium as **INT-03** (`integration.md`), on two grounds QA should adopt: with
+ADR-16 and ADR-18 in place it is now a *contract violation* rather than an engine divergence,
+and since `csat_prompt` landed it also produces a satisfaction survey under an unanswered
+question. Case 13b makes the contrast exact — the deterministic engine returns `needs_input`
+and no CSAT for the same input. Owner moves to `@backend.eng`; the likely shape of the fix is
+ADR-17's, a runtime check after the turn rather than a model-emitted marker.
+
+Original QA finding, retained:
+The marker rule was widened from "a clarifying question about a missing id" to "any reply the
+turn is genuinely waiting on", and the unaided-answer guard (ADR-17) now catches the specific
+case that produced this defect: an unknown order that reaches no specialist is escalated
+rather than reported `resolved`. What remains unguaranteed is the general case — the marker is
+still model-emitted, so a specialist-backed reply that ends in a real question can still be
+reported `resolved`. Kept open at low severity with that narrower scope. Original finding:
+
+
 Found while writing this document. An unknown order on the sdk engine returns
 `done{status:"resolved"}` while the reply text is a clarifying question ("Could you
 double-check the order number?"). The deterministic engine returns `needs_input` for the same
@@ -129,11 +146,41 @@ mechanism but not guaranteed in practice — a claim worth stating precisely rat
 rounding up to "fixed". Minor related observation: the specialist called `get_order_items`
 after `get_order` had already returned not-found.
 
-**DEF-05 — Engine divergence on terminal status. Severity: low. OPEN.**
-DEF-04's general form. The two engines can return different `status` for identical input. No
-DTO breach and the customer-visible text is correct on both, but any consumer keying off
-`status` sees engine-dependent behaviour. Needs an explicit ruling: is terminal status part of
-the frozen contract, or engine-dependent? Carried to `@integration.eng`.
+**DEF-05 — Engine divergence on terminal status. Severity: low. CLOSED 2026-08-28.**
+DEF-04's general form. Ruled by **ADR-16** (2026-08-27): terminal status IS part of the
+cross-engine contract, and both engines must escalate a money-adjacent request. **ADR-18**
+(2026-08-28) scopes that ruling — parity is on terminal status, not on specialist coverage,
+so `deterministic` is not expected to grow a policy search or a membership read. Both engines
+were re-verified on the same three inputs after the Sprint 2 work: WISMO `resolved`, refund
+`escalated`, "why was my order cancelled" `resolved`.
+
+## Sprint 2 re-test — 2026-08-28
+
+The six-agent roster is registered, so the eval set is no longer three scripts against two
+agents. `npm run eval:sdk` now runs **8 scripts / 102 assertions**, green on two consecutive
+runs (`claude-sonnet-5`, `SDK_STREAM_MODE=live`, server pinned at `AS_OF_DATE=2026-09-01`).
+Unit suite is **57/57**, up from 41.
+
+Defects found by running the new paths, all fixed and regression-tested — recorded in
+`backend.md` items 6–9 with root causes:
+
+| # | Defect | Why it mattered |
+|---|---|---|
+| 1 | The coordinator answered "What is the capital of France?" from model memory | The grounding claim is the capstone. A prompt rule fixed it, then it recurred — now a runtime control (ADR-17) |
+| 2 | Hop budget denied a handoff but forced nothing | Customer told "I'll follow up shortly" on a turn that ended `resolved`, with nobody to follow up |
+| 3 | `list_orders_for_user` registered but in no allowlist | The specialist truthfully reported it could not look up order history |
+| 4 | Policy document title counted as a heading match | One-word queries scored 1.00 on six sections at once; ranking fell back to alphabetical |
+| 5 | Stemmer did not collide inflections (`received` / `receives`) | The crew escalated questions the corpus answers word for word |
+| 6 | Sentence-shaped queries diluted the score below 0.55 | Two correct retrievals measured at 0.504 and 0.5264. Fixed by term selection — **the threshold was not moved** |
+| 7 | Two assistant messages ran together mid-sentence | "...for that.I'm not able to process refunds" reached the customer |
+
+**AC-ORCH-02 is now tested.** The hop-exhaustion fixture that "Future work" called for exists
+as a manual procedure: run the server at `MAX_HOPS=1` and ask a question needing two different
+specialists ("Am I still on Plus, and separately where is my order?"). Observed:
+`hop_budget_exhausted` in the trace, then `forced_escalation`, `reason_code=repeat_failure`,
+`done{escalated}` with a real ticket id. It is not yet in `eval:sdk` because the harness runs
+against one server process and this case needs a different `MAX_HOPS` — worth adding as a
+second eval profile.
 
 ## Coverage against acceptance criteria
 
@@ -150,7 +197,16 @@ belong to unregistered agents and are correctly untested.
 | AC-ESC-02 | Customer sees confirmation + summary | Pass |
 | AC-ESC-03 | Stub has unique id | Pass — 5 distinct ids over 5 runs |
 | AC-ORCH-01 | Per-agent tool allowlists enforced | Pass — unit + observed `tool_denied` on `SendMessage` |
-| AC-ORCH-02 | Max hops then escalate | **Not tested** — no fixture forces hop exhaustion |
+| AC-ORCH-02 | Max hops then escalate | **Pass 2026-08-28** — forced at `MAX_HOPS=1`; `forced_escalation` + `repeat_failure` observed |
+| AC-FAQ-01 | Answers only from hits ≥ 0.55 | **Pass 2026-08-28** — eval slice D; threshold asserted in-trace |
+| AC-FAQ-03 | Ungrounded → escalate `ungrounded` | **Pass 2026-08-28** — eval slice E, plus the runtime guard |
+| AC-FAQ-04 | Corpus files exist for all four topics | **Pass 2026-08-28** — unit-tested against the real corpus |
+| AC-PLUS-01 | `get_membership` surfaces plan, status, dates | **Pass 2026-08-28** — eval slice F |
+| AC-PLUS-02 | Benefit explanations carry citations | **Pass 2026-08-28** — `policy:plus#…` in the reply |
+| AC-PLUS-03 | Cancel/billing → escalate `restricted_action` | **Pass 2026-08-28** — eval slice H |
+| AC-RET-01 | Advice combines order data + policy citations | **Pass 2026-08-28** — eval slice G |
+| AC-RET-03 | Refund language → `payment_or_refund` | **Pass 2026-08-28** — eval slice B |
+| AC-EVAL-05 | Window/trial evals pin `AS_OF_DATE` | **Pass 2026-08-28** — harness documents the pinned server |
 | AC-ORCH-03 | `SessionState` persists across turns | **Fails by design** — sessions are per-turn in Sprint 1 |
 | AC-CHAT-01 | Chat page loads, send/receive | Pass — manual, plus production build |
 | AC-CHAT-02 | Responses stream | Pass — token frames observed on both engines |

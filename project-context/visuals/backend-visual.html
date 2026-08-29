@@ -186,17 +186,17 @@
       <span>·</span>
       <span>AAMAD Build phase</span>
       <span>·</span>
-      <span>23 Aug 2026</span>
+      <span>28 Aug 2026</span>
     </div>
     <h1>The backend, as built</h1>
-    <p class="standfirst">Two engines behind one seam. The free one answers today; the model-backed one is wired, typechecked, and switched off.</p>
+    <p class="standfirst">Two engines behind one seam, and a six-agent crew behind one of them. Every guarantee in the architecture is now something the runtime enforces rather than something a prompt asks for.</p>
   </header>
 
   <dl class="state">
     <div><dt>Runtime</dt><dd>claude-agent-sdk</dd></div>
-    <div><dt>Active engine</dt><dd class="ok">deterministic</dd></div>
-    <div><dt>Cost per turn</dt><dd class="ok">$0.00</dd></div>
-    <div><dt>Orders in DB</dt><dd>47,199</dd></div>
+    <div><dt>Agents registered</dt><dd class="ok">6 of 6</dd></div>
+    <div><dt>Tools registered</dt><dd class="ok">9 of 9</dd></div>
+    <div><dt>Eval scripts</dt><dd class="ok">102 / 102</dd></div>
     <div><dt>Money tools</dt><dd class="ok">0 of 0</dd></div>
   </dl>
 
@@ -298,7 +298,7 @@
 
     <figure>
       <div class="frame">
-        <svg viewBox="0 0 880 330" role="img" aria-label="The triage-router coordinator holds the only delegation tool and hands off to order-specialist, which may call get_order and get_order_items, or to escalation-handoff, which may call create_ticket_stub and format_handoff_summary. Specialists hold no delegation tool. Three further agents are drafted but unregistered, and refund, cancel and payment tools do not exist in the process.">
+        <svg viewBox="0 0 880 520" role="img" aria-label="The triage-router coordinator holds the only delegation tool and hands off to one of five specialists: order-specialist with the four order tools, faq-policy with search_policy alone, plus-specialist with get_membership, get_user and search_policy, returns-advisor with both the order tools and search_policy, and the terminal escalation-handoff with create_ticket_stub and format_handoff_summary. No specialist holds the delegation tool. Refund, cancel and payment functions do not exist anywhere in the process.">
           <defs>
             <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
@@ -307,60 +307,83 @@
           <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">
 
             <!-- coordinator -->
-            <rect x="14" y="118" width="160" height="70" rx="3" fill="var(--wash)" stroke="currentColor" stroke-width="1.8"/>
-            <text x="94" y="142" text-anchor="middle" fill="currentColor" font-size="12.5">triage-router</text>
-            <text x="94" y="159" text-anchor="middle" fill="var(--muted)" font-size="10">coordinator</text>
-            <text x="94" y="175" text-anchor="middle" fill="var(--grounded)" font-size="10">holds Agent tool</text>
+            <rect x="8" y="182" width="152" height="76" rx="3" fill="var(--wash)" stroke="currentColor" stroke-width="1.8"/>
+            <text x="84" y="206" text-anchor="middle" fill="currentColor" font-size="12.5">triage-router</text>
+            <text x="84" y="223" text-anchor="middle" fill="var(--muted)" font-size="10">coordinator</text>
+            <text x="84" y="240" text-anchor="middle" fill="var(--grounded)" font-size="10">holds Agent tool</text>
+            <text x="84" y="277" text-anchor="middle" fill="var(--faint)" font-size="9.5">one specialist</text>
+            <text x="84" y="290" text-anchor="middle" fill="var(--faint)" font-size="9.5">per turn</text>
 
-            <!-- hop label -->
-            <path d="M 174 140 L 214 140 L 214 74 L 258 74" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"/>
-            <path d="M 174 166 L 214 166 L 214 236 L 258 236" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"/>
-            <text x="222" y="106" fill="var(--muted)" font-size="10">hop 1</text>
-            <text x="222" y="212" fill="var(--muted)" font-size="10">hop 1</text>
-
-            <!-- order specialist -->
-            <rect x="260" y="44" width="168" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
-            <text x="344" y="68" text-anchor="middle" fill="currentColor" font-size="12">order-specialist</text>
-            <text x="344" y="86" text-anchor="middle" fill="var(--faint)" font-size="9.5">no Agent tool</text>
-
-            <line x1="428" y1="74" x2="470" y2="74" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar2)"/>
-
-            <rect x="472" y="40" width="188" height="70" rx="3" fill="none" stroke="var(--grounded)" stroke-width="1.4"/>
-            <text x="566" y="62" text-anchor="middle" fill="var(--grounded)" font-size="10.5">get_order</text>
-            <text x="566" y="79" text-anchor="middle" fill="var(--grounded)" font-size="10.5">get_order_items</text>
-            <text x="566" y="97" text-anchor="middle" fill="var(--muted)" font-size="9.5">read-only</text>
-
-            <!-- escalation -->
-            <rect x="260" y="206" width="168" height="62" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
-            <text x="344" y="230" text-anchor="middle" fill="currentColor" font-size="12">escalation-handoff</text>
-            <text x="344" y="248" text-anchor="middle" fill="var(--faint)" font-size="9.5">terminal · no Agent tool</text>
-
-            <line x1="428" y1="236" x2="470" y2="236" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar2)"/>
-
-            <rect x="472" y="202" width="188" height="70" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
-            <text x="566" y="224" text-anchor="middle" fill="currentColor" font-size="10.5">create_ticket_stub</text>
-            <text x="566" y="241" text-anchor="middle" fill="currentColor" font-size="10.5">format_handoff_summary</text>
-            <text x="566" y="259" text-anchor="middle" fill="var(--muted)" font-size="9.5">writes stub only</text>
+            <path d="M 160 220 L 196 220 L 196 60 L 244 60" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"/>
+            <rect x="246" y="30" width="176" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <text x="334" y="55" text-anchor="middle" fill="currentColor" font-size="12">order-specialist</text>
+            <text x="334" y="73" text-anchor="middle" fill="var(--faint)" font-size="9.5">no Agent tool</text>
+            <line x1="422" y1="60" x2="452" y2="60" stroke="currentColor" stroke-width="1.3" stroke-dasharray="3 3" marker-end="url(#ar2)"/>
+            <rect x="454" y="30" width="300" height="60" rx="3" fill="none" stroke="var(--grounded)" stroke-width="1.3"/>
+            <text x="468" y="47" fill="var(--grounded)" font-size="9.5">get_order</text>
+            <text x="468" y="59" fill="var(--grounded)" font-size="9.5">get_order_items</text>
+            <text x="468" y="71" fill="var(--grounded)" font-size="9.5">list_orders_for_user</text>
+            <text x="468" y="83" fill="var(--grounded)" font-size="9.5">get_processing_calendar</text>
+            <path d="M 160 220 L 196 220 L 196 138 L 244 138" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"/>
+            <rect x="246" y="108" width="176" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <text x="334" y="133" text-anchor="middle" fill="currentColor" font-size="12">faq-policy</text>
+            <text x="334" y="151" text-anchor="middle" fill="var(--faint)" font-size="9.5">no Agent tool</text>
+            <line x1="422" y1="138" x2="452" y2="138" stroke="currentColor" stroke-width="1.3" stroke-dasharray="3 3" marker-end="url(#ar2)"/>
+            <rect x="454" y="108" width="300" height="60" rx="3" fill="none" stroke="var(--grounded)" stroke-width="1.3"/>
+            <text x="468" y="125" fill="var(--grounded)" font-size="9.5">search_policy</text>
+            <text x="468" y="137" fill="var(--muted)" font-size="9.5">— nothing else. No order data:</text>
+            <text x="468" y="149" fill="var(--muted)" font-size="9.5">a policy answer must not carry</text>
+            <text x="468" y="161" fill="var(--muted)" font-size="9.5">somebody's account with it.</text>
+            <path d="M 160 220 L 196 220 L 196 216 L 244 216" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"/>
+            <rect x="246" y="186" width="176" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <text x="334" y="211" text-anchor="middle" fill="currentColor" font-size="12">plus-specialist</text>
+            <text x="334" y="229" text-anchor="middle" fill="var(--faint)" font-size="9.5">no Agent tool</text>
+            <line x1="422" y1="216" x2="452" y2="216" stroke="currentColor" stroke-width="1.3" stroke-dasharray="3 3" marker-end="url(#ar2)"/>
+            <rect x="454" y="186" width="300" height="60" rx="3" fill="none" stroke="var(--grounded)" stroke-width="1.3"/>
+            <text x="468" y="203" fill="var(--grounded)" font-size="9.5">get_membership</text>
+            <text x="468" y="215" fill="var(--grounded)" font-size="9.5">get_user</text>
+            <text x="468" y="227" fill="var(--grounded)" font-size="9.5">search_policy</text>
+            <path d="M 160 220 L 196 220 L 196 294 L 244 294" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"/>
+            <rect x="246" y="264" width="176" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <text x="334" y="289" text-anchor="middle" fill="currentColor" font-size="12">returns-advisor</text>
+            <text x="334" y="307" text-anchor="middle" fill="var(--faint)" font-size="9.5">no Agent tool</text>
+            <line x1="422" y1="294" x2="452" y2="294" stroke="currentColor" stroke-width="1.3" stroke-dasharray="3 3" marker-end="url(#ar2)"/>
+            <rect x="454" y="264" width="300" height="60" rx="3" fill="none" stroke="var(--grounded)" stroke-width="1.3"/>
+            <text x="468" y="281" fill="var(--grounded)" font-size="9.5">get_order</text>
+            <text x="468" y="293" fill="var(--grounded)" font-size="9.5">get_order_items</text>
+            <text x="468" y="305" fill="var(--grounded)" font-size="9.5">get_processing_calendar</text>
+            <text x="468" y="317" fill="var(--grounded)" font-size="9.5">search_policy</text>
+            <path d="M 160 220 L 196 220 L 196 372 L 244 372" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"/>
+            <rect x="246" y="342" width="176" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <text x="334" y="367" text-anchor="middle" fill="currentColor" font-size="12">escalation-handoff</text>
+            <text x="334" y="385" text-anchor="middle" fill="var(--faint)" font-size="9.5">terminal · no Agent tool</text>
+            <line x1="422" y1="372" x2="452" y2="372" stroke="currentColor" stroke-width="1.3" stroke-dasharray="3 3" marker-end="url(#ar2)"/>
+            <rect x="454" y="342" width="300" height="60" rx="3" fill="none" stroke="var(--escalate)" stroke-width="1.3"/>
+            <text x="468" y="359" fill="var(--escalate)" font-size="9.5">create_ticket_stub</text>
+            <text x="468" y="371" fill="var(--escalate)" font-size="9.5">format_handoff_summary</text>
+            <text x="196" y="172" text-anchor="middle" fill="var(--muted)" font-size="10">+1 hop each</text>
+            <text x="604" y="20" text-anchor="middle" fill="var(--faint)" font-size="9.5">tool calls cost 0 hops, however many are made</text>
 
             <!-- money tools: absent -->
-            <rect x="694" y="118" width="172" height="94" rx="3" fill="none" stroke="var(--abort)" stroke-width="1.5" stroke-dasharray="4 4"/>
-            <text x="780" y="142" text-anchor="middle" fill="var(--abort)" font-size="11">refund · cancel</text>
-            <text x="780" y="158" text-anchor="middle" fill="var(--abort)" font-size="11">payment</text>
-            <line x1="712" y1="170" x2="848" y2="170" stroke="var(--line)" stroke-width="1"/>
-            <text x="780" y="188" text-anchor="middle" fill="var(--abort)" font-size="10">no such function</text>
-            <text x="780" y="202" text-anchor="middle" fill="var(--abort)" font-size="10">exists in process</text>
-
-            <!-- unregistered drafts -->
-            <rect x="14" y="252" width="160" height="60" rx="3" fill="none" stroke="var(--faint)" stroke-width="1.2" stroke-dasharray="3 4"/>
-            <text x="94" y="273" text-anchor="middle" fill="var(--faint)" font-size="10">faq-policy</text>
-            <text x="94" y="288" text-anchor="middle" fill="var(--faint)" font-size="10">plus-specialist</text>
-            <text x="94" y="303" text-anchor="middle" fill="var(--faint)" font-size="10">returns-advisor</text>
-            <text x="94" y="243" text-anchor="middle" fill="var(--faint)" font-size="9.5">drafted, unregistered</text>
+            <rect x="246" y="428" width="508" height="72" rx="3" fill="none" stroke="var(--abort)" stroke-width="1.5" stroke-dasharray="4 4"/>
+            <text x="500" y="452" text-anchor="middle" fill="var(--abort)" font-size="11">refund · cancel · payment · billing</text>
+            <line x1="290" y1="464" x2="710" y2="464" stroke="var(--line)" stroke-width="1"/>
+            <text x="500" y="482" text-anchor="middle" fill="var(--abort)" font-size="10">no such function exists in the process — nothing to grant,</text>
+            <text x="500" y="494" text-anchor="middle" fill="var(--abort)" font-size="10">nothing to deny, nothing to talk into calling</text>
           </g>
         </svg>
-      </div>
-      <figcaption><b>Three of six agents are registered.</b> The other three are deliberately inert: Sprint 1 puts them out of scope and their tools don't exist, so registering them would only invite ungrounded answers. Hops count agent transfers, never tool calls, and increment solely in the <code>SubagentStart</code> hook — a budget the model cannot talk its way past.</figcaption>
+      <figcaption><b>All six agents are registered — and the allowlists carry the design.</b> <code>returns-advisor</code> holds the order tools <em>and</em> the policy tool, which is the SAD chain exception in code: return eligibility is order dates measured against written policy, so splitting it across two specialists would cost a hop and get a worse answer. <code>faq-policy</code> deliberately holds no order tools at all. Hops count agent transfers, never tool calls, and increment solely in the <code>SubagentStart</code> hook — a budget the model cannot talk its way past, and when it is spent the runtime opens the ticket itself.</figcaption>
     </figure>
+  </section>
+
+  <section>
+    <h2>Two guarantees the model cannot decline</h2>
+    <p>Both of these were prompt instructions first. Both were observed being ignored — not often, which is what makes prompt-only enforcement dangerous. They are now decided by the runtime after the turn, on what actually happened rather than on what the model was asked to do (ADR-17).</p>
+    <ol class="layers">
+      <li><span class="n">ADR-08</span><span class="what"><b>A spent hop budget forces escalation.</b> The hook denied the handoff and told the coordinator to escalate; at <code>maxHops=1</code> it told the customer "let me get that sorted for you now, and I'll follow up shortly" and ended <code>resolved</code>. The engine now builds the <code>repeat_failure</code> package itself.</span></li>
+      <li><span class="n">NFR-SAFE-01</span><span class="what"><b>A turn that consulted nobody has answered from memory.</b> Asked the capital of France, the coordinator answered "Paris". A turn with no hop, no ticket and no question back is escalated as <code>ungrounded</code> whatever it wrote — bare greetings excepted, matched whole so "hi, where is my order" is not exempt.</span></li>
+    </ol>
+    <p class="note">The prompt rules stay. They make the model right most of the time, which is cheaper and reads better. What changed is that the guarantee no longer depends on them.</p>
   </section>
 
   <section>
@@ -391,12 +414,15 @@
         <tr><td>Unknown order</td><td>Order id 99999999</td><td class="ok">needs_input</td></tr>
         <tr><td>Malformed body</td><td>Non-JSON payload</td><td class="ok">HTTP 400</td></tr>
         <tr><td>Data provenance</td><td>MD5 of orders table vs. streamed reply</td><td class="ok">match</td></tr>
-        <tr><td>Agent behaviour</td><td>Requires a live model call</td><td class="cost">not run</td></tr>
+        <tr><td>Grounding gate</td><td>0.55 threshold, real corpus, off-corpus rejection</td><td class="ok">11 / 11</td></tr>
+        <tr><td>The six-agent crew</td><td>8 live scripts, <code>claude-sonnet-5</code>, pinned clock</td><td class="ok">102 / 102</td></tr>
+        <tr><td>Chain exception</td><td>Return question answered in one hop</td><td class="ok">hops = 1</td></tr>
+        <tr><td>Money tools at runtime</td><td>Every script re-checks what was actually called</td><td class="ok">0 called</td></tr>
       </tbody>
     </table>
-    <p class="caveat"><b>The SDK path is wired, not proven.</b> It compiles, preflights, and fails cleanly without a key — but its first live turn asked the customer to confirm a lookup instead of performing it. A prompt fix is in place and remains untested, because testing it costs money and the switch is currently off.</p>
+    <p class="caveat"><b>What running it actually found.</b> Nine defects, every one from a live turn rather than a review: a coordinator answering from memory, a hop budget that denied without forcing, a registered tool no agent could call, two assistant messages run together mid-sentence, and three separate retrieval faults in the policy scorer — including a stemmer where <code>received</code> and <code>receives</code> never met, so the crew escalated questions the corpus answers word for word. All fixed, all regression-tested. The threshold was never moved to make one pass.</p>
   </section>
 
-  <footer>as built 2026-08-23 · commit efabe86 · AAMAD_TARGET_RUNTIME=claude-agent-sdk</footer>
+  <footer>as built 2026-08-28 · six agents, nine tools · AAMAD_TARGET_RUNTIME=claude-agent-sdk</footer>
 
 </div>

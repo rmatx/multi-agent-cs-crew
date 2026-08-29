@@ -77,18 +77,29 @@ Main agent = coordinator (`triage-router`). Specialists are `AgentDefinition` en
 | Agent | Registered? | Tools granted | Can delegate? |
 |-------|-------------|---------------|---------------|
 | `triage-router` (main) | yes | `Agent` only | yes — the only one |
-| `order-specialist` | yes | `mcp__novamart__get_order`, `…get_order_items` | **no** |
-| `escalation-handoff` | yes | `…create_ticket_stub`, `…format_handoff_summary` | **no** |
-| `faq-policy` | **no — inert draft** | — | — |
-| `plus-specialist` | **no — inert draft** | — | — |
-| `returns-advisor` | **no — inert draft** | — | — |
+| `order-specialist` | yes | `get_order`, `get_order_items`, `list_orders_for_user`, `get_processing_calendar` | **no** |
+| `faq-policy` | yes | `search_policy` | **no** |
+| `plus-specialist` | yes | `get_membership`, `get_user`, `search_policy` | **no** |
+| `returns-advisor` | yes | `get_order`, `get_order_items`, `get_processing_calendar`, `search_policy` | **no** |
+| `escalation-handoff` | yes | `create_ticket_stub`, `format_handoff_summary` | **no** |
 
-Three registered, not six, and that is deliberate. SAD "Sprint 1 — thin vertical slice"
-lists `faq-policy`, `plus-specialist` and `returns-advisor` as explicitly *not* in Sprint 1,
-and their tools (`search_policy`, `get_membership`) do not exist. Registering an agent whose
-tools are missing gives it exactly one way to answer — from model memory — which is the
-"escalate over invent" failure the PRD forbids. They live as inert drafts in `stubs.ts`, and
-the coordinator routes their intents to `escalation-handoff` with an honest reason.
+All six are registered as of Sprint 2 (tool names above are shown bare; the model sees them
+`mcp__novamart__`-prefixed). The rule that got them here is unchanged and still binding: **an
+agent is registered in the same change that registers its tools, never before.** Sprint 1 ran
+three agents because `search_policy` and `get_membership` did not exist yet, and an agent
+without tools has exactly one way to answer — from model memory — which is the "escalate over
+invent" failure the PRD forbids.
+
+Two allowlist decisions carry design weight:
+
+- **`returns-advisor` holds BOTH the order tools and the policy tool.** That is the SAD §2
+  chain exception in code: return eligibility is order dates measured against written policy,
+  so splitting it across two specialists would cost a second hop and produce a worse answer —
+  `order-specialist` cannot read the returns policy, and `faq-policy` cannot read the order.
+  Slice G of the eval asserts `hops === 1` for exactly this reason.
+- **`faq-policy` holds no order tools at all.** A policy question answered with somebody's
+  order data is a privacy problem; an order question answered from policy prose is an
+  ungrounded one.
 
 **Delegation is structural.** Specialists do not receive the `Agent` tool in `tools`, and
 `disallowedTools` names it (and every built-in) explicitly. A specialist cannot spawn another
@@ -97,15 +108,102 @@ prompt asks it not to. `PreToolUse` denies it a third time if it somehow appears
 
 ## Tools
 
-Four tools, all read-only or ticket-writing, served from an **in-process MCP server**
-(ADR-07 — no external MCP server in MVP):
+Nine tools — the complete SAD §2 MVP tool contract — all read-only or ticket-writing, served
+from an **in-process MCP server** (ADR-07 — no external MCP server in MVP):
 
 | Tool | Reads | Side effect |
 |------|-------|-------------|
 | `get_order` | DuckDB `orders`, RO | none |
 | `get_order_items` | DuckDB `order_items` + `products`, RO | none |
+| `list_orders_for_user` | DuckDB `orders`, RO, newest first, `limit ≤ 5` | none |
+| `get_user` | DuckDB `users`, RO | none |
+| `get_membership` | DemoOverlay, then DuckDB `memberships`, RO | none |
+| `search_policy` | `data/policy/*.md` via the section scorer | none |
+| `get_processing_calendar` | DuckDB `orders` + `users.country`, RO, then Nager.Date over HTTPS | none |
 | `create_ticket_stub` | — | writes an in-memory ticket stub (never the practice DB) |
 | `format_handoff_summary` | in-memory stub | none |
+
+`get_membership` computes `active_as_of_today` and `days_remaining` **in code** rather than
+returning two dates for the model to compare. Date arithmetic in prose is a reliable source
+of confident wrong answers, and "is my trial still running" is the question the whole Plus
+path exists to answer.
+
+### `search_policy` and the 0.55 gate (ADR-11 / AC-FAQ-01)
+
+The corpus is four markdown files chunked by `##` section. Scoring is inverse-document-
+frequency coverage of the query's most informative terms, weighted higher for a match in the
+section heading than in its body. `server/data/policyScore.ts` has no imports so the gate is
+unit-testable; `server/data/policy.ts` does the file I/O.
+
+**Below the threshold, the tool returns no policy text at all** — not the text with a warning
+attached. An agent cannot answer from a weak hit it was never shown, which makes "escalate
+over invent" a property of the tool rather than a request made of the model. AC-FAQ-03 falls
+straight out of that: a question the corpus cannot answer produces `grounded: false`, and the
+coordinator escalates with `reason_code=ungrounded`.
+
+Three retrieval defects were found by running real turns, and all three are regression-tested:
+
+1. **The document title counted as a heading match.** Every section of `returns.md` inherited
+   "returns" from the `#` title, so a one-word query scored a perfect 1.00 on six sections at
+   once and ranking fell back to alphabetical order. Titles are body-weighted now.
+2. **The stemmer did not actually collide inflections.** `received` → `receiv` but `receives`
+   → `receive`; `processing` → `proces` but `process` → `process`. Live turns escalated
+   questions the corpus answers word for word, because the words never met. The test asserts
+   the collisions, not the stems — the output string is an implementation detail.
+3. **Sentence-shaped queries diluted the score.** An agent writes "return processing timeline
+   after item received", not "return processing". Trailing words that exist elsewhere in the
+   corpus dragged correct retrievals under the gate (0.504 and 0.5264 were both measured on
+   the right section). The fix is ordinary term selection — the four highest-idf terms carry
+   the judgement. **The threshold itself was not moved**: it is normative, and an eval check
+   asserts it is still 0.55 in the trace.
+
+### The one external integration
+
+`get_processing_calendar` is the only tool in this system that leaves the process for
+anything other than the Anthropic API. It names upcoming public holidays in the customer's own
+country so an answer about a **return** can say *why* processing might run slow — context,
+never a promised date. Carrier tracking was the obvious alternative and was rejected: `orders`
+has no tracking number and no in-transit rows, so a tracking integration would have meant
+inventing shipments. `users.country` is real fixture data.
+
+It shipped once as `get_delivery_calendar` and was **unreachable**, which unit tests could not
+have caught. Every order in the fixture is terminal — 40,234 `completed`, 4,596 `cancelled`,
+2,369 `returned` — so a gate keyed on "not yet delivered" matched nothing. That is the same
+absence that ruled out tracking, and it applied to a delivery calendar too. Repointing it at
+the 2,369 real `returned` orders gave it a question the data supports. Two further constraints
+surfaced only under the live eval:
+
+- **Refund wording never reaches a specialist.** The coordinator routes any refund ask
+  straight to a human, by design. So the tool answers return *status*, not refund *timing*.
+- **An optional gate is a coin flip.** `MAY call` fired on roughly half of eligible turns at
+  `effort: low`. The gate is now `ALWAYS`, and `eval:sdk` Slice C asserts the invocation.
+
+Four properties make an outbound dependency safe to put behind a support agent
+(`server/data/holidays.ts`):
+
+1. **It never throws.** Every failure — timeout, 5xx, unreachable host, malformed body —
+   resolves to `calendar_available: false` with a named reason. The turn still answers from
+   DuckDB. A third party being down degrades an answer; it must never break one.
+2. **No SSRF surface.** The host comes from `HOLIDAY_API_BASE_URL`, an operator setting. Only
+   the year and a validated two-letter country code are interpolated into the path. Nothing
+   model-supplied or customer-supplied reaches the URL.
+3. **Bounded.** Explicit `AbortSignal` timeout (`HOLIDAY_TIMEOUT_MS`, default 3s); no implicit
+   default is relied on.
+4. **Cached.** Holidays change at most yearly, so `{country}:{year}` is cached for the life of
+   the process.
+
+The fixture stores `UK`, which is not an ISO 3166-1 alpha-2 code — Nager.Date wants `GB`.
+`normalizeCountryCode` maps it, and the `other` bucket resolves to "country unknown" rather
+than a bogus lookup. Without that mapping ~12% of users would have degraded silently, which
+is the worst kind of bug in a system whose failure mode is designed to look ordinary.
+
+Upstream also lists one holiday twice when it has both a regional and a national variant — a
+live US lookup returns Columbus Day as `global:false` and `global:true`. `upcomingFrom`
+collapses same-date-same-name to the nationwide entry, because telling a customer about one
+holiday twice reads as a bug.
+
+The upstream call is mocked in `server/data/holidays.test.ts` (20 cases, most of them failure
+paths), so CI never touches the network. Slice C of `npm run eval:sdk` covers the live path.
 
 `get_user`, `list_orders_for_user`, `get_membership` and `search_policy` are in the SAD tool
 contract but are **not registered** — stubbed in `stubs.ts`, throwing `notImplemented()`.
@@ -223,11 +321,54 @@ draft. The standing rule is written into the file: **a stub must never return
 plausible-looking fake data**, because an agent that receives invented policy text will
 present it as grounded fact.
 
-Covered: the three unregistered agents; `get_user` / `list_orders_for_user` /
-`get_membership` / `search_policy`; `DemoOverlay` (which is why `overlayHit` is honestly
-`false`); SQLite `SessionStore` / `TicketStubStore` (ADR-10); and the out-of-MVP list
-(F-WRITE-01 refund writes, F-ANALYTICS-01, F-COP-01, external MCP, session resume, rate
-limiting + operator-key auth).
+What remains: SQLite `SessionStore` / `TicketStubStore` (ADR-10, Sprint 2 layer 5) and the
+out-of-MVP list (F-WRITE-01 refund writes, F-ANALYTICS-01, F-COP-01, external MCP, session
+resume, rate limiting + operator-key auth). The agent drafts and the four tool stubs are gone
+because the real things exist.
+
+**DemoOverlay is now built** (`server/data/demoOverlay.ts`, `data/demo_overlay.json`), and it
+holds exactly one persona. That is not laziness — it is the rule above applied to data. Every
+other demo case comes from real fixture rows, and an overlay persona duplicating data the
+database already has would replace grounded evidence with invented evidence. The one gap it
+fills was measured: **no user's current membership is a live trial.** Every trial in the
+fixture either converted (leaving a paid row behind it) or expired on or before the order
+anchor, so after the uniform shift the newest current trial ended *yesterday*. SAD §4
+consequence 2 predicted this case precisely. The persona sits on a real user id, so `get_user`
+and the order history still resolve against DuckDB; only the membership row is overlaid, and
+`overlayHit` now reports honestly instead of being hard-coded `false`.
+
+## Endpoints
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `POST /api/chat` | none (rate limited) | The turn. SSE envelope, both engines |
+| `GET /api/health` | none | `status`, `duckdb`, `stores`, `engine`, `sdkEngineConfigured`, `operatorTrace` |
+| `GET /api/conversations/:id/trace` | **`X-Operator-Key`** | Hop path, per-turn cost, transcript, CSAT, tickets |
+| `POST /api/conversations/:id/csat` | none | Record a 1–5 CSAT score for a conversation |
+
+The trace endpoint is the only authenticated surface in the system, and it is authenticated
+because of what it returns: the machinery behind a turn, including things the customer never
+sees. Everything it returns was already redacted at write time by `trace.ts`, so it cannot
+leak what was never stored.
+
+## Durable stores (ADR-10)
+
+Two SQLite databases under `data/`, never the practice DuckDB (ADR-06 — that connection is
+read-only and is never written, not even for tickets):
+
+| File | Holds | Env override |
+|---|---|---|
+| `data/sessions.sqlite` | sessions, transcript, identity, CSAT | `SESSION_DB_PATH` |
+| `data/ticket_stubs.sqlite` | `EscalationPackage` rows | `TICKET_STUB_DB_PATH` |
+
+**`node:sqlite`, not `better-sqlite3`.** The durable-store layer adds **zero dependencies** to
+a project whose dependency list is itself part of the security story — one fewer native module
+to audit, rebuild per platform, and keep patched. The API is synchronous, which suits both
+call sites: a turn writes a handful of rows, and the alternative is threading async through
+engine code that has no other reason to be async. Schema creation is idempotent and runs on
+first open, so a fresh clone works with no migration step.
+
+Both files are gitignored. Set either path to `:memory:` for stateless turns.
 
 ## Enabling the sdk engine once a key exists
 
@@ -311,14 +452,68 @@ the client, and no effect whatsoever on the default path. Verified below.
    token reaches the customer (`server/runtime/needsInput.ts`). The marker is stripped across
    delta boundaries, covered by 9 unit tests including an exhaustive split-at-every-index
    sweep, and `npm run eval:sdk` asserts no fragment ever reaches the wire.
-6. **Sessions are per-turn.** No transcript is carried across turns on either engine; SAD
-   Sprint 1 permits in-memory session state, and SQLite durability is Sprint 2 layer 5.
-7. **Ticket stubs are in-memory** and die with the process (SAD Sprint 1 Slice B allows it).
-8. **`GET /api/conversations/:id/trace` is not built.** Operator visibility is the JSONL log
-   plus the `X-Novamart-*` response headers, which SAD Sprint 1 accepts.
-9. **No rate limiting, no `X-Operator-Key` auth.** SAD §4 lists 429 and operator-key auth;
-   both are stubbed as out-of-MVP for `@security.eng` to rule on.
-10. **Turbopack warning on the DuckDB read** is unchanged and now also appears via
+6. **The coordinator answered from model memory — resolved 2026-08-28, structurally.**
+   Asked "What is the capital of France?", it replied "Paris" without delegating to anyone.
+   Adding an explicit prompt rule ("you do not answer questions; you classify, delegate and
+   relay") fixed it for several runs and then it recurred in an eval run — a rule that lives
+   only in prompt text is a request, not a control, which is the same lesson the tool
+   allowlists already encode. The runtime now checks the OUTCOME instead of trusting the
+   instruction: a turn that reached no specialist, opened no ticket and asked the customer
+   nothing has answered unaided by definition, whatever it said, and is escalated as
+   `ungrounded` (`server/runtime/groundingGuard.ts`). The one exemption is bare pleasantries —
+   "hi", "thanks" — matched against the whole message so "hi, where is my order" is not
+   exempt. The default is strict: an unrecognised message requires a specialist, so a new
+   phrasing costs a needless escalation rather than an ungrounded answer.
+7. **The hop budget denied handoffs but forced nothing — resolved 2026-08-28.** ADR-08 says a
+   spent budget forces escalation. The `PreToolUse` hook denied the transfer and *told* the
+   coordinator to escalate; at `maxHops=1` the observed result was the customer being told
+   "let me get that sorted for you now, and I'll follow up shortly", with terminal status
+   `resolved` and nobody following up. The runtime now builds the `repeat_failure` package in
+   code when the budget is spent, exactly as the deterministic engine does for money intent
+   (ADR-16). `tools_tried` and `citations` come from the hook ledger, so the ticket carries
+   what happened rather than what a model recalls.
+8. **A registered tool no agent could call — resolved 2026-08-28.** `list_orders_for_user` was
+   in the tool server and in `REGISTERED_TOOL_NAMES` but in nobody's allowlist, so asked "what
+   have I ordered recently?" the specialist truthfully answered that it had no way to look
+   that up. An invariant test now asserts every registered tool is granted to at least one
+   agent — a tool nothing can call is worse than a missing one, because the failure reads as a
+   product limitation.
+9. **Two assistant messages ran together mid-sentence — resolved 2026-08-28.** In
+   `SDK_STREAM_MODE=live`, a coordinator that spoke before delegating and again afterwards
+   produced "...connect you with a human agent for that.I'm not able to process refunds". The
+   engine now emits a paragraph break at the message boundary. The prompt also asks for one
+   reply per turn, written after the work, so the repetition that made this visible is gone
+   too.
+10. **Sessions are durable and multi-turn — resolved 2026-08-28 (ADR-10).** Every turn used to
+   start cold: "can I return it?" after an order lookup was unanswerable, and identity given in
+   turn 1 was thrown away by turn 2. `data/sessions.sqlite` now stores the transcript and the
+   last identity; the coordinator receives `conversation_so_far` in its prompt. **Facts are not
+   carried forward, only what was said** — the prompt states that history is context, never
+   evidence, so an order status quoted twenty minutes ago is never restated as current. Every
+   turn re-reads what it needs, which is cheap against a local DuckDB.
+11. **Ticket stubs are durable — resolved 2026-08-28 (ADR-10).** `data/ticket_stubs.sqlite`.
+   The Sprint 1 idempotency contract is unchanged but now enforced by a `UNIQUE INDEX` on
+   `(conversation_id, reason_code)` rather than a scan of a Map, so a replayed turn cannot open
+   a second ticket and "a human will pick this up" survives a restart. Verified by restarting
+   the server and reading the stub back through the operator endpoint.
+12. **`GET /api/conversations/:id/trace` is built — resolved 2026-08-28.** Returns the hop path,
+   per-turn cost/usage, the transcript, the CSAT record and the tickets opened. **It fails
+   closed**: with `OPERATOR_KEY` unset it returns 503 and reads nothing, rather than treating
+   an unset key as "no check required" — an endpoint that becomes public when someone forgets
+   an env var is worse than one that is switched off. The conversation id is sanitised before
+   it reaches `path.join`, so `..%2f..%2fetc%2fpasswd` resolves to a harmless filename (404).
+13. **Rate limiting is in — resolved 2026-08-28.** Fixed window, 20 turns/minute/client,
+   `RATE_LIMIT_PER_MIN` to tune, `0` to disable. It runs before body parsing, because the
+   thing being protected is the operator's API key on an unauthenticated endpoint: a loop
+   against `/api/chat` on the sdk engine is a bill, not just load. It is a **cost guard, not
+   access control** — per-process, and keyed on a spoofable client address. Recorded that way
+   for `@security.eng` rather than dressed up.
+14. **CSAT is wired end to end — resolved 2026-08-28 (F-CSAT-01, backend half).** The route
+   emits `csat_prompt` immediately before `done` on any turn that actually finished, and never
+   on `needs_input` — asking someone to rate an unanswered question is its own small insult.
+   `POST /api/conversations/:id/csat` records a 1–5 score with an optional comment, overwriting
+   rather than duplicating. The UI for it belongs to `@frontend.eng`.
+15. **Turbopack warning on the DuckDB read** is unchanged and now also appears via
    `app/api/health/route.ts` — a dynamic `path.join(process.cwd(), …)`, warning only.
 
 ## Verification
@@ -331,6 +526,62 @@ the client, and no effect whatsoever on the default path. Verified below.
 ```
 
 `npm run test:invariants` — 9 passed, 0 failed (zero-money-tools exact-set suite).
+
+`npm test` — **70 passed, 0 failed** (41 before Sprint 2). New: 11 policy-scorer tests
+covering the 0.55 gate, section retrieval, off-corpus rejection and stemmer collisions; 5
+grounding-guard tests; 8 session/stub-store tests against a real SQLite file in a temp
+directory; 5 rate-limit tests; plus the orphan-tool invariant.
+
+The store tests need the `@/` path alias, which `tsc` understands and Node does not — until
+now every tested module was deliberately import-free, a good constraint for pure logic and an
+impossible one for a store whose whole job is to talk to SQLite. `scripts/test-resolver.mjs`
+maps the aliases for the test process only (`node --import`), which is a smaller price than
+bending the production import style around the test runner or leaving the durable stores
+untested.
+
+### The six-agent crew, live (2026-08-28)
+
+`npm run eval:sdk` — **102/102 checks across 8 scripts**, on `claude-sonnet-5`,
+`SDK_STREAM_MODE=live`, server pinned at `AS_OF_DATE=2026-09-01`.
+
+| Script | Path exercised | Result |
+|---|---|---|
+| A WISMO | `order-specialist` → `get_order` | `resolved` |
+| B refund | `escalation-handoff`, money intent | `escalated` / `payment_or_refund` |
+| C return status | the external holiday calendar is actually invoked | `resolved`, no invented timeline |
+| D policy | `faq-policy` → `search_policy` above the gate | `resolved` + `policy:` citation |
+| E ungrounded | corpus cannot answer | `escalated` / `ungrounded` |
+| F membership | `plus-specialist` + the DemoOverlay persona | `resolved` + `overlay:` citation |
+| G returns | order **and** policy in ONE hop | `resolved`, `hops === 1` |
+| H restricted | cancel a membership | `escalated` / `restricted_action` |
+
+Every script also runs the shared checks: exactly one `done`, no `error` frame, no control
+marker on the wire, no `turn_error` in the trace, and **zero money tools invoked at runtime**.
+That last one is a different claim from `test:invariants`, which proves no money tool is
+*registered*; this proves none was *called*.
+
+**One eval assertion was wrong, and it is worth recording why.** Slice E ("What is the capital
+of France?") required the coordinator to delegate to `faq-policy` and get a not-covered report.
+It failed on a run where the coordinator tried to answer alone and the grounding guard caught
+it instead — the right outcome by the other legal route. The assertion was testing the
+mechanism rather than the promise. It now asserts the promise (the customer never receives an
+ungrounded answer) and *prints* which route the run took, so the variability stays visible
+instead of being encoded as a requirement.
+
+**Layer 5 verified live, 2026-08-28**: a follow-up turn ("Can I still return it?") with no
+identity supplied resolved "it" to order 46101 from the stored session and re-read the order
+through the tools; `csat_prompt` observed in position `session → token → token → csat_prompt →
+done`; a CSAT score of 5 written and read back through the operator endpoint; the trace
+endpoint returning 401 without a key, 401 with a wrong key, 404 on a traversal attempt, and
+the full hop path with the right key; 429 on the 21st request in a minute with `Retry-After:
+60`; and a ticket stub read back **after a server restart**.
+
+Manually verified beyond the eval set, same session: `list_orders_for_user` by user id with no
+order id to hand; a missing order id → `done{needs_input}`; the hop budget spent at
+`MAX_HOPS=1` → `hop_budget_exhausted` then `forced_escalation` with a real ticket; a bare
+greeting → `resolved` with no escalation (the grounding guard's exemption); and the
+deterministic engine unchanged — WISMO `resolved`, refund `escalated`, "why was my order
+cancelled" still `resolved` rather than over-escalating.
 
 `npx next build` — compiled successfully; routes `/`, `/api/chat`, `/api/health`. One
 pre-existing Turbopack dynamic-filesystem-access warning from the DuckDB read; no errors.
