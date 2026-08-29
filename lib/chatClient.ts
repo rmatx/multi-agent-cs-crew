@@ -72,6 +72,21 @@ export async function runTurn(
   onHeaders?: (headers: TurnHeaders) => void,
 ): Promise<void> {
   dispatch({ kind: "submit" });
+
+  if (useMockStream()) {
+    // The mock's fidelity extends to the RESPONSE HEADERS, not just the frames. Without this
+    // the TracePanel's metadata row renders as five em-dashes in mock mode, so the one surface
+    // that displays turn metadata cannot be developed offline — the same drift that left the
+    // mock without `csat_prompt`. Values are obviously synthetic and labelled as such.
+    onHeaders?.({
+      conversationId: request.conversationId ?? "mock-conversation",
+      engine: "mock",
+      asOf: new Date().toISOString().slice(0, 10),
+      shiftDays: "0",
+      overlayHit: "false",
+    });
+  }
+
   const source: AsyncIterable<StreamEvent> = useMockStream()
     ? mockStartTurn(request)
     : startTurn(request, signal, onHeaders);

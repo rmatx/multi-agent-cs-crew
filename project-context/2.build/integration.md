@@ -26,6 +26,10 @@ durable session, and a `csat_prompt` frame in the envelope — so the message-fl
 executed again rather than amended. **18 cases, all observed.** Five findings recorded across
 the two runs; four resolved by the owning personas, one — INT-03 — is new and open.
 
+**`*integrate-api` re-run 2026-08-29.** The wiring was complete; the client's *description* of
+it was not. Two contract defects found and fixed (INT-04, INT-05), and OQ-5 closed — the last
+unmet item in the adapter's Quality Gates.
+
 ---
 
 ## Integration surface (`*integrate-api`)
@@ -137,6 +141,87 @@ had already succeeded were logged as failures. **A disconnected client is a norm
 turn, not a fault.**
 
 ---
+
+## Client-side contract pass (`*integrate-api`, 2026-08-29)
+
+The UI has been wired to `/api/chat` since Sprint 1 and the round trip works. This action
+therefore asked a narrower question — **does the client's stated view of the API match the API?**
+— and the answer was no in three places. All three are the same shape: a declaration that was
+true when written and never revisited, with a cast standing in for a check.
+
+### INT-04 — `TurnTrace` described an endpoint that does not exist. **RESOLVED.**
+
+`lib/services/turnService.ts` declared the operator-trace response as
+`{ conversationId, temporal, hops: {agentId, hop}[], tools }`. The route returns
+`{ conversationId, hops, turns, transcript, identity, csat, ticketStubs, traceRecordCount }`.
+`temporal` and `tools` do not exist in the response at all, and `hops` carries a merged event
+stream, not agent transfers.
+
+The type was written in Sprint 1 as a placeholder beside a `getTurnTrace` that threw
+"not implemented"; the route arrived on 2026-08-28 and nothing reconciled the two. Because
+`getTurnTrace` **cast** the parsed JSON to that type, the compiler could not see the mismatch —
+the first caller would have read `undefined` from `.temporal` with no error anywhere.
+
+Fixed: the type now describes the actual payload, and `getTurnTrace` shape-checks the response
+before returning it.
+
+### INT-05 — the frontend mock had drifted from the wire. **RESOLVED.**
+
+`lib/services/mockStream.ts` is the stand-in the contract-freeze gate names: the frontend
+develops against it, so what it cannot produce is a surface nobody can build offline. It was
+written for the Sprint 1 envelope and never revisited. Measured against the route, it:
+
+- emitted **no `citation`** — so the Sources line could not be developed;
+- emitted **no `csat_prompt`** — so the CSAT card could not be rendered at all;
+- emitted **no `escalation`** — so the handoff copy and the ticket id had no offline path;
+- emitted `agent_hop` / `tool_call` **unconditionally**, while the route withholds them unless
+  the turn asked for a trace. A frontend built against that would have shown a customer the
+  crew's internals, and the TracePanel's empty state could never be seen.
+
+Fixed: the mock now mirrors the route including **what it withholds**, adds a money-intent
+branch that escalates with a ticket, and supplies synthetic response headers so the trace
+panel's metadata row is developable offline. Six tests assert the mock against the same
+envelope properties this document asserts against the real server — `session` first, `done`
+last and once, `csat_prompt` immediately before it and never on `needs_input`, trace frames
+gated.
+
+The freeze gate's rule was "a change to the DTO requires a re-check of the FE mock". This is
+the inverse case and worth recording: **the DTO did not change and the mock still drifted,**
+because frames were added to the SERVER that the mock was never taught to send. The gate as
+written does not catch that. The tests now do.
+
+### OQ-5 — `StreamEvent` validated at the client boundary. **CLOSED.**
+
+`parseFrame` accepted any object carrying a `type` field and asserted it into the union. That
+is safe exactly as long as the only producer is our own route handler — an assumption that
+holds today and survives right up until a proxy, a replay tool, a mock, or a future non-Next
+backend sits in between. A malformed frame would reach the FSM as a variant with undefined
+fields and surface as a blank message or a missing terminal state, not as a parse error.
+
+`packages/shared/src/streamEvent.ts` adds `parseStreamEvent`, beside the frozen contract it
+validates. **It restates no shape**, so the freeze gate is untouched: a new variant means
+editing the union *and* the validator, and a test asserts the union's arity so that a variant
+added to one and not the other fails the build.
+
+Hand-written rather than Zod, deliberately. Zod is already a dependency but only server-side,
+where the SDK's `tool()` helper requires it; using it here would put a schema library in the
+**client** bundle for nine object shapes. That is the same trade this project has declined
+twice — `node:sqlite` over `better-sqlite3`, and no markdown renderer for the sake of bold
+text. The validator is fifty lines with no dependencies and six tests, including one that
+confirms a `__proto__` payload does not survive parsing.
+
+A rejected frame is dropped and logged (`frame_rejected`), never thrown: one bad frame must not
+kill a turn that is otherwise fine, and the envelope guarantees a `done` will still arrive.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| Unit suite | **104 / 104** (was 92) — 6 validator, 6 mock-fidelity |
+| Live sdk turn, trace on | `session → agent_hop → tool_call ×2 → citation → csat_prompt → done`, **zero `frame_rejected`** |
+| Browser, real engine | Trace panel renders hops, tools, citations, terminal status; no console errors |
+| Browser, `NEXT_PUBLIC_USE_MOCK_STREAM=1` | Refund → escalation with ticket, CSAT card, handed-off banner, populated metadata row — all offline. Screenshot: `docs/screenshots/06-mock-mode-envelope.png` |
+| `npx tsc --noEmit` | exit 0 |
 
 ## Message flow verification (`*verify-messageflow`)
 
@@ -315,7 +400,7 @@ Checked against `.claude/rules/adapter-claude-agent-sdk.md`.
 | Trace logs under `2.build/logs`, secrets redacted | Met — `SECRET_KEY_PATTERN` in `trace.ts` |
 | Retry / idempotency for replayable actions | Met — `withReadRetry`; ticket stubs idempotent on `conversationId + reason_code` |
 | MCP availability validated before execution | Met — startup assertions |
-| **Structured output contracts validated** | **Partial** — `EscalationPackage` is validated; `StreamEvent` is not validated at the client boundary (see Open Questions) |
+| **Structured output contracts validated** | **Met 2026-08-29** — `EscalationPackage` server-side, `StreamEvent` at the client boundary via `parseStreamEvent`. No Quality Gate item remains unmet |
 | Rate limiting on a spend-bearing endpoint | Met (new) — fixed window before body parsing; a **cost guard**, not access control |
 | Operator surface authenticated and fail-closed | Met (new) — `X-Operator-Key`, `503` when unset, id sanitised before the filesystem |
 | Durable state for replayable actions | Met (new) — ticket stubs in SQLite, idempotent on `conversationId + reason_code` via a UNIQUE INDEX |
@@ -375,11 +460,10 @@ Checked against `.claude/rules/adapter-claude-agent-sdk.md`.
 4. ~~**Is terminal `status` part of the cross-engine contract** (DEF-05)?~~ **Closed 2026-08-27** —
    ADR-16 rules that it is. `@qa.eng` should close DEF-05 and re-scope DEF-04, which remains open
    as an sdk-path-only issue (the coordinator not emitting the `needs_input` marker).
-5. **Should `StreamEvent` be validated at the client boundary?** Still open, and now the only
-   unmet item in the adapter's Quality Gates. `parseFrame` accepts any object with a `type`
-   field and casts; a malformed frame reaches the FSM as an unknown variant. Zod is already a
-   dependency. The FSM is now tested and handles unknown variants by ignoring them, which
-   bounds the damage but does not close the gap.
+5. ~~**Should `StreamEvent` be validated at the client boundary?**~~ **Closed 2026-08-29** —
+   `parseStreamEvent` in `packages/shared/src/streamEvent.ts`, hand-written, no new dependency,
+   6 tests. See the client-side contract pass above. This was the last unmet item in the
+   adapter's Quality Gates.
 6. ~~**No client-side test harness.**~~ **Closed 2026-08-28** — 22 client tests cover the FSM
    contract, the status vocabulary and the text handling. The blocker was that Node could not
    resolve the `@shared` / `@/` aliases; `scripts/test-resolver.mjs` maps them for the test
@@ -396,7 +480,7 @@ Checked against `.claude/rules/adapter-claude-agent-sdk.md`.
 |---|---|
 | Persona | `@integration.eng` |
 | Actions | `*integrate-api`, `*verify-messageflow`, `*log-integration` |
-| Timestamp | 2026-08-27; re-verified 2026-08-28 |
+| Timestamp | 2026-08-27; re-verified 2026-08-28; `*integrate-api` contract pass 2026-08-29 |
 | Resolved runtime | `claude-agent-sdk` (env `AAMAD_TARGET_RUNTIME`, matches `aamad.config.yml` → `runtime.target`; no fallback, no warning) |
 | Adapter rule loaded | `.claude/rules/adapter-claude-agent-sdk.md` |
 | SDK version | `@anthropic-ai/claude-agent-sdk` 0.3.241 (declared `^0.3.241`) |
@@ -404,7 +488,7 @@ Checked against `.claude/rules/adapter-claude-agent-sdk.md`.
 | Budgets | `maxHops 4` · `maxModelTurns 12` · `turnTimeoutMs 120000` · `maxOutputTokens 4096` · `toolReadRetries 1` |
 | Engines verified | `sdk` and `deterministic`, both runs |
 | Agents live at verification | six — `triage-router`, `order-specialist`, `faq-policy`, `plus-specialist`, `returns-advisor`, `escalation-handoff` |
-| Files written by `@integration.eng` | `project-context/2.build/integration.md` (this file) only — no source files modified |
+| Files written by `@integration.eng` | 2026-08-27/28: this file only. **2026-08-29 (`*integrate-api`)**: `packages/shared/src/streamEvent.ts` + test (new), `lib/services/turnService.ts`, `lib/services/mockStream.ts` + test (new), `lib/chatClient.ts`, `package.json` (test glob). All are the client/server seam this persona owns; no agent prompt, tool, UI component or backend route was touched |
 | Template | None. `.cursor/templates/` has no integration template; headings derived from the persona contract and the SAD API & Flows reference. |
 | Prompt Trace | Not captured. This action produced no model-generated artifact content — findings come from executed HTTP requests and code reads, both reproducible from the table above. Per `aamad-core`, the omission is stated here with its reason. |
 | Verification evidence | 12 executed cases 2026-08-27; **18 executed cases 2026-08-28**, both engines; per-turn traces under `project-context/2.build/logs/` |

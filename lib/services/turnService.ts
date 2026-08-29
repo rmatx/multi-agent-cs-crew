@@ -6,16 +6,51 @@
  * arrive, and there is no status to poll — `getTurnTrace` is an operator read-after-the-fact.
  */
 
-import type { ChatRequest, StreamEvent, TemporalMeta } from "@shared/dto";
+import type { ChatRequest, StreamEvent } from "@shared/dto";
+import { parseStreamEvent } from "@shared/streamEvent";
 
 export const CHAT_ENDPOINT = "/api/chat";
 
-/** Operator trace read (F-TRACE-01). Backend route lands with the trace panel — Sprint 2. */
+/**
+ * Operator trace read (F-TRACE-01) — the shape `GET /api/conversations/:id/trace` ACTUALLY
+ * returns.
+ *
+ * The previous declaration was written before the route existed and never reconciled with it:
+ * it promised `temporal` and `tools`, neither of which the endpoint sends, and typed `hops` as
+ * `{agentId, hop}` when the route returns a merged event stream. `getTurnTrace` then cast the
+ * JSON to it, so every one of those mismatches was invisible to the compiler and would have
+ * surfaced as `undefined` at the first caller. This is the same defect class as OQ-5, one
+ * layer up: a cast standing in for a contract.
+ */
 export type TurnTrace = {
   conversationId: string;
-  temporal: TemporalMeta;
-  hops: Array<{ agentId: string; hop: number }>;
-  tools: Array<{ agentId: string; tool: string; ok: boolean }>;
+  /** Hop path, tool calls, denials and budget exhaustion, in arrival order. */
+  hops: Array<{
+    ts: string | null;
+    event: string | null;
+    agentId: string | null;
+    tool: string | null;
+    hop: number | null;
+    reason: string | null;
+  }>;
+  /** One entry per turn on this conversation, with the model's own usage figures. */
+  turns: Array<{
+    ts: string | null;
+    hops: number | null;
+    path: string[] | null;
+    numTurns: number | null;
+    costUsd: number | null;
+  }>;
+  transcript: Array<{ role: "user" | "assistant"; content: string; status: string | null; ts: string }>;
+  identity: { userId?: number; orderId?: number };
+  csat: { score: number; comment: string | null; at: string } | null;
+  ticketStubs: Array<{
+    ticket_stub_id: string;
+    reason_code: string;
+    urgency: string;
+    created_at: string;
+  }>;
+  traceRecordCount: number;
 };
 
 /**
@@ -93,22 +128,38 @@ export async function* startTurn(
   }
 }
 
-/** Parse one SSE frame; ignore comments/heartbeats and anything not shaped like a StreamEvent. */
+/**
+ * Parse one SSE frame; ignore comments/heartbeats and anything that is not a valid
+ * `StreamEvent`.
+ *
+ * VALIDATED, NOT CAST (integration.md OQ-5). This used to accept any object carrying a `type`
+ * field and assert it into the union, which held only while the sole producer was our own
+ * route handler. `parseStreamEvent` checks the required fields of the actual variant, so a
+ * malformed frame is dropped here — where a `frame_rejected` line names it — instead of
+ * reaching the FSM as a variant with undefined fields and surfacing as a blank message.
+ */
 function parseFrame(frame: string): StreamEvent | null {
   const dataLines = frame
     .split("\n")
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice(5).trim());
   if (dataLines.length === 0) return null;
+
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(dataLines.join("\n"));
-    if (typeof parsed === "object" && parsed !== null && "type" in parsed) {
-      return parsed as StreamEvent;
-    }
-    return null;
+    parsed = JSON.parse(dataLines.join("\n"));
   } catch {
     return null;
   }
+
+  const event = parseStreamEvent(parsed);
+  if (event === null && parsed !== null) {
+    // Not thrown: one bad frame must not kill a turn that is otherwise fine, and the envelope
+    // guarantees a `done` will still arrive. Logged, because a silently dropped frame is the
+    // hardest kind of wire bug to find later.
+    console.warn("frame_rejected", parsed);
+  }
+  return event;
 }
 
 /**
@@ -132,5 +183,17 @@ export async function getTurnTrace(
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
     throw new Error(body?.message ?? `Trace read failed (HTTP ${response.status}).`);
   }
-  return (await response.json()) as TurnTrace;
+  const body: unknown = await response.json();
+  // A shallow shape check, for the same reason `parseFrame` validates: this is a cast at a
+  // process boundary, and the compiler cannot help. Full validation of a nested operator
+  // payload would be more machinery than the one caller justifies.
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    !Array.isArray((body as TurnTrace).hops) ||
+    !Array.isArray((body as TurnTrace).turns)
+  ) {
+    throw new Error("Trace read returned an unexpected shape.");
+  }
+  return body as TurnTrace;
 }
