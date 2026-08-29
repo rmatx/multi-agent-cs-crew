@@ -20,7 +20,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { registerHooks } from "node:module";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = process.cwd();
 
@@ -44,14 +44,33 @@ function withExtension(filePath) {
   return null;
 }
 
+/**
+ * Extensionless RELATIVE imports, e.g. `./demoOverlay` from inside `dateShift.ts`.
+ *
+ * TypeScript and Next resolve these; Node's ESM loader does not. It only surfaces when a
+ * module that imports a sibling is loaded by the test runner — which is why it appeared the
+ * moment QA wrote the first test for the temporal layer, and not before: every previously
+ * tested module was either import-free or imported through an alias.
+ */
+function resolveRelative(specifier, parentURL) {
+  if (!specifier.startsWith("./") && !specifier.startsWith("../")) return null;
+  if (parentURL === undefined || !parentURL.startsWith("file:")) return null;
+  const asPath = path.resolve(path.dirname(fileURLToPath(parentURL)), specifier);
+  return withExtension(asPath);
+}
+
 registerHooks({
   resolve(specifier, context, nextResolve) {
     const mapped = mapAlias(specifier);
-    if (mapped === null) return nextResolve(specifier, context);
+    if (mapped !== null) {
+      const resolved = withExtension(mapped);
+      if (resolved !== null) return { url: pathToFileURL(resolved).href, shortCircuit: true };
+      return nextResolve(specifier, context);
+    }
 
-    const resolved = withExtension(mapped);
-    if (resolved === null) return nextResolve(specifier, context);
+    const relative = resolveRelative(specifier, context.parentURL);
+    if (relative !== null) return { url: pathToFileURL(relative).href, shortCircuit: true };
 
-    return { url: pathToFileURL(resolved).href, shortCircuit: true };
+    return nextResolve(specifier, context);
   },
 });

@@ -296,9 +296,31 @@ const gResult = g.trace.find((t) => t.event === "turn_result");
 check("G", "the whole answer cost exactly one specialist hop", gResult?.hops === 1,
   `hops=${gResult?.hops}, path=${JSON.stringify(gResult?.path)}`);
 const gText = g.events.filter((ev) => ev.type === "token").map((ev) => ev.text).join("");
-check("G", "the eligibility answer is grounded in the order date",
-  /2026-09-01|today/i.test(gText), gText.slice(0, 200));
-check("G", "the 14-day window is stated from policy", /14[-\s]day/i.test(gText), gText.slice(0, 200));
+/*
+ * Assert the CONTRACT, not the copy.
+ *
+ * Two earlier versions of these checks asserted wording — that the reply contained the order
+ * date, and that it said "14-day" — and each went red once on an answer that was correct,
+ * grounded and arguably better written ("you have until 2026-09-15"). Sampled separately, the
+ * date appeared in 5 of 5 runs; the failures were phrasing drift, not behaviour drift. An eval
+ * that goes red on good output teaches the operator to re-run until green, which is the worst
+ * thing a gate can teach. Same lesson as slice E.
+ *
+ * What must hold, in any phrasing: the verdict is right, both sources reached the answer, and
+ * no refund timeline was invented.
+ */
+const gCitations = g.events.filter((ev) => ev.type === "citation").flatMap((ev) => ev.ids);
+check("G", "the answer cites the ORDER it reasoned from",
+  gCitations.some((id) => id.startsWith("duckdb:orders:")), gCitations.join(", "));
+check("G", "the answer cites the POLICY it reasoned from",
+  gCitations.some((id) => id.startsWith("policy:returns")), gCitations.join(", "));
+check("G", "an in-window order is told it can be returned",
+  /\b(yes|can|still|eligible|within)\b/i.test(gText) && !/\b(cannot|can't|not eligible|too late|outside)\b/i.test(gText),
+  gText.slice(0, 200));
+// AC-RET-02 / AC-RET-04: advice only. A return window is not a refund promise.
+check("G", "no refund timeline was invented",
+  !/refund .{0,30}(within|in)\s+\d+|\d+\s*(business\s*)?days? .{0,20}refund/i.test(gText),
+  gText.slice(0, 200));
 
 console.log("\nSlice H -- restricted action, not a money tool (AC-PLUS-03)");
 const h = await runTurn({

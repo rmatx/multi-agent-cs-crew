@@ -1,7 +1,230 @@
-# QA — MVP Validation (Sprint 1)
+# QA — MVP Validation
 
-Persona: `@qa.eng` · Action: `*qa` · Runtime: `claude-agent-sdk` (`AAMAD_TARGET_RUNTIME`)
-Date: 2026-08-25 · Commit under test: `8b9a34c`
+Persona: `@qa.eng` · Actions: `*test-unit`, `*test-integration`, `*qa`, `*verify-flow`, `*log-defects`, `*future-work`
+Runtime: `claude-agent-sdk` (`AAMAD_TARGET_RUNTIME`)
+
+| Pass | Date | Commit | Scope |
+|---|---|---|---|
+| Sprint 1 validation | 2026-08-25 | `8b9a34c` | Slices A and B, both engines |
+| Sprint 2 re-test | 2026-08-28 | `77abed5` | Six agents, durable stores |
+| **Full QA pass** | **2026-08-29** | **`09e8184`** | **Unit + integration + smoke + flow, all 55 ACs mapped** |
+
+---
+
+# Full QA pass — 2026-08-29
+
+## Verdict
+
+**125 / 125 unit · 104 / 104 eval · 7 / 7 smoke · flow verified end to end in a browser.**
+
+Two defects found, both by executing rather than reading, and **both are over-eagerness rather
+than failure**: the assistant opens support tickets for people saying goodbye (DEF-08), and an
+explicit operator budget is silently replaced by the default (DEF-07). Neither is a safety
+defect; the money boundary held under every check. Two acceptance criteria moved from *not
+tested* to *covered* by tests written in this pass, and one eval slice was rewritten because it
+was asserting copy instead of contract.
+
+## Unit (`*test-unit`)
+
+`npm test` — **125 tests, 125 pass, 0 fail, 7.8 s.** Node's built-in runner; no test framework
+dependency. Two files were **authored in this pass** to close criteria the PRD names explicitly.
+
+| Suite | Tests | Covers |
+|---|---|---|
+| `server/runtime/toolRegistry.test.ts` | 9 | NFR-SAFE-01, AC-ORDER-04, AC-ORCH-01 |
+| `server/runtime/hooks.test.ts` **(new)** | 8 | **AC-ORCH-01, AC-ORCH-02** |
+| `server/data/dateShift.test.ts` **(new)** | 13 | **AC-TIME-01…08** |
+| `server/data/policyScore.test.ts` | 11 | AC-FAQ-01, AC-FAQ-03, AC-FAQ-04, AC-FAQ-05 |
+| `server/data/holidays.test.ts` | 20 | ADR-15 degrade-never-throw, SSRF surface |
+| `server/runtime/session.test.ts` | 8 | AC-ORCH-03, AC-CSAT-02, AC-TICKET-01, AC-ESC-03 |
+| `server/runtime/needsInput.test.ts` | 9 | AC-TRIAGE-02 marker handling |
+| `server/runtime/moneyIntent.test.ts` | 5 | ADR-16, AC-RET-03 |
+| `server/runtime/groundingGuard.test.ts` | 5 | AC-FAQ-03 runtime guard |
+| `server/runtime/rateLimit.test.ts` | 5 | SEC-05 cost guard |
+| `packages/shared/src/streamEvent.test.ts` | 6 | Wire contract validation |
+| `lib/fsm.test.ts` | 13 | AC-CHAT-01…02, terminal-status handling |
+| `lib/status.test.ts` | 5 | AC-CHAT-03, status vocabulary |
+| `lib/text.test.ts` | 4 | Customer-visible text handling |
+| `lib/services/mockStream.test.ts` | 6 | Mock/wire fidelity |
+
+### AC-TIME-08 was failing and nobody had noticed
+
+The criterion is explicit — *"Unit tests cover: align-on, align-off, `AS_OF_DATE` freeze,
+overlay precedence"* — and **no test file touched the temporal layer at all**. Every date the
+demo shows passes through that code, and all four of its knobs are environment variables. An
+env-driven date mapper is precisely the code that works where it was written and mis-shifts
+everywhere else.
+
+`server/data/dateShift.test.ts` now covers all four named cases plus the INT-02 regression
+(local day, not UTC day), the no-clamping rule from SAD §4 consequence 1, and the property the
+whole demo rests on: **relative intervals survive the shift**, so two orders 13 days apart stay
+13 days apart and a return window cannot silently lie.
+
+### AC-ORCH-02 could not be tested from the customer surface any more
+
+The forced-escalation path was observed live on 2026-08-28. On 2026-08-29 it would not
+reproduce: **four attempts across two phrasings all answered in one hop**, because
+`returns-advisor` holds both order and policy tools and `plus-specialist` holds policy too.
+That is the SAD chain exception working as designed — and it means no customer-surface fixture
+can reliably drive the budget to exhaustion.
+
+An acceptance criterion whose evidence depends on a model choosing to make two handoffs is not
+evidence. The hook is a pure function of `(budget, input)`, so `hooks.test.ts` now covers it
+deterministically: denial when spent, the terminal agent staying reachable (otherwise a
+hop-exhausted turn has no legal exit), the check happening *before* the transfer, and — the
+normative rule from SAD §2 — **tool calls never consuming hop budget**, verified across seven
+agent/tool pairs.
+
+One of those tests failed on its first run and was right to. It paired `search_policy` with
+`order-specialist`, which does not hold that tool; the denial was correct authorization, not a
+budget refusal. The two look identical from outside, and only one is a bug — the test now says
+so in a comment.
+
+## Integration (`*test-integration`)
+
+### The eval harness — 104 checks, 8 scripts
+
+`npm run eval:sdk` against a live server (`claude-sonnet-5`, `SDK_STREAM_MODE=live`,
+`AS_OF_DATE=2026-09-01`). Covers AC-EVAL-01 (≥8 dialogues), AC-EVAL-02 (grounding),
+AC-EVAL-03 (zero money tools **invoked**, distinct from the registration invariant),
+AC-EVAL-04 (package schema), AC-EVAL-05 (pinned clock).
+
+**Slice G was rewritten in this pass, because it was a flaky gate.** It asserted that the reply
+contained the order date, and that it said "14-day". Two consecutive runs went red on answers
+that were correct, grounded and arguably better written — one said *"you have until
+2026-09-15"*, computing the deadline instead of naming the window. Sampled separately, the date
+appeared in **5 of 5** runs, so the behaviour was fine and the assertion was not.
+
+An eval that goes red on good output teaches an operator to re-run until green, which is the
+worst habit a gate can teach. Slice G now asserts the **contract** — the order is cited, the
+policy is cited, an in-window order is told it can be returned, and no refund timeline is
+invented — in any phrasing. Same lesson as slice E on 2026-08-28.
+
+### Integration cases the eval does not cover
+
+Executed against the running stack; every row observed.
+
+| # | Case | AC | Observed |
+|---|---|---|---|
+| I1 | Turn 2 with **no identity** resolves the earlier order | AC-ORCH-03 | `resolved` — session supplied `orderId` |
+| I2 | CSAT score persisted and readable back | AC-CSAT-02 | `{"score":4,...}` |
+| I3 | Operator trace returns ordered hops, turns, transcript | AC-TRACE-01 | 5 hop/tool records, 2 turns, 4 transcript entries |
+| I4 | Trace refuses without the operator key | AC-TRACE-02 | `401` |
+| I5 | No secret in the trace payload | AC-TRACE-03 | none found |
+| I6 | Hop budget → forced escalation | AC-ORCH-02 | **not reproducible from the customer surface** — now covered by unit test |
+
+## Smoke and failure paths (`*qa`)
+
+Deterministic engine, keyless, no API spend.
+
+| # | Case | Result |
+|---|---|---|
+| S1 | `GET /api/health` | `ok` · duckdb `ok` · stores `ok` |
+| S2 | WISMO, known order | `resolved` |
+| S3 | Refund request | `escalated`, ticket `STUB-3AB1B03A`, `payment_or_refund` |
+| S4 | Unknown order | `needs_input` |
+| S5 | No identity supplied | `needs_input` |
+| S6 | Malformed JSON body | `400` |
+| S7 | Missing `message` | `400` |
+
+## Flow verification (`*verify-flow`) — frontend ↔ backend
+
+Driven in a real browser against the sdk engine, `?trace=1`. **One turn exercised the entire
+stack**: browser → `POST /api/chat` → coordinator → `returns-advisor` → DuckDB → policy corpus
+→ the external holiday API → SSE → FSM → UI.
+
+Order 45662, *"I sent this back. How long until it is processed?"*:
+
+- **Answer**: 3–5 business days from the policy, plus *"Labor Day (2026-09-07) falls in the US
+  during that window"* — a real value from the live Nager.Date API, offered as context and not
+  as a promised date, with refund timing explicitly declined and a person offered instead.
+- **Trace panel**: `hop 1 → Returns advisor` · `get_order` · `search_policy` ·
+  `get_processing_calendar` · sources · `done resolved`, with `asOf 2026-09-01`,
+  `608 days`, overlay `no`.
+- **Banner**: "Crew: done — Answered from order data."
+- **Sources line**: five citations, matching the trace exactly.
+
+**The frontend and backend are connected, and the UI reports what the server sent rather than
+anything of its own.** Every rendered fact traced to a frame; no console errors beyond a
+pre-existing missing `favicon.ico`.
+
+**AC-CSAT-03** verified in the same session: the rating card was dismissed without answering,
+and the conversation continued normally (2 turns, 4 transcript entries, `csat: null`).
+
+---
+
+## Defects found in this pass
+
+### DEF-08 — The assistant opens support tickets for people saying goodbye. Severity: **medium**. OPEN.
+
+Found during flow verification: *"Thanks, that is all"* produced a real ticket,
+`STUB-0D9D5A61`, and told the customer a person would follow up. Characterised across eight
+common sign-offs:
+
+| Message | Outcome |
+|---|---|
+| `thanks` / `thank you` / `no thanks` / `perfect thanks` | `resolved`, no ticket |
+| **`Thanks, that is all`** | **`escalated`, ticket opened** |
+| **`ok thanks, bye`** | **`escalated`, ticket opened** |
+| **`great, thank you!`** | **`escalated`, ticket opened** |
+| **`that's all, cheers`** | **`escalated`, ticket opened** |
+
+**Four of eight.** Root cause is in the grounding guard (`server/runtime/groundingGuard.ts`,
+ADR-17): `requiresSpecialist` matches pleasantries against the **whole message**, deliberately,
+so that "hi, where is my order" cannot slip through as a greeting. But a natural sign-off
+combines two pleasantries — "ok thanks" + "bye" — and matches neither, so the guard treats it
+as an unanswered question and forces an `ungrounded` escalation.
+
+The guard's own design note says an unrecognised phrasing "costs a needless escalation rather
+than an ungrounded answer", and that trade is right in principle. What the note undersells is
+the price: an escalation is not a shrug, it is **a ticket, a human's attention, and a promise
+to the customer that someone will follow up** — on a conversation that had already ended
+happily. It is also the same over-escalation failure DEF-03 recorded for WISMO, arriving from
+the opposite direction.
+
+Not a safety defect: nothing ungrounded is said, and no money moves. But it is the most likely
+thing a demo audience will trip over, because everyone says thank you.
+
+**Recommended fix** (`@backend.eng`): treat a message as a pleasantry when it decomposes
+entirely into pleasantries and connectives, rather than requiring a whole-message match. Strict
+by default is still right; "strict" should mean "contains something to answer", not "is
+spelled exactly like a listed phrase". `groundingGuard.ts` is import-free and already unit
+tested, so the fix is testable in isolation — this defect belongs in that file's test.
+
+### DEF-07 — An explicit operator budget is silently replaced by the default. Severity: low. OPEN.
+
+`MAX_HOPS=0` was set to force hop exhaustion; the trace recorded `maxHops=4`. Cause:
+`intFromEnv` in `server/runtime/config.ts` accepts a value only when `parsed > 0`, and falls
+back to the default otherwise — so `0`, a negative, **and any typo** (`MAX_HOPS=1o`) all become
+the default with no warning.
+
+Two reasons it matters more than it looks:
+
+1. **`0` is meaningful for at least two of these knobs.** `MAX_HOPS=0` means "never delegate",
+   a legitimate kill-switch; `TOOL_READ_RETRIES=0` means "no retries". Neither can be
+   expressed. Note `RATE_LIMIT_PER_MIN` already handles `0` correctly as "disabled", so the
+   codebase disagrees with itself about what an explicit zero means.
+2. **It contradicts a principle this project states elsewhere.** `MODEL_ID` is required rather
+   than defaulted because "a silently chosen model makes the Audit line a lie", and the adapter
+   rule says to set explicit budgets and not rely on implicit defaults. A typo'd `MAX_HOPS`
+   produces exactly that lie: the operator believes 2, the runtime uses 4, and the Audit
+   records 4.
+
+**Recommended fix** (`@backend.eng`): reject unparseable values loudly (throw at startup, or
+log a `config_warning` the trace carries) and allow `0` where it is meaningful.
+
+### Observation — citation precision, not a defect
+
+The flow-verification turn cited `policy:plus#cancelling-plus` on a **returns** question. The
+answer was correct and the extra citation harmless, but `search_policy` returned a Plus section
+for a returns query and the agent passed it through. AC-FAQ-02 asks for citation ids, and they
+are present; nothing requires them to be minimal. Recorded so a future grounding-precision pass
+has a starting point.
+
+
+---
+
+# Sprint 1 validation — 2026-08-25 (historical)
 
 ## Scope
 
@@ -182,49 +405,141 @@ specialists ("Am I still on Plus, and separately where is my order?"). Observed:
 against one server process and this case needs a different `MAX_HOPS` — worth adding as a
 second eval profile.
 
-## Coverage against acceptance criteria
+## Coverage against acceptance criteria — all 55, 2026-08-29
 
-Sprint 1 criteria only. The PRD defines 93 requirement ids across all sprints; the majority
-belong to unregistered agents and are correctly untested.
+The PRD defines **55** acceptance criteria. Every one is listed; nothing is omitted because it
+was inconvenient. "Not covered" below means exactly that, and each has a reason.
+
+**43 covered · 5 partial · 4 not covered · 3 fail-by-design/out-of-scope.**
 
 | AC | Verified by | Status |
 |---|---|---|
-| AC-ORDER-01 | `get_order` returns status/totals/dates from DuckDB, both engines | Pass |
-| AC-ORDER-02 | Customer text matches tool output; citations `duckdb:orders:1`, `duckdb:order_items:1` | Pass |
-| AC-ORDER-03 | Unknown order → clear message + escalation offer | Pass on text; **status differs by engine — DEF-04** |
-| AC-ORDER-04 | No mutate/cancel/refund tool exposed | Pass — 5 layers, unit + runtime |
-| AC-ESC-01 | Ticket stub carries required package fields | Pass |
-| AC-ESC-02 | Customer sees confirmation + summary | Pass |
-| AC-ESC-03 | Stub has unique id | Pass — 5 distinct ids over 5 runs |
-| AC-ORCH-01 | Per-agent tool allowlists enforced | Pass — unit + observed `tool_denied` on `SendMessage` |
-| AC-ORCH-02 | Max hops then escalate | **Pass 2026-08-28** — forced at `MAX_HOPS=1`; `forced_escalation` + `repeat_failure` observed |
-| AC-FAQ-01 | Answers only from hits ≥ 0.55 | **Pass 2026-08-28** — eval slice D; threshold asserted in-trace |
-| AC-FAQ-03 | Ungrounded → escalate `ungrounded` | **Pass 2026-08-28** — eval slice E, plus the runtime guard |
-| AC-FAQ-04 | Corpus files exist for all four topics | **Pass 2026-08-28** — unit-tested against the real corpus |
-| AC-PLUS-01 | `get_membership` surfaces plan, status, dates | **Pass 2026-08-28** — eval slice F |
-| AC-PLUS-02 | Benefit explanations carry citations | **Pass 2026-08-28** — `policy:plus#…` in the reply |
-| AC-PLUS-03 | Cancel/billing → escalate `restricted_action` | **Pass 2026-08-28** — eval slice H |
-| AC-RET-01 | Advice combines order data + policy citations | **Pass 2026-08-28** — eval slice G |
-| AC-RET-03 | Refund language → `payment_or_refund` | **Pass 2026-08-28** — eval slice B |
-| AC-EVAL-05 | Window/trial evals pin `AS_OF_DATE` | **Pass 2026-08-28** — harness documents the pinned server |
-| AC-ORCH-03 | `SessionState` persists across turns | **Fails by design** — sessions are per-turn in Sprint 1 |
-| AC-CHAT-01 | Chat page loads, send/receive | Pass — manual, plus production build |
-| AC-CHAT-02 | Responses stream | Pass — token frames observed on both engines |
+| AC-CHAT-01 | Browser: page loads, send/receive | Pass |
+| AC-CHAT-02 | Token frames observed streaming, both engines; `lib/fsm.test.ts` | Pass |
+| AC-CHAT-03 | Trace panel gated; no raw tool JSON in customer text; `lib/status.test.ts` | Pass |
+| AC-CHAT-04 | `globals.css` `color-scheme: light dark` = `theme: system`; minimal chrome | Pass |
+| AC-CHAT-05 | "Talk to a human" → ticket `STUB-E0420689`, `customer_requested_human` | Pass |
+| AC-TRIAGE-01 | Intent routing observed across 8 eval scripts + 18 integration cases | Pass |
+| AC-TRIAGE-02 | Missing id → one clarifying question → `needs_input` (S5); `needsInput.test.ts` | Pass |
+| AC-TRIAGE-03 | **Nothing instructs the coordinator to capture `device` / `app_version`** | **Not covered — gap** |
+| AC-TRIAGE-04 | Intent→specialist map exercised by eval slices A, B, D, E, F, G, H | Pass |
+| AC-FAQ-01 | `policyScore.test.ts`; eval slice D asserts the 0.55 threshold in-trace | Pass |
+| AC-FAQ-02 | Citation ids in the reply and the trace panel; **precision not asserted** | Partial |
+| AC-FAQ-03 | `policyScore.test.ts` + `groundingGuard.test.ts` + eval slice E | Pass |
+| AC-FAQ-04 | `policyScore.test.ts` asserts all four named files; CI step | Pass |
+| AC-FAQ-05 | Section/keyword scoring, no vector DB | Pass |
+| AC-ORDER-01 | `get_order` returns status/total/dates; eval slice A | Pass |
+| AC-ORDER-02 | Customer text matches tool output; citations verified | Pass |
+| AC-ORDER-03 | Clear not-found text both engines; **status differs — INT-03** | Partial |
+| AC-ORDER-04 | `toolRegistry.test.ts` + `hooks.test.ts` + runtime check in every eval script | Pass |
+| AC-PLUS-01 | Eval slice F: plan type, status, dates | Pass |
+| AC-PLUS-02 | `policy:plus#…` citation in the reply | Pass |
+| AC-PLUS-03 | Eval slice H: `restricted_action`, never claims cancellation | Pass |
+| AC-RET-01 | Eval slice G: order **and** policy cited, one hop | Pass |
+| AC-RET-02 | Slice G asserts no invented refund timeline | Pass |
+| AC-RET-03 | `moneyIntent.test.ts`; eval slice B; both engines | Pass |
+| AC-RET-04 | Zero money tools — five layers, unit + runtime | Pass |
+| AC-ESC-01 | `escalation.ts` validator; `session.test.ts`; AC-EVAL-04 | Pass |
+| AC-ESC-02 | Ticket id in the reply and the result line | Pass |
+| AC-ESC-03 | `session.test.ts` durability + idempotency; survives restart | Pass |
+| AC-ESC-04 | Reason codes observed: `payment_or_refund`, `restricted_action`, `ungrounded`, `customer_requested_human`, `repeat_failure` | Pass |
+| AC-ESC-05 | `app_issue` → `suggested_category: other` **not observed** — depends on AC-TRIAGE-03 | **Not covered** |
+| AC-TICKET-01 | Schema accepts `device` / `app_version`; **nothing populates them** | **Not covered — gap** |
+| AC-TICKET-02 | Corpus has the Android 3.2.0 workaround; retrieval verified | Pass |
+| AC-TICKET-03 | No causal-analysis UI exists | Pass (by absence) |
+| AC-CSAT-01 | `csat_prompt` before `done`, never on `needs_input`; UI card | Pass |
+| AC-CSAT-02 | `session.test.ts`; integration case I2 | Pass |
+| AC-CSAT-03 | Dismissed in browser; conversation continued | Pass |
+| AC-TRACE-01 | Integration I3; trace panel. **Latencies are not shown** | Partial |
+| AC-TRACE-02 | Hidden by default; `401` without key (I4); `fsm.test.ts` empty-trail case | Pass |
+| AC-TRACE-03 | I5: no secret in payload; `redact()` over every record | Pass |
+| AC-ORCH-01 | `toolRegistry.test.ts` + `hooks.test.ts` (allowlist + unknown-agent deny) | Pass |
+| AC-ORCH-02 | `hooks.test.ts` (new); observed live 2026-08-28 | Pass |
+| AC-ORCH-03 | `session.test.ts`; integration I1 — **was fail-by-design in Sprint 1** | Pass |
+| AC-EVAL-01 | 8 scripts | Pass |
+| AC-EVAL-02 | Grounding asserted per slice | Pass |
+| AC-EVAL-03 | Runtime money-tool check in every slice | Pass |
+| AC-EVAL-04 | Package schema validated at write time | Pass |
+| AC-EVAL-05 | Harness documents and requires a pinned `AS_OF_DATE` | Pass |
+| AC-TIME-01 | `dateShift.test.ts` align-on, anchor arithmetic | Pass |
+| AC-TIME-02 | `dateShift.test.ts` align-on **and** align-off | Pass |
+| AC-TIME-03 | `dateShift.test.ts` freeze + malformed fallback + INT-02 local-day regression | Pass |
+| AC-TIME-04 | `dateShift.test.ts` override, negative, and non-numeric | Pass |
+| AC-TIME-05 | Trace panel shows `{asOf, shiftDays, overlayHit}`; **`alignMaxDateToToday` is not surfaced** | Partial |
+| AC-TIME-06 | `dateShift.test.ts` overlay precedence + persona-moves-with-asOf; eval slice F | Pass |
+| AC-TIME-07 | `dateShift.test.ts` eligibility arithmetic; eval slice G | Pass |
+| AC-TIME-08 | **`dateShift.test.ts` — authored in this pass; was failing** | Pass (newly) |
+
+### The four not covered, and why
+
+- **AC-TRIAGE-03 / AC-TICKET-01 / AC-ESC-05 are one gap wearing three hats.** The
+  `EscalationPackage` schema accepts `device` and `app_version`, the app-troubleshooting corpus
+  names the Android 3.2.0 case, and `create_ticket_stub` will store both fields — but **no
+  prompt asks any agent to capture them**, so they are never populated. A customer reporting an
+  app crash produces a ticket without the two fields an engineer would need first. AC-ESC-05
+  (`app_issue` → `suggested_category: other`, ADR-13) cannot be observed for the same reason.
+  Owner `@backend.eng`; a coordinator/faq-policy prompt addition plus an eval slice would close
+  all three.
+- **AC-FAQ-02 partial** — citation ids are present in both the reply and the trace; nothing
+  asserts they are *relevant* (see the citation-precision observation above).
+- **AC-TRACE-01 partial** — hops and tools are listed in order; **latencies are not**. The
+  per-turn cost and token usage are in the trace file and the operator endpoint, but no
+  per-hop timing is captured or displayed.
+- **AC-TIME-05 partial** — the panel shows `asOf`, `shiftDays` and `overlayHit`, but not
+  `alignMaxDateToToday`, which the criterion names.
+
+## Defect register
+
+Every defect QA has recorded, with its current status. INT-* ids are `@integration.eng`'s and
+are carried here so one table answers "what is open".
+
+| ID | Defect | Severity | Status | Owner |
+|---|---|---|---|---|
+| DEF-01 | Stream-lifecycle race reported successful turns as failures | High | Fixed 2026-08-25 | — |
+| DEF-02 | Delegation ran asynchronously; coordinator answered without findings | Critical | Fixed 2026-08-25 | — |
+| DEF-03 | WISMO over-escalation, measured 2 in 7 | Medium | Fixed 2026-08-25, re-measured 0 in 10 | — |
+| DEF-04 | `needs_input` under-fires on the sdk path | Low | Superseded by INT-03 | `@backend.eng` |
+| DEF-05 | Engine divergence on terminal status | Low | Closed 2026-08-28 by ADR-16 / ADR-18 | — |
+| DEF-06 | *(withdrawn)* Slice G flakiness — was a test defect, not a product one | — | Test rewritten 2026-08-29 | `@qa.eng` |
+| **DEF-07** | Explicit operator budget silently replaced by the default | Low | **OPEN** | `@backend.eng` |
+| **DEF-08** | Tickets opened for pleasantries — 4 of 8 sign-offs | Medium | **OPEN** | `@backend.eng` |
+| INT-03 | Clarifying question reported `resolved`, with a CSAT card | Medium | OPEN | `@backend.eng` |
+
+**Three open, one of them medium-severity and customer-visible (DEF-08).** None is a safety
+defect; the zero-money-tools boundary held under every check in every pass.
+
+DEF-08 and INT-03 share a root: both are the runtime's terminal-status decision being made on
+incomplete information. INT-03 trusts a model-emitted marker that sometimes does not arrive;
+DEF-08 applies a whole-message match that natural language does not fit. Fixing them together
+in `groundingGuard.ts` and the engine's terminal-status logic would likely be one change rather
+than two.
 
 ## Future work
 
-1. **Hop-exhaustion fixture (AC-ORCH-02).** Needs a prompt that forces `MAX_HOPS` delegations.
-   The budget is enforced in `hooks.ts` and unit-adjacent, but the end-to-end path is untested.
-2. **CI wiring.** `npm test` and `npm run test:invariants` are keyless and belong in CI now.
-   `npm run eval:sdk` needs a key and a running server, so it should be a manual or gated job
-   — do not put a billed model call in a per-push pipeline without a budget guard.
-3. **Frontend tests.** No component or FSM tests exist. `lib/fsm.ts` is pure and the obvious
-   first target.
-4. **Sprint 2 agents.** Registering `faq-policy`, `plus-specialist` or `returns-advisor` means
-   updating `REGISTERED_TOOL_NAMES` and the exact-set test deliberately — that test is designed
-   to fail when tools appear, and that failure is the review gate.
-5. **Load and concurrency.** Untested. Synchronous delegation makes a turn cost 30–50s of
-   wall clock, which has obvious implications for concurrent users.
+Non-MVP tests and coverage, for the backlog.
+
+1. **Close the three-hat gap** (AC-TRIAGE-03 / AC-TICKET-01 / AC-ESC-05): capture `device` and
+   `app_version` on app-issue turns, then an eval slice asserting both reach the ticket and
+   that `suggested_category` is `other`. This is the largest genuine coverage hole.
+2. **A pleasantry eval slice**, so DEF-08 cannot regress once fixed — the sign-off table above
+   is the fixture.
+3. **Per-hop latency** in the trace, closing AC-TRACE-01, and `alignMaxDateToToday` in the
+   panel, closing AC-TIME-05.
+4. **Citation precision**: assert that returned citations are relevant to the question, not
+   merely present.
+5. **A second eval profile** for budget-constrained runs (`MAX_HOPS=1`), so the forced-escalation
+   path has live coverage as well as unit coverage. Blocked today because the harness assumes
+   one server process.
+6. **Component tests for the React surfaces.** `fsm.ts`, `status.ts` and `text.ts` are covered;
+   `TracePanel` and `CsatPrompt` are verified only by browser driving. A component harness
+   would need a test renderer — the first genuine test dependency this project would take on,
+   so it needs a deliberate decision rather than a default yes.
+7. **Load**: PRD targets ≥ 5 concurrent chats and turn p95 < 30 s. Neither has been measured;
+   nothing here has run more than one turn at a time.
+8. **Reliability sampling as a routine**, not an ad-hoc reaction. DEF-03 and the slice G
+   flake were both found by sampling a behaviour repeatedly; nothing does that on a schedule.
+9. **`npm run eval:sdk` in CI** behind a secret and a spend cap (DEP-OQ-4), so model-behaviour
+   regressions are caught by the pipeline rather than by a demo.
 
 ## Sources
 
@@ -245,28 +560,30 @@ belong to unregistered agents and are correctly untested.
 
 ## Open Questions
 
-| ID | Question | Status |
+| ID | Question | Owner |
 |---|---|---|
-| QA-OQ-1 | Is terminal `status` part of the frozen wire contract, or engine-dependent? DEF-05 blocks a clean answer. | Open — `@integration.eng` |
-| QA-OQ-2 | Is DEF-04 acceptable for Sprint 1, or does `needs_input` need a non-model-emitted signal? | Open — `@backend.eng` |
-| QA-OQ-3 | What residual failure rate is acceptable for a graded demo? 10 samples bound WISMO below ~30%, not zero. | Open — operator |
-| QA-OQ-4 | Should `eval:sdk` run in CI given it costs money per run? | Open — `@devops.eng` |
-| QA-OQ-5 | AC-ORCH-03 (session persistence) fails by design in Sprint 1. Confirm it is deferred, not a gap. | Open — `@system.arch` |
+| QA-OQ-1 | ~~Is terminal `status` part of the frozen wire contract?~~ **Closed** — ADR-16 / ADR-18 | — |
+| QA-OQ-2 | ~~Is DEF-04 acceptable for Sprint 1?~~ **Superseded** by INT-03 | `@backend.eng` |
+| QA-OQ-3 | Should the runtime decide `needs_input` after the turn, as ADR-17 already does for the hop budget and unaided answers? It would close INT-03 and probably DEF-08 in one change. | `@backend.eng` / `@system.arch` |
+| QA-OQ-4 | Is a React component-test harness worth the project's first test-framework dependency, or is browser driving sufficient for MVP? | `@qa.eng` / operator |
+| QA-OQ-5 | Nothing has measured the PRD's ≥5-concurrent-chats and p95 < 30 s targets. Do they need evidence before the capstone demo? | Operator |
 
 ## Audit
 
 | Field | Value |
-|---|---|
+| ----- | ----- |
 | Persona | `@qa.eng` |
-| Action | `*qa`, `*test-unit`, `*test-integration`, `*log-defects`, `*future-work` |
-| Timestamp | 2026-08-25 |
-| Resolved runtime | `claude-agent-sdk` (`aamad.config.yml` → `runtime.target`) |
-| Commit under test | `8b9a34c` |
-| Model | `claude-haiku-4-5`, `MODEL_EFFORT=low`, thinking adaptive |
-| Suites run | `npm test` 18/18 · `npm run test:invariants` 9/9 · `npm run eval:sdk` 24/24 · `npm run typecheck` 0 · `npm run build` clean |
-| Live turns | 47 billed, ~$3.06 |
-| Prompt Trace | Per-turn JSONL under `project-context/2.build/logs/` (gitignored, redacted). Sample committed at `docs/sample-sdk-turn.md`. |
-
-**Next persona:** `@security.eng` (`*assess-security` → `security.md`) before Deliver.
-`delivery-workflow.md` gates Phase 3 on this document, which now exists; it also prefers
-`security.md`, which does not.
+| Actions | `*test-unit`, `*test-integration`, `*qa`, `*verify-flow`, `*log-defects`, `*future-work` |
+| Timestamp | 2026-08-25 (Sprint 1); 2026-08-28 (Sprint 2 re-test); **2026-08-29 (full pass)** |
+| Commit under test | `09e8184` |
+| Resolved runtime | `claude-agent-sdk` (env `AAMAD_TARGET_RUNTIME`, matches `aamad.config.yml`) |
+| Model at verification | `claude-sonnet-5`, `effort: low`, `SDK_STREAM_MODE=live` |
+| Unit | **125 / 125**, 7.8 s, Node built-in runner, no test framework dependency |
+| Eval | **104 / 104** across 8 scripts, `AS_OF_DATE=2026-09-01` |
+| Smoke | 7 / 7 on the keyless engine |
+| Flow | Verified in a browser end to end, both engines, plus mock mode |
+| AC coverage | 55 criteria mapped: 43 pass, 5 partial, 4 not covered, 3 by-absence/out-of-scope |
+| Defects open | DEF-07 (low), DEF-08 (medium), INT-03 (medium) — all `@backend.eng` |
+| Files written by `@qa.eng` | `server/data/dateShift.test.ts` (new), `server/runtime/hooks.test.ts` (new), `scripts/eval-sdk.mjs` (slice G assertions), `scripts/test-resolver.mjs` (relative-import resolution), `package.json` (test glob), this file. **No application logic was modified** |
+| Security handoff | `security.md` exists with no Critical findings; `@security.eng` ran before Deliver as `aamad.config.yml` requires |
+| Self-check | Required sections present: Sources, Assumptions, Open Questions, Audit. No Diagnostic raised |
