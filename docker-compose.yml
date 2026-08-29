@@ -1,0 +1,47 @@
+# Demo stack — one service, one volume (SAD §5 "demo: one container/VM; SQLite under data/").
+#
+# THE PORT BINDING IS A SECURITY CONTROL, NOT A DEFAULT. `127.0.0.1:3000:3000` publishes to
+# loopback only, which is the exact condition security.md attaches to accepting SEC-01 and
+# SEC-02: this build has no authentication, so any customer's order is readable by anyone who
+# can reach the port, and a conversation id is a bearer token for that conversation's history.
+# Changing this line to `3000:3000` exposes the app on every interface and turns both accepted
+# risks into live ones. Do not change it without reading security.md "Handoff readiness".
+
+services:
+  novamart:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: novamart-support-crew:latest
+    # Loopback only. See the note above before touching this.
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      # Engine. `deterministic` is the keyless default and costs nothing; `sdk` is the crew
+      # and spends the API key on every turn.
+      CHAT_ENGINE: ${CHAT_ENGINE:-deterministic}
+      # Pin the demo clock so the dates in a walkthrough are reproducible. Unset = today.
+      AS_OF_DATE: ${AS_OF_DATE:-}
+      MODEL_ID: ${MODEL_ID:-}
+      MODEL_EFFORT: ${MODEL_EFFORT:-low}
+      SDK_STREAM_MODE: ${SDK_STREAM_MODE:-final}
+      # Turns per minute per client. A cost guard on an unauthenticated endpoint, not access
+      # control (security.md SEC-05).
+      RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-20}
+    # Secrets by NAME only, never inline: ANTHROPIC_API_KEY and OPERATOR_KEY live in
+    # .env.local, which is gitignored and never copied into the image (.dockerignore).
+    env_file:
+      - path: .env.local
+        required: false
+    volumes:
+      # Durable state (ADR-10). Named volume rather than a bind mount so the container's
+      # unprivileged `node` user owns it without host-side chown.
+      - novamart-data:/app/data
+      # Operator traces. Bound to the host on purpose: they are what an operator reads after
+      # a turn — and they contain customer conversations (security.md SEC-03), so treat this
+      # directory as customer data and prune it on the schedule the runbook names.
+      - ./project-context/2.build/logs:/app/project-context/2.build/logs
+    restart: unless-stopped
+
+volumes:
+  novamart-data:

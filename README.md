@@ -160,6 +160,24 @@ Both engines share one seam (`server/runtime/engine.ts`) and one wire contract. 
 `packages/shared/src/dto.ts` changes between them; if it ever has to, the contract-freeze gate
 in the SAD has been breached and it belongs in `integration.md`.
 
+## Deploying it
+
+`Dockerfile` + `docker-compose.yml` run the whole thing in one container:
+
+```bash
+docker compose up --build          # keyless demo
+CHAT_ENGINE=sdk docker compose up --build   # the crew, needs .env.local
+```
+
+The compose file publishes to `127.0.0.1:3000` **on purpose** — this build has no
+authentication, so it is meant to be reachable only from the machine running it. See
+[`project-context/2.build/security.md`](project-context/2.build/security.md) before changing
+that, and [`project-context/3.deliver/deploy.md`](project-context/3.deliver/deploy.md) for the
+runbook: env matrix, promotion, rollback, and the pre-demo checklist.
+
+New to the app? [`project-context/3.deliver/user-guide.md`](project-context/3.deliver/user-guide.md)
+is the install guide and user manual.
+
 ## Layout
 
 ```

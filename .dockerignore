@@ -1,0 +1,32 @@
+# Build context hygiene. Everything here is either rebuilt in the image, secret, or
+# customer data that must never be baked into a layer.
+
+.git
+.github
+node_modules
+.next
+out
+
+# Secrets. The image takes them at run time, never at build time.
+.env
+.env.local
+
+# Customer data and operator traces produced by a RUNNING instance. Baking these into an
+# image would ship one demo's conversations to whoever pulls it (security.md SEC-03).
+data/*.sqlite
+data/*.sqlite-wal
+data/*.sqlite-shm
+project-context/2.build/logs
+
+# The 151 MB practice DB is untracked anyway; the committed CI fixture is what ships.
+data/fixtures/novamart_practice.duckdb
+
+# Not needed at runtime.
+docs
+project-context
+.playwright-mcp
+.venv
+.claude
+.cursor
+*.md
+!README.md

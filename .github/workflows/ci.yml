@@ -1,0 +1,98 @@
+# CI — lint/typecheck, test, build (delivery-workflow.md: "Generate CI/CD configuration files
+# only; do not trigger live deploys").
+#
+# This pipeline is deliberately KEYLESS. Every step here runs against the committed 3.2 MB CI
+# fixture with no ANTHROPIC_API_KEY in the environment, which means a fork or a pull request
+# can run the full suite without a secret and without spending anyone's money. The one thing
+# it therefore cannot cover — `npm run eval:sdk`, which drives eight live model turns against
+# a running server — is the operator's manual gate before a demo, and the runbook says so.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Must match .nvmrc and the Dockerfile: `node:sqlite` (ADR-10) needs Node ≥ 22.5.
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install (lockfile-exact)
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Named as its own step rather than folded into `npm test`, because this is the one the
+      # PRD calls NFR-SAFE-01: no refund, cancel or payment tool may be registered in the
+      # process. A failure here is a safety regression, and a build log should say so plainly.
+      - name: Zero-money-tools invariant
+        run: npm run test:invariants
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npx next build
+
+      # Guards the assumption every other job rests on: the committed fixture is the five MVP
+      # tables with every row. A truncated or swapped fixture would make the suite pass
+      # against data the demo does not use.
+      - name: Fixture sanity
+        run: |
+          test -f data/fixtures/novamart_ci.duckdb
+          node -e "
+            const { DuckDBInstance } = require('@duckdb/node-api');
+            (async () => {
+              const db = await DuckDBInstance.create('data/fixtures/novamart_ci.duckdb', { access_mode: 'READ_ONLY' });
+              const c = await db.connect();
+              const expected = { users: 50000, orders: 47199, order_items: 75447, products: 500, memberships: 5513 };
+              for (const [table, rows] of Object.entries(expected)) {
+                const got = Number((await (await c.run('SELECT count(*) AS n FROM ' + table)).getRowObjects())[0].n);
+                if (got !== rows) throw new Error(table + ': expected ' + rows + ' rows, found ' + got);
+                console.log(table, got);
+              }
+            })().catch((e) => { console.error(e.message); process.exit(1); });
+          "
+
+      - name: Policy corpus present
+        # AC-FAQ-04. An empty corpus turns every policy question into an escalation, which
+        # looks like a routing bug rather than missing content.
+        run: |
+          for f in returns shipping plus app_troubleshooting; do
+            test -s "data/policy/$f.md" || { echo "missing data/policy/$f.md"; exit 1; }
+          done
+          echo "four policy files present"
+
+      - name: Secret scan
+        # Cheap backstop for the thing that cannot be undone once pushed.
+        run: |
+          if git grep -nIE "sk-[A-Za-z0-9]{16,}|ANTHROPIC_API_KEY *= *['\"]?[A-Za-z0-9_-]{16,}" -- . ':!*.md' ':!.github'; then
+            echo "::error::possible secret committed"; exit 1
+          fi
+          echo "no secret patterns in tracked files"
+
+  container:
+    # Proves the image builds. It is NOT pushed anywhere and nothing is deployed — promotion
+    # is a manual step in deploy.md, per the delivery workflow's continuous-deployment policy.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t novamart-support-crew:ci .
