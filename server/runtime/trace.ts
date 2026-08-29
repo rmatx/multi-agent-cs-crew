@@ -92,8 +92,18 @@ export function createTracer(conversationId: string, engineId: string): Tracer {
   };
 }
 
-function sanitiseId(id: string): string {
+/**
+ * Path-safe conversation id. This is the ONLY thing standing between a URL path segment and
+ * `path.join`, so it strips every character that could climb out of the log directory —
+ * `..`, slashes, and anything else non-alphanumeric — rather than trying to detect traversal.
+ */
+export function sanitiseId(id: string): string {
   return id.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80) || "unknown";
+}
+
+/** Where per-conversation trace files live. Read by the operator trace endpoint. */
+export function traceLogPath(conversationId: string): string {
+  return path.join(LOG_DIR, `${sanitiseId(conversationId)}.jsonl`);
 }
 
 /**

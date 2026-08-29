@@ -34,6 +34,13 @@ export type TurnInput = {
   readonly conversationId: string;
   readonly message: string;
   readonly identity: { readonly userId?: number; readonly orderId?: number };
+  /**
+   * What was already said on this conversation, oldest first, EXCLUDING this turn's message.
+   * Empty on the first turn. Engines may ignore it — the deterministic engine does, because it
+   * composes from one order row and has no use for context — but the sdk coordinator reads it
+   * so a follow-up question ("can I return it?") knows what "it" is.
+   */
+  readonly history: readonly { role: "user" | "assistant"; content: string }[];
   /** Operator trace requested. Gates `agent_hop` / `tool_call` frames (SAD §4). */
   readonly trace: boolean;
   /** Full temporal meta. Engines pass only `toAgentTemporalView(...)` to any model. */

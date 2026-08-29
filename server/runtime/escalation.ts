@@ -1,16 +1,21 @@
 /**
- * EscalationPackage validator + in-memory TicketStubStore (SAD §4 "EscalationPackage
- * (normative shape)", Sprint 1 Slice B, PRD F-ESC-01 / F-TICKET-01).
+ * EscalationPackage validator + durable TicketStubStore (SAD §4 "EscalationPackage
+ * (normative shape)", PRD F-ESC-01 / F-TICKET-01, ADR-10).
  *
- * Sprint 1 scope, exactly as the SAD allows: in-memory store, `payment_or_refund` path.
- * Durable SQLite (ADR-10) and the remaining six reason codes are Sprint 2 layer 1 — see
- * `stubs.ts`. The validator is full-strength now because it is what the eval asserts.
+ * The store is SQLite as of Sprint 2 layer 1 — `data/ticket_stubs.sqlite`, never the practice
+ * DuckDB (ADR-06). It was an in-memory Map through Sprint 1, which the SAD explicitly allowed
+ * and which had one property nobody wants in a demo: every open ticket vanished on restart,
+ * so "a human will pick this up" was true only until the next `npm run dev`.
+ *
+ * All seven `ReasonCode` values are accepted and reachable; the validator is full-strength
+ * because it is what the eval asserts.
  *
  * `create_ticket_stub` REJECTS a partial package rather than writing a degraded stub. That
  * rejection is the mechanism behind PRD "100% complete escalations".
  */
 
 import type { EscalationPackage, ReasonCode } from "@shared/dto";
+import { ticketStubDb } from "@/server/data/sqlite";
 
 const REASON_CODES: readonly ReasonCode[] = [
   "customer_requested_human",
@@ -80,11 +85,36 @@ export function validateEscalationPackage(input: unknown): ValidationResult {
 
 export type StoredStub = EscalationPackage;
 
-/**
- * Process-local store. Deliberately NOT the practice DuckDB (ADR-06: the practice DB is
- * read-only and is never written, not even for tickets).
- */
-const stubs = new Map<string, StoredStub>();
+type StubRow = {
+  ticket_stub_id: string;
+  conversation_id: string;
+  intent: string;
+  entities: string;
+  urgency: string;
+  transcript_summary: string;
+  tools_tried: string;
+  citations: string;
+  reason_code: string;
+  suggested_category: string;
+  created_at: string;
+};
+
+/** Rehydrate a row into the normative package shape the DTO and the eval both expect. */
+function toStub(row: StubRow): StoredStub {
+  return {
+    ticket_stub_id: row.ticket_stub_id,
+    conversationId: row.conversation_id,
+    intent: row.intent,
+    entities: JSON.parse(row.entities) as StoredStub["entities"],
+    urgency: row.urgency as StoredStub["urgency"],
+    transcript_summary: row.transcript_summary,
+    tools_tried: JSON.parse(row.tools_tried) as StoredStub["tools_tried"],
+    citations: JSON.parse(row.citations) as string[],
+    reason_code: row.reason_code as ReasonCode,
+    suggested_category: row.suggested_category,
+    created_at: row.created_at,
+  };
+}
 
 export type CreateStubResult =
   | { ok: true; ticket_stub_id: string; stub: StoredStub }
@@ -103,12 +133,15 @@ export function createTicketStub(
   if (!validation.ok) return { ok: false, errors: validation.errors };
 
   const pkg = input as Omit<EscalationPackage, "ticket_stub_id" | "created_at">;
-  const idempotencyKey = `${pkg.conversationId}::${pkg.reason_code}`;
+  const db = ticketStubDb();
 
-  for (const existing of stubs.values()) {
-    if (`${existing.conversationId}::${existing.reason_code}` === idempotencyKey) {
-      return { ok: true, ticket_stub_id: existing.ticket_stub_id, stub: existing };
-    }
+  // Idempotency is now a UNIQUE INDEX on (conversation_id, reason_code) rather than a scan of
+  // an in-memory map. Same contract, enforced one layer down, and it survives a restart.
+  const existing = db
+    .prepare("SELECT * FROM ticket_stubs WHERE conversation_id = ? AND reason_code = ?")
+    .get(pkg.conversationId, pkg.reason_code) as StubRow | undefined;
+  if (existing !== undefined) {
+    return { ok: true, ticket_stub_id: existing.ticket_stub_id, stub: toStub(existing) };
   }
 
   const ticket_stub_id = `STUB-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
@@ -116,12 +149,42 @@ export function createTicketStub(
   // produces a stable created_at date component.
   const created_at = `${clock.asOf}T00:00:00.000Z`;
   const stub: StoredStub = { ...pkg, ticket_stub_id, created_at };
-  stubs.set(ticket_stub_id, stub);
+
+  db.prepare(
+    `INSERT INTO ticket_stubs (
+       ticket_stub_id, conversation_id, intent, entities, urgency, transcript_summary,
+       tools_tried, citations, reason_code, suggested_category, created_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    ticket_stub_id,
+    stub.conversationId,
+    stub.intent,
+    JSON.stringify(stub.entities),
+    stub.urgency,
+    stub.transcript_summary,
+    JSON.stringify(stub.tools_tried),
+    JSON.stringify(stub.citations),
+    stub.reason_code,
+    stub.suggested_category,
+    created_at,
+  );
+
   return { ok: true, ticket_stub_id, stub };
 }
 
 export function getTicketStub(id: string): StoredStub | undefined {
-  return stubs.get(id);
+  const row = ticketStubDb()
+    .prepare("SELECT * FROM ticket_stubs WHERE ticket_stub_id = ?")
+    .get(id) as StubRow | undefined;
+  return row === undefined ? undefined : toStub(row);
+}
+
+/** Operator read: the tickets opened on one conversation, oldest first. */
+export function listTicketStubsForConversation(conversationId: string): StoredStub[] {
+  const rows = ticketStubDb()
+    .prepare("SELECT * FROM ticket_stubs WHERE conversation_id = ? ORDER BY created_at, rowid")
+    .all(conversationId) as StubRow[];
+  return rows.map(toStub);
 }
 
 /** Customer-safe handoff text. No raw tool JSON, no PII beyond ids (SAD §8 redaction). */

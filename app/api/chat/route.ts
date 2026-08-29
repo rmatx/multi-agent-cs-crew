@@ -16,6 +16,14 @@
 import type { ChatRequest, StreamEvent } from "@shared/dto";
 import { resolveTemporalMeta } from "@/server/data/dateShift";
 import { resolveBudgets, resolveEngineId } from "@/server/runtime/config";
+import { checkRateLimit, clientKey } from "@/server/runtime/rateLimit";
+import {
+  appendMessage,
+  ensureSession,
+  loadSession,
+  mergeIdentity,
+  saveIdentity,
+} from "@/server/runtime/session";
 import type { TurnInput } from "@/server/runtime/engine";
 import { loadEngine } from "@/server/runtime/engines/select";
 
@@ -35,6 +43,20 @@ function isChatRequest(body: unknown): body is ChatRequest {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // Before parsing anything: a turn on the sdk engine spends the operator's API key, and this
+  // endpoint has no authentication (integration.md, Assumption 2). Cheapest possible check
+  // first, so a loop costs a map lookup rather than a JSON parse and a DuckDB read.
+  const limit = checkRateLimit(clientKey(request));
+  if (!limit.allowed) {
+    return Response.json(
+      {
+        code: "rate_limited",
+        message: "Too many messages. Please wait a moment and try again.",
+      },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -58,10 +80,28 @@ export async function POST(request: Request): Promise<Response> {
   const engineId = resolveEngineId();
   const budgets = resolveBudgets();
 
+  // Session first (ADR-10): the stored identity feeds the temporal resolve below, so a
+  // customer who gave a user id last turn still matches an overlay persona on this one.
+  let session;
+  let identity;
+  try {
+    ensureSession(conversationId);
+    session = loadSession(conversationId);
+    identity = mergeIdentity(session.identity, chatRequest.identity ?? {});
+    saveIdentity(conversationId, identity);
+    appendMessage(conversationId, "user", chatRequest.message);
+  } catch (err) {
+    console.error("session store failed", err);
+    return Response.json(
+      { code: "session_unavailable", message: "Chat is unavailable right now." },
+      { status: 500 },
+    );
+  }
+
   // Temporal context is resolved before any date leaves the server (F-TIME-01).
   let temporal;
   try {
-    temporal = await resolveTemporalMeta();
+    temporal = await resolveTemporalMeta(identity);
   } catch (err) {
     console.error("temporal resolve failed", err);
     return Response.json(
@@ -91,6 +131,10 @@ export async function POST(request: Request): Promise<Response> {
 
       let terminated = false;
       let streamDead = false;
+      /** Assistant text as the customer received it, for the transcript. */
+      let replyText = "";
+      let terminalStatus: string | null = null;
+      let csatSent = false;
 
       // `send` MUST NOT throw. It is called from inside engine code, so a dead stream that
       // threw here would surface as an engine defect: the throw unwinds into the engine's own
@@ -99,15 +143,32 @@ export async function POST(request: Request): Promise<Response> {
       // the 2026-08-23 traces — always AFTER a successful `turn_result`, i.e. a turn that in
       // fact worked, reported as a failure. A disconnected client is a normal end to a turn,
       // not a fault, so drop the frame and let the turn wind down quietly.
-      const send = (event: StreamEvent): void => {
-        if (terminated) return; // nothing may follow `done`
-        if (event.type === "done") terminated = true;
+      const enqueue = (event: StreamEvent): void => {
         if (streamDead || consumerGone) return;
         try {
           controller.enqueue(frame(event));
         } catch {
           streamDead = true;
         }
+      };
+
+      const send = (event: StreamEvent): void => {
+        if (terminated) return; // nothing may follow `done`
+        if (event.type === "token") replyText += event.text;
+        if (event.type === "done") {
+          terminated = true;
+          terminalStatus = event.status;
+          // F-CSAT-01. The envelope guarantees `done` is last, so the prompt goes BEFORE it —
+          // and it belongs here rather than in either engine, because "ask after a turn that
+          // actually finished" is a property of the turn, not of how the turn was computed.
+          // A `needs_input` turn is not finished: asking a customer to rate an unanswered
+          // question is the kind of thing that makes people distrust a support bot.
+          if (!csatSent && event.status !== "needs_input") {
+            csatSent = true;
+            enqueue({ type: "csat_prompt" });
+          }
+        }
+        enqueue(event);
       };
 
       try {
@@ -123,7 +184,8 @@ export async function POST(request: Request): Promise<Response> {
         const input: TurnInput = {
           conversationId,
           message: chatRequest.message,
-          identity: chatRequest.identity ?? {},
+          identity,
+          history: session.transcript.map(({ role, content }) => ({ role, content })),
           trace,
           temporal,
           signal: abort.signal,
@@ -151,6 +213,14 @@ export async function POST(request: Request): Promise<Response> {
       } finally {
         clearTimeout(timer);
         request.signal.removeEventListener("abort", onDisconnect);
+        // Persist what the customer actually saw, even on an aborted or failed turn — a
+        // half-turn is still part of the conversation, and dropping it would make the next
+        // turn's history lie about what was said.
+        try {
+          appendMessage(conversationId, "assistant", replyText, terminalStatus);
+        } catch (err) {
+          console.error("transcript write failed", err);
+        }
         // Same reasoning as `send`: closing an already-closed controller throws, and this is
         // a `finally`, so the throw would replace whatever really happened in the turn.
         if (!streamDead && !consumerGone) {

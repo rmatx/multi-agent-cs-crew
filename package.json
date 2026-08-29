@@ -11,8 +11,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:invariants": "node --test server/runtime/toolRegistry.test.ts",
-    "test": "node --test server/runtime/*.test.ts",
+    "test:invariants": "node --import ./scripts/test-resolver.mjs --test server/runtime/toolRegistry.test.ts",
+    "test": "node --import ./scripts/test-resolver.mjs --test server/runtime/*.test.ts server/data/*.test.ts lib/*.test.ts",
     "eval:sdk": "node scripts/eval-sdk.mjs"
   },
   "repository": {
