@@ -23,42 +23,79 @@
  * escalation rather than an ungrounded answer. That asymmetry is deliberate.
  */
 
-/** Stripped before matching so "Hi!" and "hi" are the same message. */
+/**
+ * Stripped before matching so "Thanks!" and "thanks" are the same message. Apostrophes are
+ * removed rather than split on, so "that's" normalises to one token and not two.
+ */
 function normalize(message: string): string {
   return message
     .toLowerCase()
+    .replace(/['\u2019]/g, "")
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 /**
- * Pure pleasantries. Matched against the WHOLE message, never as a substring: "hi, where is
- * my order" is an order question that happens to open politely, and treating it as a greeting
- * would exempt exactly the turns this guard exists to catch.
+ * The vocabulary a pure sign-off is made of.
+ *
+ * DEF-08 (qa.md, 2026-08-29): this used to be a set of whole PHRASES matched against the whole
+ * message, and real sign-offs are compounds — "ok thanks, bye" is two pleasantries and matched
+ * neither, so **four of eight** sampled closings opened a support ticket. A customer who wrote
+ * "Thanks, that is all" was told a human would follow up on a conversation that had already
+ * ended happily.
+ *
+ * The old rule was right about one thing and wrong about another. Right: "hi, where is my
+ * order" must never be exempt, because a greeting is not a licence for what follows. Wrong: it
+ * treated an unrecognised phrasing as cheap. An escalation is a ticket, a human's attention,
+ * and a promise — the same over-escalation cost DEF-03 measured from the other direction.
+ *
+ * So the unit of matching moves from the phrase to the WORD: a message is conversational when
+ * EVERY word in it appears here. "where", "order", "refund", "when", "cancel" and every other
+ * content word is absent, so anything with something to answer still requires a specialist.
+ * The default stays strict — an unknown word means a specialist — but "unknown word" now means
+ * an actual content word rather than an unlisted way of saying goodbye.
  */
-const PLEASANTRIES = [
-  "hi", "hi there", "hello", "hello there", "hey", "hey there", "yo",
-  "good morning", "good afternoon", "good evening",
-  "thanks", "thank you", "thanks a lot", "thank you so much", "thanks so much",
-  "cheers", "ta", "much appreciated", "appreciate it", "perfect thanks", "great thanks",
-  "ok", "okay", "ok thanks", "okay thanks", "got it", "understood", "sounds good",
-  "bye", "goodbye", "bye bye", "see you", "that s all", "that is all", "no thanks",
-  "nothing else", "no that s all", "all good",
-];
+const PLEASANTRY_WORDS = new Set([
+  // greetings
+  "hi", "hii", "hello", "hey", "yo", "there", "good", "morning", "afternoon", "evening",
+  "greetings",
+  // thanks
+  "thanks", "thank", "thankyou", "you", "ty", "cheers", "ta", "much", "appreciated",
+  "appreciate", "it", "lots",
+  // acknowledgement
+  "ok", "okay", "k", "kk", "got", "understood", "sounds", "great", "perfect", "awesome",
+  "brilliant", "lovely", "nice", "cool", "fine", "alright", "right", "yes", "yep", "yeah",
+  "yup", "sure", "noted",
+  // closing
+  "bye", "goodbye", "byebye", "later", "see", "soon", "night", "thats", "that", "is", "was",
+  "all", "no", "nope", "nothing", "else", "done", "im", "am", "we", "re",
+  // connectives and politeness that carry nothing to answer
+  "and", "so", "then", "just", "very", "really", "please", "sorry", "for", "your", "help",
+  "my", "friend", "a", "the", "to", "me",
+]);
 
-const PLEASANTRY_SET = new Set(PLEASANTRIES);
+/** A message longer than this is not a sign-off, whatever words it is built from. */
+const MAX_PLEASANTRY_WORDS = 10;
 
 /**
  * Does this message need a specialist before the assistant may reply with content?
  *
- * True for anything that is not a bare pleasantry — including the empty case, because a turn
- * with nothing to answer should not be reporting a confident resolution either.
+ * True for anything that is not a pure pleasantry — including the empty case, because a turn
+ * with nothing to answer should not report a confident resolution either.
+ *
+ * A question mark forces a specialist regardless of vocabulary: "Is that all?" is built
+ * entirely from harmless words and is still a question, and being wrong in that direction
+ * costs one needless escalation rather than an ungrounded answer.
  */
 export function requiresSpecialist(message: string): boolean {
   const normalized = normalize(message);
   if (normalized.length === 0) return true;
-  return !PLEASANTRY_SET.has(normalized);
+  if (message.includes("?")) return true;
+
+  const words = normalized.split(" ");
+  if (words.length > MAX_PLEASANTRY_WORDS) return true;
+  return !words.every((word) => PLEASANTRY_WORDS.has(word));
 }
 
 export type TurnEvidence = {

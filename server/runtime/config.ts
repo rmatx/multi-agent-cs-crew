@@ -27,19 +27,52 @@ export function resolveEngineId(): EngineId {
   return raw === "sdk" ? "sdk" : DEFAULT_ENGINE;
 }
 
-function intFromEnv(name: string, fallback: number): number {
+/**
+ * Integer budget from the environment.
+ *
+ * UNSET falls back to the default. SET-BUT-INVALID throws — those are different situations and
+ * used to have the same outcome.
+ *
+ * DEF-07 (qa.md, 2026-08-29): QA set `MAX_HOPS=0` to force hop exhaustion and the trace
+ * recorded `maxHops=4`. The old guard was `parsed > 0`, so `0`, any negative, and any typo
+ * (`MAX_HOPS=1o`) all became the default silently. That is the failure this project already
+ * refuses elsewhere — `MODEL_ID` is required rather than defaulted because "a silently chosen
+ * model makes the Audit line a lie" — and it produced exactly that lie: the operator believes
+ * 2, the runtime uses 4, and the Audit records 4.
+ *
+ * `min` exists because `0` is meaningful for some of these knobs and not others.
+ * `MAX_HOPS=0` means "never delegate", a legitimate kill switch; `TOOL_READ_RETRIES=0` means
+ * "do not retry"; a `TURN_TIMEOUT_MS` of 0 means nothing useful. `RATE_LIMIT_PER_MIN` already
+ * treated `0` as "disabled", so before this the codebase disagreed with itself about what an
+ * explicit zero meant.
+ */
+function intFromEnv(name: string, fallback: number, min = 1): number {
   const raw = process.env[name]?.trim();
   if (raw === undefined || raw.length === 0) return fallback;
+
   const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < min) {
+    throw new Error(
+      `${name}="${raw}" is not a valid setting: expected an integer >= ${min}. ` +
+        "Fix it or unset it to use the default — a budget that was asked for and silently " +
+        "ignored is worse than one that was never set.",
+    );
+  }
+  return parsed;
 }
 
 /** Same as `intFromEnv`, but "unset" is meaningful and stays `undefined`. */
-function optionalIntFromEnv(name: string): number | undefined {
+function optionalIntFromEnv(name: string, min = 1): number | undefined {
   const raw = process.env[name]?.trim();
   if (raw === undefined || raw.length === 0) return undefined;
+
   const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : undefined;
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < min) {
+    throw new Error(
+      `${name}="${raw}" is not a valid setting: expected an integer >= ${min}, or unset.`,
+    );
+  }
+  return parsed;
 }
 
 /** Thinking depth, per the SDK `effort` option. */
@@ -82,7 +115,8 @@ export type TurnBudgets = {
 /** SAD-normative defaults. Env vars override; nothing is left to the SDK to decide. */
 export function resolveBudgets(): TurnBudgets {
   return {
-    maxHops: intFromEnv("MAX_HOPS", 4),
+    // 0 is legal here: "never delegate" is a real operator choice (DEF-07).
+    maxHops: intFromEnv("MAX_HOPS", 4, 0),
     maxModelTurns: intFromEnv("MAX_MODEL_TURNS", 12),
     // 120s, not 60s: delegation is forced synchronous (see `sdk.ts` canUseTool), and a
     // measured two-hop turn (order lookup then escalation) runs ~50s wall clock. The old
@@ -91,7 +125,8 @@ export function resolveBudgets(): TurnBudgets {
     maxOutputTokens: intFromEnv("MAX_OUTPUT_TOKENS", 4_096),
     effort: effortFromEnv("MODEL_EFFORT", "low"),
     thinkingBudgetTokens: optionalIntFromEnv("MAX_THINKING_TOKENS"),
-    toolReadRetries: intFromEnv("TOOL_READ_RETRIES", 1),
+    // 0 is legal here too: "do not retry" is a real operator choice (DEF-07).
+    toolReadRetries: intFromEnv("TOOL_READ_RETRIES", 1, 0),
   };
 }
 

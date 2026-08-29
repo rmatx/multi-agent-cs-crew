@@ -137,6 +137,8 @@ export const sdkEngine: TurnEngine = {
     const temporal = toAgentTemporalView(input.temporal);
     const budget = createHopBudget(budgets.maxHops);
     const toolsTried: ToolAttempt[] = [];
+    /** Data tools this turn attempted — see HookContext.toolAttempts (INT-03). */
+    const toolAttempts: string[] = [];
     const citations: string[] = [];
     let escalationTicketId: string | undefined;
 
@@ -183,7 +185,15 @@ export const sdkEngine: TurnEngine = {
     });
 
     const escalation: EscalationOutcome = {};
-    const hookCtx: HookContext = { tracer, budget, emitTrace, toolsTried, citations, escalation };
+    const hookCtx: HookContext = {
+      tracer,
+      budget,
+      emitTrace,
+      toolsTried,
+      toolAttempts,
+      citations,
+      escalation,
+    };
     const hooks = buildHooks(hookCtx);
 
     const { query } = await import("@anthropic-ai/claude-agent-sdk");
@@ -464,10 +474,55 @@ export const sdkEngine: TurnEngine = {
         tracer.log({ event: "forced_escalation_failed", errors: forced.errors });
       }
 
-      // Structured, not inferred: the coordinator declares a clarifying question with the
-      // control marker (stripped above). The hop check stays as a guard — a turn that
-      // delegated has by definition done work, so it is not merely awaiting the customer.
-      const askedForMore = needsInput && budget.hops === 0;
+      /**
+       * Terminal status, decided on TWO signals: what the coordinator declared, and what the
+       * tools actually returned.
+       *
+       * 1. The control marker (stripped above) — the coordinator saying "I am waiting on the
+       *    customer". Structured, not inferred from a question mark.
+       * 2. INT-03: every tool call this turn failed.
+       *
+       * The second exists because the first is model-emitted and therefore not a guarantee.
+       * Order 999999999 produced "Could you double-check the order number?" with
+       * `done{resolved}` and, once CSAT landed, a satisfaction survey underneath an
+       * unanswered question — while the deterministic engine returned `needs_input` for the
+       * same input, which ADR-16/ADR-18 make a contract violation rather than a divergence.
+       *
+       * The runtime signal is precise: a specialist ran, every tool it called came back
+       * `ok: false`, and nothing escalated. The turn consulted the data and the data had
+       * nothing — so it is waiting on the customer, whatever the reply happened to say.
+       *
+       * `ok: true` with an empty result stays `resolved`, deliberately. "You have never had a
+       * Plus membership" is a complete answer built from a successful lookup, and reporting it
+       * as `needs_input` would ask the customer to supply something they have already given.
+       * That distinction is exactly why this keys on the tool ledger rather than on citations.
+       */
+      /*
+       * Attempts vs successes, not the outcome ledger alone.
+       *
+       * Two things had to be learned the hard way here. The delegation tool is excluded,
+       * because `Agent` succeeding means a specialist RAN, not that the data had anything —
+       * counting it made "every tool failed" unreachable. And a tool that returns an error
+       * never reaches PostToolUse at all, so the failing get_order in the INT-03 case left a
+       * `tool_call` with no matching `tool_result`: invisible in `toolsTried`, which is why
+       * that ledger alone could not see the very case this rule exists for.
+       */
+      const isDataTool = (tool: string): boolean =>
+        !(DELEGATION_TOOL_ALIASES as readonly string[]).includes(tool);
+      const dataAttempts = toolAttempts.filter(isDataTool);
+      const dataSuccesses = toolsTried.filter((a) => isDataTool(a.tool) && a.ok);
+      const everyToolFailed = dataAttempts.length > 0 && dataSuccesses.length === 0;
+      const askedForMore = (needsInput && budget.hops === 0) || everyToolFailed;
+
+      if (everyToolFailed && !needsInput) {
+        tracer.log({
+          event: "needs_input_inferred",
+          reason: "all_tool_calls_failed",
+          tools: [...dataAttempts],
+          hops: budget.hops,
+        });
+      }
+
       emit({ type: "done", status: askedForMore ? "needs_input" : "resolved" });
     } catch (err) {
       console.error("sdk engine turn failed", err);

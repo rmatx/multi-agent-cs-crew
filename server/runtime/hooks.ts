@@ -47,6 +47,18 @@ export type ToolAttempt = { tool: string; ok: boolean; summary: string };
 export type EscalationOutcome = { ticketStubId?: string; reasonCode?: string };
 
 export type HookContext = {
+  /**
+   * Data tools this turn ATTEMPTED, recorded at PreToolUse.
+   *
+   * Separate from `toolsTried`, which records outcomes at PostToolUse, because the two do not
+   * always pair up: a tool that returns `isError` never reaches PostToolUse at all, so a
+   * failed lookup is invisible in the outcome ledger. INT-03 turned on exactly that gap — an
+   * unknown order produced a `tool_call` with no matching `tool_result`, and a turn that found
+   * nothing looked identical to a turn that called nothing.
+   *
+   * Attempts minus successes is what tells the engine the data had nothing to give.
+   */
+  readonly toolAttempts: string[];
   readonly tracer: Tracer;
   readonly budget: HopBudget;
   /** Emits `agent_hop` / `tool_call` frames. Trace-gated by the engine, not here. */
@@ -174,6 +186,7 @@ export function buildHooks(
       return deny(`Denied: ${agentId} is not permitted to call ${toolName}.`);
     }
 
+    ctx.toolAttempts.push(toolName);
     ctx.emitTrace({ type: "tool_call", agentId, tool: toolName });
     ctx.tracer.log({ event: "tool_call", agentId, tool: toolName, input: input.tool_input });
     return allow();

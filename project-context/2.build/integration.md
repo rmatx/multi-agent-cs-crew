@@ -24,7 +24,7 @@ Status: **integration complete and re-verified on both engines, 2026-08-28.** Sp
 the surface underneath this artifact — four more agents, two new endpoints, a rate limit, a
 durable session, and a `csat_prompt` frame in the envelope — so the message-flow run was
 executed again rather than amended. **18 cases, all observed.** Five findings recorded across
-the two runs; four resolved by the owning personas, one — INT-03 — is new and open.
+the two runs; **all five now resolved by the owning personas** — INT-03 closed 2026-08-29.
 
 **`*integrate-api` re-run 2026-08-29.** The wiring was complete; the client's *description* of
 it was not. Two contract defects found and fixed (INT-04, INT-05), and OQ-5 closed — the last
@@ -270,7 +270,20 @@ guarantee. Checked in six separate cases across both engines rather than once.
 
 ## Findings (`*log-integration`)
 
-### INT-03 — A clarifying question is reported `resolved`, and now asks for a rating too. Severity: **medium**. OPEN. *(new)*
+### INT-03 — A clarifying question is reported `resolved`, and now asks for a rating too. Severity: **medium**. **RESOLVED 2026-08-29**. *(new)*
+
+**Resolution.** `@backend.eng` moved the decision to the runtime, per ADR-17. A turn that
+attempted data lookups and got **no successful result** from any of them is `needs_input`,
+whatever the reply says and whether or not the coordinator emitted the marker. Re-verified:
+order `999999999` now returns `done{needs_input}` with **no `csat_prompt`**, matching the
+deterministic engine on identical input, while a real order still resolves with its citation.
+Eval 104/104, unit suite 135/135, deterministic engine unchanged.
+
+The signal took two attempts to get right, and the reason is recorded in `backend.md`: the
+outcome ledger cannot see a failing tool, because a tool that returns an error never reaches
+`PostToolUse` at all.
+
+Original finding:
 
 Case 8. Order `999999999` on the sdk engine returns:
 

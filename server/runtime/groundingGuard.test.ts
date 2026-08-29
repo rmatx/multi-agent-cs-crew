@@ -22,6 +22,49 @@ test("bare pleasantries need no specialist", () => {
   }
 });
 
+/**
+ * DEF-08 regression. Every one of these opened a real support ticket in the 2026-08-29 QA
+ * pass — four of the eight sign-offs sampled — because pleasantries were matched as whole
+ * phrases and a natural closing is a compound of two.
+ */
+test("DEF-08: compound sign-offs do not open a ticket", () => {
+  for (const message of [
+    "Thanks, that is all",
+    "ok thanks, bye",
+    "great, thank you!",
+    "that's all, cheers",
+    "thanks so much, bye!",
+    "perfect, thank you",
+    "ok cool thanks",
+    "no thanks, that's all",
+    "thanks for your help",
+    "got it, cheers",
+    "alright thanks bye",
+  ]) {
+    assert.equal(g.requiresSpecialist(message), false, message);
+    assert.equal(g.isUnaidedAnswer(message, NO_EVIDENCE), false, message);
+  }
+});
+
+test("DEF-08: the fix does not open a hole — content words still require a specialist", () => {
+  for (const message of [
+    "hi, where is my order",           // the case the whole-phrase rule got right
+    "thanks, but where is my refund",
+    "ok bye, cancel my membership",
+    "great, now tell me my order status",
+    "thanks. is that all you can do about the refund",
+    "Is that all?",                     // pleasantry words, but a question
+    "thanks?",
+  ]) {
+    assert.equal(g.requiresSpecialist(message), true, message);
+  }
+});
+
+test("a long message is never a sign-off, whatever words it uses", () => {
+  const wordy = "thanks thanks thanks thanks thanks thanks thanks thanks thanks thanks thanks";
+  assert.equal(g.requiresSpecialist(wordy), true);
+});
+
 test("anything with a question or a request in it needs a specialist", () => {
   for (const message of [
     "What is the capital of France?",

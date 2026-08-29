@@ -35,6 +35,7 @@ function context(maxHops: number) {
       budget,
       emitTrace: () => {},
       toolsTried: [],
+      toolAttempts: [],
       citations: [],
       escalation: {},
     } as Parameters<Hooks["buildHooks"]>[0],
@@ -148,6 +149,19 @@ test("the budget is checked BEFORE the transfer, not after", async () => {
     "deny",
     "the second must not",
   );
+});
+
+test("INT-03: an allowed data-tool call is recorded as an ATTEMPT", async () => {
+  // The engine compares attempts with successes to decide whether the data had anything. A
+  // tool that errors never reaches PostToolUse, so without this the failing lookup in the
+  // INT-03 case was invisible: a `tool_call` with no matching `tool_result`.
+  const { ctx } = context(4);
+  await runPreToolUse(ctx, preToolUse("mcp__novamart__get_order", { agent: "order-specialist" }));
+  assert.deepEqual(ctx.toolAttempts, ["mcp__novamart__get_order"]);
+
+  // A DENIED call is not an attempt — nothing was looked up.
+  await runPreToolUse(ctx, preToolUse("mcp__novamart__search_policy", { agent: "order-specialist" }));
+  assert.equal(ctx.toolAttempts.length, 1, "a denied tool must not count as a lookup");
 });
 
 test("a hop is an agent transfer — tool calls never consume the budget", async () => {

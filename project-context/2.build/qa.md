@@ -501,18 +501,19 @@ are carried here so one table answers "what is open".
 | DEF-04 | `needs_input` under-fires on the sdk path | Low | Superseded by INT-03 | `@backend.eng` |
 | DEF-05 | Engine divergence on terminal status | Low | Closed 2026-08-28 by ADR-16 / ADR-18 | — |
 | DEF-06 | *(withdrawn)* Slice G flakiness — was a test defect, not a product one | — | Test rewritten 2026-08-29 | `@qa.eng` |
-| **DEF-07** | Explicit operator budget silently replaced by the default | Low | **OPEN** | `@backend.eng` |
-| **DEF-08** | Tickets opened for pleasantries — 4 of 8 sign-offs | Medium | **OPEN** | `@backend.eng` |
-| INT-03 | Clarifying question reported `resolved`, with a CSAT card | Medium | OPEN | `@backend.eng` |
+| DEF-07 | Explicit operator budget silently replaced by the default | Low | **Fixed 2026-08-29** | — |
+| DEF-08 | Tickets opened for pleasantries — 4 of 8 sign-offs | Medium | **Fixed 2026-08-29** | — |
+| INT-03 | Clarifying question reported `resolved`, with a CSAT card | Medium | **Fixed 2026-08-29** | — |
 
-**Three open, one of them medium-severity and customer-visible (DEF-08).** None is a safety
-defect; the zero-money-tools boundary held under every check in every pass.
+**All three were fixed the same day by `@backend.eng`; none is open.** No defect in any pass
+has been a safety defect — the zero-money-tools boundary held under every check.
 
-DEF-08 and INT-03 share a root: both are the runtime's terminal-status decision being made on
-incomplete information. INT-03 trusts a model-emitted marker that sometimes does not arrive;
-DEF-08 applies a whole-message match that natural language does not fit. Fixing them together
-in `groundingGuard.ts` and the engine's terminal-status logic would likely be one change rather
-than two.
+The prediction that DEF-08 and INT-03 shared a root was **half right**, and the half that was
+wrong is the more interesting one. Both are the runtime deciding terminal status on incomplete
+information, but they needed separate fixes: DEF-08 was a matching-granularity problem (phrase
+vs word), while INT-03 turned out to rest on a runtime signal that did not exist — a tool that
+returns an error never reaches `PostToolUse`, so a failed lookup was invisible in the outcome
+ledger the fix was first written against. See `backend.md` for what that cost.
 
 ## Future work
 

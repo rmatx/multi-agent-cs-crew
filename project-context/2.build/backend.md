@@ -513,7 +513,46 @@ the client, and no effect whatsoever on the default path. Verified below.
    on `needs_input` — asking someone to rate an unanswered question is its own small insult.
    `POST /api/conversations/:id/csat` records a 1–5 score with an optional comment, overwriting
    rather than duplicating. The UI for it belongs to `@frontend.eng`.
-15. **Turbopack warning on the DuckDB read** is unchanged and now also appears via
+15. **`needs_input` is decided by the runtime — resolved 2026-08-29 (INT-03).** Gap 5 above
+   made the marker structural; it did not make it guaranteed, because the marker is still
+   model-emitted. An unknown order produced a clarifying question with `done{resolved}` and —
+   once CSAT landed — a satisfaction survey underneath an unanswered question, while the
+   deterministic engine returned `needs_input` for identical input, which ADR-16/ADR-18 make a
+   contract violation rather than a divergence. The engine now also decides from evidence: a
+   turn that **attempted data lookups and got no successful result from any of them** is
+   `needs_input`. This is ADR-17's third case, after the hop budget and the unaided answer.
+
+   **Two wrong signals were tried first, and both are worth recording.** The first counted
+   "every tool call failed" from the outcome ledger — dead on arrival, because the `Agent`
+   delegation tool is itself recorded as a successful call, so the condition could never be
+   true. The second fixed that by excluding delegation and still changed nothing: **a tool
+   that returns an error never reaches `PostToolUse` at all**, so the failing `get_order` left
+   a `tool_call` with no matching `tool_result` and was invisible in the very ledger the rule
+   was reading. Attempts are now recorded at `PreToolUse` and compared against successes at
+   `PostToolUse`. A ledger of outcomes cannot answer a question about absences.
+
+   Deliberately unchanged: `ok: true` with an empty result stays `resolved`. "You have never
+   had a Plus membership" is a complete answer from a successful lookup, and reporting it as
+   `needs_input` would ask the customer for something they already gave.
+16. **The guard opened tickets for people saying goodbye — resolved 2026-08-29 (DEF-08).**
+   QA measured four of eight common sign-offs escalating: "Thanks, that is all" opened a real
+   ticket and promised a follow-up on a conversation that had already ended happily. The
+   grounding guard matched pleasantries as whole PHRASES, and a natural closing is a compound
+   — "ok thanks, bye" is two pleasantries and matched neither. Matching moved from the phrase
+   to the word: a message is conversational when every word in it is conversational, so
+   "where", "order" and "refund" still force a specialist while an unlisted way of saying
+   goodbye no longer costs a human's attention. A question mark forces a specialist regardless
+   of vocabulary. The guard's own note called an unrecognised phrasing "a needless escalation";
+   what it undersold is that an escalation is a ticket, a promise, and someone's time.
+17. **An explicit budget was silently replaced by the default — resolved 2026-08-29 (DEF-07).**
+   `MAX_HOPS=0` executed as 4. `intFromEnv` accepted only `parsed > 0`, so zero, negatives and
+   **any typo** became the default with no warning — while `RATE_LIMIT_PER_MIN` already treated
+   `0` as "disabled", so the codebase disagreed with itself. It also contradicted this
+   project's own rule that `MODEL_ID` is not defaulted because a silently chosen value makes
+   the Audit a lie. Unset now falls back; **set-but-invalid throws**, naming the variable, the
+   value and the way out. `0` is accepted where it means something (`MAX_HOPS`,
+   `TOOL_READ_RETRIES`) and rejected where it does not (`TURN_TIMEOUT_MS`).
+18. **Turbopack warning on the DuckDB read** is unchanged and now also appears via
    `app/api/health/route.ts` — a dynamic `path.join(process.cwd(), …)`, warning only.
 
 ## Verification
@@ -527,7 +566,7 @@ the client, and no effect whatsoever on the default path. Verified below.
 
 `npm run test:invariants` — 9 passed, 0 failed (zero-money-tools exact-set suite).
 
-`npm test` — **70 passed, 0 failed** (41 before Sprint 2). New: 11 policy-scorer tests
+`npm test` — **135 passed, 0 failed** (41 before Sprint 2, 70 after layer 5, 125 after the QA pass, 135 with the DEF-07/DEF-08/INT-03 regression tests). New: 11 policy-scorer tests
 covering the 0.55 gate, section retrieval, off-corpus rejection and stemmer collisions; 5
 grounding-guard tests; 8 session/stub-store tests against a real SQLite file in a temp
 directory; 5 rate-limit tests; plus the orphan-tool invariant.
