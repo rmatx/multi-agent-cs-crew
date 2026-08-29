@@ -29,3 +29,10 @@ data/*.sqlite
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# SQLite sidecar files (ADR-10). The .sqlite files are ignored above; WAL mode adds these.
+data/*.sqlite-wal
+data/*.sqlite-shm
+
+# Browser-driven verification artifacts (Playwright MCP snapshots and console logs).
+.playwright-mcp/

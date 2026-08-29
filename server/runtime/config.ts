@@ -8,6 +8,11 @@
  * and the resolved values are echoed into the Prompt Trace so a run is reproducible.
  */
 
+import {
+  DEFAULT_HOLIDAY_API_BASE_URL,
+  DEFAULT_HOLIDAY_TIMEOUT_MS,
+} from "@/server/data/holidays";
+
 /** Which turn engine handles a request. Default is deliberately the keyless one. */
 export type EngineId = "deterministic" | "sdk";
 
@@ -116,6 +121,21 @@ export type SdkStreamMode = "final" | "live";
 
 export function resolveSdkStreamMode(): SdkStreamMode {
   return process.env.SDK_STREAM_MODE?.trim().toLowerCase() === "live" ? "live" : "final";
+}
+
+/**
+ * Holiday-calendar integration settings (`server/data/holidays.ts`). The base URL is an
+ * OPERATOR setting, never model- or customer-supplied — that is what keeps the one outbound
+ * host in this system out of reach of a prompt injection.
+ */
+export type HolidayApiConfig = { baseUrl: string; timeoutMs: number };
+
+export function resolveHolidayApiConfig(): HolidayApiConfig {
+  const raw = process.env.HOLIDAY_API_BASE_URL?.trim();
+  return {
+    baseUrl: raw !== undefined && raw.length > 0 ? raw : DEFAULT_HOLIDAY_API_BASE_URL,
+    timeoutMs: intFromEnv("HOLIDAY_TIMEOUT_MS", DEFAULT_HOLIDAY_TIMEOUT_MS),
+  };
 }
 
 export type SdkPreflight =

@@ -18,10 +18,22 @@ const registry = (await import(
   new URL("./toolRegistry.ts", import.meta.url).href
 )) as Registry;
 
-test("the registered tool set is exactly the reviewed Sprint 1 set", () => {
+test("the registered tool set is exactly the reviewed set", () => {
   assert.deepEqual(
     [...registry.REGISTERED_TOOL_NAMES].sort(),
-    ["create_ticket_stub", "format_handoff_summary", "get_order", "get_order_items"],
+    [
+      "create_ticket_stub",
+      "format_handoff_summary",
+      "get_membership",
+      "get_order",
+      "get_order_items",
+      // The one outbound tool. Read-only, keyless, and degrade-not-throw — see holidays.ts.
+      "get_processing_calendar",
+      "get_user",
+      "list_orders_for_user",
+      // Sprint 2 layer 2 (ADR-11). In-process, read-only, no network.
+      "search_policy",
+    ],
   );
 });
 
@@ -65,7 +77,7 @@ test("drift in the registered set is a hard failure", () => {
     () =>
       registry.assertRegisteredSetMatches([
         ...registry.REGISTERED_TOOL_NAMES,
-        "get_membership",
+        "get_shipment_tracking",
       ]),
     { message: /Tool registry drift/ },
   );
@@ -94,5 +106,16 @@ test("specialists cannot delegate, structurally", () => {
     registry.isToolAllowedForAgent("order-specialist", "mcp__novamart__get_order"),
     true,
   );
+  // A registered tool no agent may call is dead weight that an agent will truthfully report
+  // it "cannot do" — observed live for list_orders_for_user before it was granted.
+  const grantedSomewhere = new Set(
+    Object.values(registry.AGENT_TOOL_ALLOWLIST).flatMap((tools) => [...tools]),
+  );
+  for (const name of registry.REGISTERED_TOOL_NAMES) {
+    assert.ok(
+      grantedSomewhere.has(registry.mcpToolName(name)),
+      `${name} is registered but no agent allowlist grants it`,
+    );
+  }
   assert.equal(registry.isToolAllowedForAgent("unknown-agent", "mcp__novamart__get_order"), false);
 });

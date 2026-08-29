@@ -40,16 +40,23 @@ export const MVP_TOOL_CONTRACT = [
   "search_policy",
   "create_ticket_stub",
   "format_handoff_summary",
+  "get_processing_calendar",
 ] as const;
 
 /**
- * What is ACTUALLY registered in this process today (SAD Sprint 1: Slice A order read +
- * Slice B escalation stub). Sprint 2 tools are deliberately absent rather than faked —
- * see `server/runtime/stubs.ts`.
+ * What is ACTUALLY registered in this process today. Sprint 1 registered the order read and
+ * the escalation stub; Sprint 2 layer 2 (ADR-11) adds `search_policy`. A tool appears here
+ * only when it is implemented — a stubbed name would let an agent answer from model memory,
+ * which is the failure "escalate over invent" exists to prevent (`server/runtime/stubs.ts`).
  */
 export const REGISTERED_TOOL_NAMES = [
+  "get_user",
   "get_order",
   "get_order_items",
+  "list_orders_for_user",
+  "get_membership",
+  "get_processing_calendar",
+  "search_policy",
   "create_ticket_stub",
   "format_handoff_summary",
 ] as const;
@@ -167,7 +174,31 @@ export function assertRegisteredSetMatches(actual: readonly string[]): void {
  */
 export const AGENT_TOOL_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
   "triage-router": [DELEGATION_TOOL],
-  "order-specialist": [mcpToolName("get_order"), mcpToolName("get_order_items")],
+  "order-specialist": [
+    mcpToolName("get_order"),
+    mcpToolName("get_order_items"),
+    mcpToolName("list_orders_for_user"),
+    mcpToolName("get_processing_calendar"),
+  ],
+  // Policy only. No order tools: a policy question answered with someone's order data is a
+  // privacy problem, and an order question answered from policy prose is an ungrounded one.
+  "faq-policy": [mcpToolName("search_policy")],
+  // Membership facts + the Plus policy subset. `search_policy` is granted because AC-PLUS-02
+  // requires benefit explanations to carry a citation, and the membership row carries none.
+  "plus-specialist": [
+    mcpToolName("get_membership"),
+    mcpToolName("get_user"),
+    mcpToolName("search_policy"),
+  ],
+  // The SAD chain exception (§2 hop accounting): returns-advisor reuses the ORDER tools
+  // itself rather than costing a second hop to reach them. Eligibility is order dates against
+  // the returns policy, so it needs both sides in one agent.
+  "returns-advisor": [
+    mcpToolName("get_order"),
+    mcpToolName("get_order_items"),
+    mcpToolName("get_processing_calendar"),
+    mcpToolName("search_policy"),
+  ],
   "escalation-handoff": [
     mcpToolName("create_ticket_stub"),
     mcpToolName("format_handoff_summary"),

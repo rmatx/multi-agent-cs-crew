@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "_comment": [
+    "DemoOverlay — ADR-14 / PRD F-TIME-01. Checked BEFORE DuckDB; dates are expressed as",
+    "offsets from asOf, so a persona stays current under any AS_OF_DATE instead of rotting",
+    "the way an absolute date would.",
+    "",
+    "This file is deliberately SMALL. Every other demo case comes from real fixture rows —",
+    "an overlay persona that duplicates data the database already has replaces grounded",
+    "evidence with invented evidence, which is the opposite of what this system is for.",
+    "The one gap it fills is real and was measured: no user's CURRENT membership is a live",
+    "trial. Every trial in the fixture either converted (leaving a paid row behind it) or",
+    "expired on or before the order anchor, so after the uniform shift the newest current",
+    "trial ended yesterday. SAD 4, consequence 2 predicted exactly this case.",
+    "",
+    "The persona sits on a REAL user id, so get_user and the order history still resolve",
+    "against the database. Only the membership row is overlaid, and the turn reports",
+    "overlayHit=true so an operator can see it happened."
+  ],
+  "personas": [
+    {
+      "userId": 45344,
+      "label": "active-plus-trialist",
+      "membership": {
+        "membershipId": 900001,
+        "planType": "plus_trial",
+        "status": "active",
+        "startedDaysBeforeAsOf": 9,
+        "endsDaysAfterAsOf": 5
+      }
+    }
+  ]
+}

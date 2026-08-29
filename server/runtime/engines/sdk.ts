@@ -35,6 +35,7 @@ import {
   type TurnInput,
 } from "../engine";
 import { buildAgentDefinitions, coordinatorPrompt } from "../agents";
+import { isUnaidedAnswer } from "../groundingGuard";
 import { createMarkerFilter, stripMarker } from "../needsInput";
 import {
   buildHooks,
@@ -43,6 +44,7 @@ import {
   type HookContext,
   type ToolAttempt,
 } from "../hooks";
+import { createTicketStub, formatHandoffSummary } from "../escalation";
 import { createNovamartToolServer } from "../tools";
 import {
   MCP_SERVER_NAME,
@@ -53,16 +55,41 @@ import {
 } from "../toolRegistry";
 import { createTracer, logPromptTrace } from "../trace";
 
+/**
+ * The turn prompt: identity, what was already said, and the question.
+ *
+ * History is passed as TEXT rather than through SDK session resume (SAD §2 "Sessions /
+ * resume"). Two reasons. It keeps the turn a pure function of what this process stored — the
+ * transcript in `sessions.sqlite` IS the memory, so an operator reading the database sees
+ * exactly what the model saw. And it keeps the SessionStore the single source of truth rather
+ * than splitting conversation state between our SQLite file and the SDK's own session state,
+ * where a divergence would be invisible until it produced a wrong answer.
+ *
+ * Facts are NOT carried forward — only what was said. Tool results are re-read every turn, so
+ * an order status quoted twenty minutes ago is never restated as if it were current.
+ */
 function buildUserPrompt(input: TurnInput): string {
   const known: string[] = [];
   if (input.identity.orderId !== undefined) known.push(`order_id=${input.identity.orderId}`);
   if (input.identity.userId !== undefined) known.push(`user_id=${input.identity.userId}`);
-  return [
+
+  const lines = [
     `conversation_id: ${input.conversationId}`,
     `known_identity: ${known.length > 0 ? known.join(", ") : "none supplied"}`,
-    "",
-    `customer_message: ${input.message}`,
-  ].join("\n");
+  ];
+
+  if (input.history.length > 0) {
+    lines.push(
+      "",
+      "conversation_so_far (oldest first — context only; re-read any fact you need to state):",
+      ...input.history.map(
+        (entry) => `  ${entry.role === "user" ? "Customer" : "You"}: ${entry.content}`,
+      ),
+    );
+  }
+
+  lines.push("", `customer_message: ${input.message}`);
+  return lines.join("\n");
 }
 
 /** Text blocks from a main-thread assistant message. Subagent messages are filtered out. */
@@ -165,6 +192,8 @@ export const sdkEngine: TurnEngine = {
     input.signal.addEventListener("abort", forwardAbort, { once: true });
 
     let buffered = "";
+    /** Live mode: a completed assistant message is waiting to be separated from the next. */
+    let pendingParagraphBreak = false;
     let streamed = false;
     let sawResult = false;
     // Set when the coordinator marks its reply as a clarifying question (live mode sees the
@@ -246,6 +275,15 @@ export const sdkEngine: TurnEngine = {
           if (delta.length > 0) {
             const releasable = markerFilter.push(delta);
             if (releasable.length > 0) {
+              // A coordinator that speaks before delegating and again after produces TWO
+              // assistant messages, and their deltas used to run together mid-sentence:
+              // "...connect you with a human agent for that.I'm not able to process refunds".
+              // The break belongs here rather than in the UI — `token` frames are the
+              // customer-visible text, and the deterministic engine emits its own breaks.
+              if (pendingParagraphBreak) {
+                emit({ type: "token", text: "\n\n" });
+                pendingParagraphBreak = false;
+              }
               streamed = true;
               emit({ type: "token", text: releasable });
             }
@@ -256,6 +294,9 @@ export const sdkEngine: TurnEngine = {
         if ((message as { type?: string }).type === "assistant") {
           const text = mainAgentText(message);
           if (text.length > 0 && streamMode === "final") buffered = text;
+          // The assistant message arrives AFTER its own deltas, so this marks a boundary the
+          // next delta must be separated from — not a break to emit now.
+          if (streamMode === "live" && streamed && text.length > 0) pendingParagraphBreak = true;
           continue;
         }
 
@@ -348,6 +389,79 @@ export const sdkEngine: TurnEngine = {
         });
         emit({ type: "done", status: "escalated" });
         return;
+      }
+
+      /**
+       * ADR-08 says a spent hop budget FORCES escalation. Until now nothing forced it: the
+       * PreToolUse hook denied the handoff and told the coordinator to escalate, and the
+       * coordinator was free to ignore that and write something else. Observed live at
+       * `maxHops=1` — the denial fired, and the customer was told "let me get that sorted
+       * for you now, and I'll follow up shortly", which nobody was going to do.
+       *
+       * So the runtime builds the package itself, exactly as the deterministic engine does
+       * for money intent (ADR-16). `tools_tried` and `citations` come from the hook ledger,
+       * so the ticket carries what actually happened rather than what a model recalls.
+       */
+      /**
+       * The second forced exit: a turn that consulted nobody. See `groundingGuard.ts` — the
+       * coordinator is told never to answer from its own knowledge, and mostly does not, but
+       * "mostly" is not a guarantee and this is the claim the whole architecture rests on.
+       */
+      const unaided = isUnaidedAnswer(input.message, {
+        hops: budget.hops,
+        escalated: false,
+        needsInput,
+      });
+
+      if (budget.exhausted || unaided) {
+        const forcedReason = budget.exhausted ? "repeat_failure" : "ungrounded";
+        const forced = createTicketStub(
+          {
+            conversationId: input.conversationId,
+            intent: "other",
+            entities: {
+              ...(input.identity.orderId !== undefined ? { order_id: input.identity.orderId } : {}),
+              ...(input.identity.userId !== undefined ? { user_id: input.identity.userId } : {}),
+            },
+            urgency: "medium",
+            transcript_summary: budget.exhausted
+              ? `The assistant reached its ${budget.maxHops}-handoff limit for this turn ` +
+                `before finishing. Path: ${budget.path.join(" → ") || "none"}. The customer's ` +
+                "question still needs an answer."
+              : "The assistant replied without consulting a specialist, so the answer was not " +
+                "grounded in NovaMart data or policy. The customer's question needs a human.",
+            tools_tried: [...toolsTried],
+            citations: [...new Set(citations)],
+            reason_code: forcedReason,
+            suggested_category: "other",
+          },
+          { asOf: input.temporal.asOf },
+        );
+
+        if (forced.ok) {
+          tracer.log({
+            event: "forced_escalation",
+            reason: budget.exhausted ? "hop_budget_exhausted" : "unaided_answer",
+            ticket_stub_id: forced.ticket_stub_id,
+            hops: budget.hops,
+            maxHops: budget.maxHops,
+          });
+          // The coordinator's own text has already streamed and cannot be unsaid, so this is
+          // appended rather than substituted: whatever it promised, a ticket now exists.
+          for (const part of chunk(`\n\n${formatHandoffSummary(forced.stub)}`)) {
+            emit({ type: "token", text: part });
+          }
+          emit({
+            type: "escalation",
+            ticketStubId: forced.ticket_stub_id,
+            reasonCode: forcedReason,
+          });
+          emit({ type: "done", status: "escalated" });
+          return;
+        }
+
+        // Package rejected: say so rather than reporting a handoff that did not happen.
+        tracer.log({ event: "forced_escalation_failed", errors: forced.errors });
       }
 
       // Structured, not inferred: the coordinator declares a clarifying question with the
