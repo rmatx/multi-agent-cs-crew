@@ -1,5 +1,9 @@
 # AAMAD Agent Framework
 
+> **Full manual:** [`docs/AGENTS.md`](docs/AGENTS.md) — what every persona and every
+> runtime agent does, their tools, allowlists and guardrails, with diagrams.
+> Artifact guide: [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md).
+
 This project uses the AAMAD framework for multi-agent development.
 Framework version: 0.7.5
 See the full agent definitions in the IDE-specific directories.

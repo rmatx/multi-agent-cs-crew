@@ -1,3 +1,18 @@
+# docs/
+
+## Reference manuals
+
+| File | What it is |
+|------|-----------|
+| [`AGENTS.md`](AGENTS.md) | Every agent in the repo — the 9 AAMAD build personas and the 6 NovaMart runtime agents, with tools, allowlists and guardrails |
+| [`PROJECT-CONTEXT.md`](PROJECT-CONTEXT.md) | What each `project-context/` artifact is, who owns it, and which ones gate a phase |
+| [`diagrams/`](diagrams/) | Editorial diagrams, checked in as `.html` (source) and `.svg` (for embedding) |
+
+Both manuals describe the code and artifacts as they exist. When the code moves, run
+`/sync-docs` for `project-context/`, and re-check these two by hand.
+
+---
+
 # Presentation artifacts
 
 Derived communication artifacts. **Not authoritative** — `project-context/1.define/`

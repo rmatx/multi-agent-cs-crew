@@ -1,0 +1,506 @@
+<title>Claude Agent SDK in NovaMart</title>
+
+<style>
+  :root {
+    --paper:    #F7F9F9;
+    --surface:  #FFFFFF;
+    --wash:     #EDF3F3;
+    --ink:      #12181A;
+    --muted:    #58686C;
+    --faint:    #6C7C80;
+    --line:     #D8E0E1;
+    --grounded: #0D6B68;
+    --escalate: #9E6510;
+    --abort:    #A2382B;
+    --code:     #F2F6F6;
+    --shadow:   0 1px 2px rgba(18,24,26,.05), 0 8px 24px -16px rgba(18,24,26,.18);
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0D1113; --surface: #141A1C; --wash: #172022; --ink: #E7EDEE;
+      --muted: #94A3A6; --faint: #84969A; --line: #252E31; --code: #10171A;
+      --grounded: #54C0B6; --escalate: #D9A551; --abort: #E2735E;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0D1113; --surface: #141A1C; --wash: #172022; --ink: #E7EDEE;
+    --muted: #94A3A6; --faint: #84969A; --line: #252E31; --code: #10171A;
+    --grounded: #54C0B6; --escalate: #D9A551; --abort: #E2735E;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper); color: var(--ink); font-family: var(--sans);
+    font-size: 16px; line-height: 1.6; margin: 0;
+    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem; -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 62rem; margin: 0 auto; display: flex; flex-direction: column; gap: 3.25rem; }
+
+  .masthead { display: flex; flex-direction: column; gap: .9rem; }
+  .eyebrow {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .13em; text-transform: uppercase;
+    color: var(--faint); display: flex; flex-wrap: wrap; gap: .5rem .9rem; align-items: center;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(2.1rem, 4.8vw, 3.1rem); line-height: 1.1;
+    font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -.01em;
+  }
+  .standfirst {
+    font-family: var(--serif); font-size: clamp(1.05rem, 2vw, 1.22rem); line-height: 1.55;
+    color: var(--muted); margin: 0; max-width: 48ch;
+  }
+
+  .state {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1px;
+    background: var(--line); border: 1px solid var(--line); border-radius: 3px; overflow: hidden;
+  }
+  .state div { background: var(--surface); padding: .95rem 1.1rem; display: flex; flex-direction: column; gap: .3rem; }
+  .state dt { font-family: var(--mono); font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin: 0; }
+  .state dd { margin: 0; font-size: .95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ok { color: var(--grounded); }
+
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+  h2 {
+    font-family: var(--serif); font-size: 1.55rem; font-weight: 600; margin: 0;
+    letter-spacing: -.005em; padding-bottom: .55rem; border-bottom: 1px solid var(--line);
+  }
+  h3 { font-family: var(--serif); font-size: 1.12rem; font-weight: 600; margin: .4rem 0 0; }
+  p { margin: 0; max-width: 70ch; }
+  .note { color: var(--muted); font-size: .95rem; }
+  code { font-family: var(--mono); font-size: .86em; background: var(--wash); padding: .1em .38em; border-radius: 2px; border: 1px solid var(--line); }
+
+  /* The one component this document adds to the set: source on the left, the reason it is
+     written that way on the right — a file read with its review margin still attached. */
+  .review {
+    display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1px;
+    background: var(--line); border: 1px solid var(--line); border-radius: 3px;
+    overflow: hidden; box-shadow: var(--shadow);
+  }
+  .review > * { background: var(--surface); padding: .85rem 1.05rem; }
+  .review pre {
+    margin: 0; background: var(--code); font-family: var(--mono); font-size: .8rem;
+    line-height: 1.65; overflow-x: auto; padding: .85rem 1.05rem;
+  }
+  .review .why { font-size: .9rem; color: var(--muted); display: flex; flex-direction: column; gap: .45rem; }
+  .review .why b { color: var(--ink); font-weight: 600; }
+  .review .why .tag {
+    font-family: var(--mono); font-size: .64rem; letter-spacing: .11em; text-transform: uppercase;
+    color: var(--faint);
+  }
+  @media (max-width: 46rem) { .review { grid-template-columns: 1fr; } }
+
+  pre.block {
+    margin: 0; background: var(--code); border: 1px solid var(--line); border-radius: 3px;
+    font-family: var(--mono); font-size: .8rem; line-height: 1.65;
+    overflow-x: auto; padding: 1rem 1.1rem;
+  }
+  pre .c { color: var(--faint); }
+  pre .k { color: var(--grounded); }
+
+  figure { margin: 0; display: flex; flex-direction: column; gap: .8rem; }
+  figcaption { font-size: .88rem; color: var(--muted); max-width: 70ch; }
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  .scroller { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  caption { text-align: left; font-size: .88rem; color: var(--muted); padding-bottom: .6rem; }
+  th, td { text-align: left; padding: .6rem .7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: var(--mono); font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 500; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono, .mono { font-family: var(--mono); font-size: .84em; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .layers { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .layers li { background: var(--surface); padding: .8rem 1.1rem; display: grid; grid-template-columns: 8.5rem 1fr; gap: .9rem; align-items: baseline; }
+  .layers .n { font-family: var(--mono); font-size: .72rem; color: var(--grounded); font-weight: 700; letter-spacing: .02em; }
+  .layers .what { font-size: .93rem; }
+  .layers .what b { font-weight: 600; }
+
+  .caveat { border-left: 2px solid var(--escalate); background: var(--wash); padding: .9rem 1.1rem; border-radius: 0 3px 3px 0; font-size: .93rem; }
+  .caveat b { color: var(--escalate); }
+
+  footer { color: var(--faint); font-size: .82rem; font-family: var(--mono); border-top: 1px solid var(--line); padding-top: 1rem; }
+  a { color: var(--grounded); }
+  :focus-visible { outline: 2px solid var(--grounded); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+  /* Paper. A printed page cannot scroll, so the review columns stack and the source runs
+     full width rather than being silently cut off at the column edge. */
+  @media print {
+    @page { size: Letter; margin: .6in .55in; }
+    body { background: #fff; padding: 0; font-size: 11.5px; }
+    .page { max-width: none; gap: 2rem; }
+    h1, h2, h3 { break-after: avoid; }
+    .review, figure, .caveat { break-inside: avoid; }
+    .layers li, tr, figcaption { break-inside: avoid; }
+    thead { display: table-header-group; }
+    .review { grid-template-columns: 1fr; box-shadow: none; }
+    .review pre { font-size: .74rem; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">
+      <span>Runtime notes</span><span>·</span>
+      <span>AAMAD_TARGET_RUNTIME=claude-agent-sdk</span><span>·</span>
+      <span>30 Aug 2026</span>
+    </div>
+    <h1>Claude Agent SDK in NovaMart</h1>
+    <p class="standfirst">Every place this codebase touches <code>@anthropic-ai/claude-agent-sdk</code>, and why each option is set the way it is. The SDK is reached through one function call — what surrounds that call is the whole design.</p>
+  </header>
+
+  <dl class="state">
+    <div><dt>SDK version</dt><dd>0.3.241</dd></div>
+    <div><dt>Import sites</dt><dd>5 files</dd></div>
+    <div><dt>query() calls</dt><dd class="ok">1</dd></div>
+    <div><dt>Options set</dt><dd class="ok">17</dd></div>
+    <div><dt>Agent definitions</dt><dd>5 + coordinator</dd></div>
+    <div><dt>Hook events</dt><dd>4</dd></div>
+    <div><dt>MCP tools</dt><dd class="ok">9, read-only</dd></div>
+    <div><dt>Built-ins denied</dt><dd class="ok">17</dd></div>
+  </dl>
+
+  <section>
+    <h2>The surface actually used</h2>
+    <p>Five files import from the SDK, and only one of them imports a value. Everything else takes types only, so the module graph is never evaluated on the default path.</p>
+    <div class="scroller">
+      <table>
+        <caption>Every <code>@anthropic-ai/claude-agent-sdk</code> import in the repository.</caption>
+        <thead>
+          <tr><th>File</th><th>Imported</th><th>Kind</th><th>What it does here</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono">engines/sdk.ts:201</td>
+            <td class="mono">query</td>
+            <td>value, dynamic</td>
+            <td>The single entry point. One call runs one customer turn.</td>
+          </tr>
+          <tr>
+            <td class="mono">tools.ts:16</td>
+            <td class="mono">createSdkMcpServer, tool</td>
+            <td>value</td>
+            <td>Builds the in-process MCP server with the nine read tools.</td>
+          </tr>
+          <tr>
+            <td class="mono">agents.ts:19</td>
+            <td class="mono">AgentDefinition</td>
+            <td>type</td>
+            <td>Shapes the five specialists handed to <code>options.agents</code>.</td>
+          </tr>
+          <tr>
+            <td class="mono">hooks.ts:16</td>
+            <td class="mono">HookCallbackMatcher, HookInput, HookJSONOutput</td>
+            <td>type</td>
+            <td>Types the four lifecycle callbacks and their return shapes.</td>
+          </tr>
+          <tr>
+            <td class="mono">stubs.ts:23</td>
+            <td class="mono">AgentDefinition</td>
+            <td>type</td>
+            <td>Deferred Sprint 2 agents. Inert — never registered, never imported by a turn.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">There is no external MCP process, no SDK CLI invocation of our own, and no second <code>query()</code> anywhere — including in tests, which drive the engine seam rather than the SDK.</p>
+  </section>
+
+  <section>
+    <h2>How the SDK is reached at all</h2>
+    <p>The default engine is <code>deterministic</code>: keyless, code-composed, no SDK. The SDK engine is opt-in through <code>CHAT_ENGINE=sdk</code>, and it is loaded by dynamic import so an unconfigured or broken SDK cannot take the default path down.</p>
+    <div class="review">
+      <pre><span class="c">// server/runtime/engines/select.ts</span>
+export async function loadEngine(id) {
+  if (id === "deterministic")
+    return { ok: true, engine: deterministicEngine };
+
+  try {
+    const mod = await import("./sdk");
+    return { ok: true, engine: mod.sdkEngine };
+  } catch (err) {
+    return { ok: false,
+             code: "sdk_engine_unavailable", ... };
+  }
+}</pre>
+      <div class="why">
+        <span class="tag">Why dynamic</span>
+        <p>On the deterministic path the SDK module graph is never evaluated: no CLI subprocess is located, no key is read, no network stack is touched.</p>
+        <p>The worst case for a misconfigured SDK is <b>one clean <code>error</code> frame</b> on a request that explicitly asked for it — never a crash, and never a broken demo.</p>
+      </div>
+    </div>
+    <div class="review">
+      <pre><span class="c">// server/runtime/config.ts — preflight</span>
+const key = process.env.ANTHROPIC_API_KEY?.trim();
+const model = process.env.MODEL_ID?.trim();
+<span class="c">// both required; MODEL_ID is NOT defaulted</span></pre>
+      <div class="why">
+        <span class="tag">Why no default model</span>
+        <p>A silently chosen model makes the Audit line a guess. Missing either value produces a documented <code>error</code> frame naming the variable, then <code>done{escalated}</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The one call, option by option</h2>
+    <p>Seventeen options are set on <code>query()</code>. Nothing below is left to an SDK default — the adapter rule requires explicit budgets, and several of these exist because a default was wrong for this system.</p>
+
+    <div class="review">
+      <pre>const run = query({
+  prompt: userPrompt,
+  options: {
+    model: preflight.model,
+    systemPrompt,
+    agents,</pre>
+      <div class="why">
+        <span class="tag">Identity</span>
+        <p><code>systemPrompt</code> is a plain string built by <code>coordinatorPrompt()</code> — not a preset, and not extended from one. The coordinator is a support router, so none of the SDK's coding-assistant framing applies.</p>
+        <p>History rides in the <b>user prompt as text</b>, not through session resume, so what the model saw is exactly what the transcript in SQLite holds.</p>
+      </div>
+    </div>
+
+    <div class="review">
+      <pre>    abortController,
+    maxTurns: budgets.maxModelTurns,   <span class="c">// 12</span>
+    thinking,                          <span class="c">// adaptive</span>
+    effort: budgets.effort,            <span class="c">// low</span>
+    env: {
+      ...process.env,
+      CLAUDE_CODE_MAX_OUTPUT_TOKENS: "4096",
+    },</pre>
+      <div class="why">
+        <span class="tag">Budgets</span>
+        <p><code>maxThinkingTokens</code> is deprecated and model-dependent — on Opus 4.6 any non-zero value acts as a plain on/off switch, so the old <code>MAX_THINKING_TOKENS=1024</code> never capped anything. <code>thinking</code> plus <code>effort</code> replaced it.</p>
+        <p>Output tokens are set through the environment because that is the control the SDK reads.</p>
+      </div>
+    </div>
+
+    <div class="review">
+      <pre>    allowedTools: [...allowedTools, "Agent"],
+    disallowedTools: [...FORBIDDEN_BUILTIN_TOOLS],
+    mcpServers: { novamart: toolServer },
+    hooks,</pre>
+      <div class="why">
+        <span class="tag">Least privilege</span>
+        <p>Both lists are computed from the tool registry rather than written out, so they cannot drift from the per-agent allowlists or from the invariant test that guards them.</p>
+        <p>Seventeen built-ins are denied by name — <code>Bash</code>, <code>Write</code>, <code>Edit</code>, <code>Read</code>, <code>WebFetch</code>, <code>WebSearch</code> and the rest. The crew has no filesystem and no outbound network.</p>
+      </div>
+    </div>
+
+    <div class="review">
+      <pre>    canUseTool: async (toolName, toolInput) => {
+      if (isMoneyToolName(toolName))
+        return { behavior: "deny",
+                 message: "No money tool exists." };
+
+      if (DELEGATION_TOOL_ALIASES.includes(toolName))
+        return { behavior: "allow",
+                 updatedInput: {
+                   ...toolInput,
+                   run_in_background: false } };
+
+      return { behavior: "allow" };
+    },</pre>
+      <div class="why">
+        <span class="tag">Two jobs</span>
+        <p><b>Money denial.</b> Layer 5 of five, sharing no code with the <code>PreToolUse</code> hook that is layer 4. Twenty-five name patterns — <code>refund</code>, <code>charge</code>, <code>cancel</code>, <code>payout</code>, <code>void</code> … — are refused before anything runs.</p>
+        <p><b>Synchronous delegation.</b> SDK 0.3.x launches subagents in the <em>background</em> by default: <code>Agent</code> returns <code>{ status: "async_launched" }</code> and the coordinator answers without ever seeing the specialist's result. For a support crew that is a grounding failure, so the flag is forced here. A prompt asking for it is not a control.</p>
+        <p class="note"><code>updatedInput</code> <em>replaces</em> the tool input, so it is omitted rather than sent as <code>{}</code> when there is nothing to change.</p>
+      </div>
+    </div>
+
+    <div class="review">
+      <pre>    forwardSubagentText: false,
+    includePartialMessages: streamMode === "live",
+    persistSession: false,
+    cwd: process.cwd(),
+  },
+});</pre>
+      <div class="why">
+        <span class="tag">One voice, no memory</span>
+        <p>Specialist text never reaches the stream loop. That is the first of two independent mechanisms; the second is a <code>parent_tool_use_id === null</code> filter on everything the loop reads.</p>
+        <p><code>persistSession: false</code> keeps the SessionStore the single source of truth. Splitting conversation state between our SQLite file and the SDK's own would make a divergence invisible until it produced a wrong answer.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Agents — <code>AgentDefinition</code> entries, not prompts</h2>
+    <p>The coordinator is the main agent. The five specialists are <code>AgentDefinition</code> entries in <code>options.agents</code>, reached through the built-in <code>Agent</code> tool, which only the coordinator holds.</p>
+    <div class="review">
+      <pre><span class="c">// server/runtime/agents.ts — one of five</span>
+"order-specialist": {
+  description:
+    "Order and line-item facts: status, dates, " +
+    "totals, items. Cannot cancel, refund, or " +
+    "change an order.",
+  tools: [...orderTools],
+  disallowedTools: SPECIALIST_DISALLOWED,
+  prompt: [ ... ].join("\n"),
+}</pre>
+      <div class="why">
+        <span class="tag">What each field carries</span>
+        <p><code>description</code> is routing copy — it is what the coordinator reads when choosing. <code>tools</code> comes from <code>AGENT_TOOL_ALLOWLIST</code>, so an agent can only state facts its own tools returned.</p>
+        <p><b>Delegation is structural.</b> Specialists never receive the <code>Agent</code> tool, so a specialist cannot re-route even under prompt injection — the capability is absent, not refused.</p>
+      </div>
+    </div>
+    <p class="note">Temporal safety runs through this layer: the definitions are built by <code>buildAgentDefinitions(temporal)</code>, which hands the model <code>{ asOf }</code> and nothing else. The <code>shiftDays</code> offset that maps a 2024 dataset onto today's calendar stays inside the tool layer, where no agent can read it back off.</p>
+  </section>
+
+  <section>
+    <h2>Tools — an in-process MCP server</h2>
+    <p>Nine tools, built with <code>tool()</code> and served by <code>createSdkMcpServer()</code> in the same process. No second process to start, secure, or fail to start.</p>
+    <div class="review">
+      <pre><span class="c">// server/runtime/tools.ts</span>
+const getOrder = tool(
+  "get_order",
+  "Look up one NovaMart order by its numeric " +
+    "id. Read-only. …",
+  { order_id: z.number().int().positive() },
+  async (args) =&gt; { ... },
+);
+
+return createSdkMcpServer({
+  name: "novamart",
+  version: "1.0.0",
+  instructions:
+    "NovaMart read-only support tools. No tool " +
+    "here can move money, refund, cancel, or " +
+    "charge. …",
+  tools: [ getOrder, ...eight more ],
+});</pre>
+      <div class="why">
+        <span class="tag">Shape of a tool</span>
+        <p>Name, description, a <b>zod schema</b>, handler. The schema is the validation boundary — a malformed argument never reaches the data layer.</p>
+        <p>Names reach the model namespaced as <code>mcp__novamart__get_order</code>, which is also the form the allowlists and the <code>PreToolUse</code> hook match on.</p>
+        <p>Two assertions run <em>before</em> the server is built: the registered set must contain no money vocabulary, and must equal a hard-coded literal. A money tool added here is a boot failure, not a runtime surprise.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Hooks — where the rules are actually enforced</h2>
+    <p>Everything the prompts ask for politely is also made true mechanically. Four events are wired; each returns <code>HookJSONOutput</code>.</p>
+    <div class="scroller">
+      <table>
+        <caption>Wired in <code>buildHooks()</code>, <code>server/runtime/hooks.ts:252–255</code>.</caption>
+        <thead><tr><th>Event</th><th>Enforces</th><th>Effect on the turn</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="mono">PreToolUse</td>
+            <td>Money-name denial (L4), per-agent allowlist, hop-budget refusal on the delegation tool</td>
+            <td>Returns <code>permissionDecision: "deny"</code> with a reason the model reads</td>
+          </tr>
+          <tr>
+            <td class="mono">SubagentStart</td>
+            <td>Hop accounting — a hop is an <em>agent transfer</em>, not a tool call</td>
+            <td>Increments <code>hops</code>; a spent budget forces escalation</td>
+          </tr>
+          <tr>
+            <td class="mono">PostToolUse</td>
+            <td>Outcome ledger for the escalation package's <code>tools_tried</code> and citations</td>
+            <td>Writes the operator trace; nothing customer-visible</td>
+          </tr>
+          <tr>
+            <td class="mono">SubagentStop</td>
+            <td>Hop close-out</td>
+            <td>Specialist text is logged for operators, never streamed</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="review">
+      <pre>return {
+  hookSpecificOutput: {
+    hookEventName: "PreToolUse",
+    permissionDecision: "deny",
+    permissionDecisionReason: reason,
+  },
+};</pre>
+      <div class="why">
+        <span class="tag">Denial shape</span>
+        <p>The reason is written for the model, not for a log: it names what was refused and what to do instead, which is how a denied handoff becomes an escalation rather than a stuck turn.</p>
+        <p class="note">Two ledgers are kept, not one. A tool that returns an error never reaches <code>PostToolUse</code>, so attempts are recorded at <code>PreToolUse</code> and outcomes at <code>PostToolUse</code>. Attempts minus successes is what tells the engine the data had nothing to give.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Reading the stream</h2>
+    <p>The engine iterates the async generator <code>query()</code> returns and acts on three message types. Everything else — including every subagent message — is ignored by construction.</p>
+    <ul class="layers">
+      <li><span class="n">stream_event</span><span class="what"><b>Live mode only.</b> <code>content_block_delta</code> / <code>text_delta</code> on the main thread becomes a <code>token</code> frame, through a filter that holds back a possible partial control marker.</span></li>
+      <li><span class="n">assistant</span><span class="what"><b>Final mode:</b> buffered as the reply. <b>Live mode:</b> marks a paragraph boundary, because a coordinator that speaks before and after delegating used to run two sentences together mid-word.</span></li>
+      <li><span class="n">result</span><span class="what"><b>First one wins.</b> A turn can surface more than one <code>result</code>; acting on the later one overwrote the real answer and doubled the trace line. <code>subtype !== "success"</code> becomes a clean error frame plus <code>done{escalated}</code>.</span></li>
+    </ul>
+    <div class="review">
+      <pre>function mainAgentText(message) {
+  if (message.parent_tool_use_id != null) return "";
+  ...
+}</pre>
+      <div class="why">
+        <span class="tag">Single voice, twice over</span>
+        <p><code>forwardSubagentText: false</code> should mean specialist text never arrives. This filter assumes it might anyway. One customer voice is the product claim, so it does not rest on one flag.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Determinism and the Audit line</h2>
+    <p>Every control that affects reproducibility is an environment variable resolved in one place, recorded in the Prompt Trace <em>before</em> execution, and reported in the artifact Audit.</p>
+    <div class="scroller">
+      <table>
+        <caption>Resolved by <code>resolveBudgets()</code> and <code>preflightSdkEngine()</code>, <code>server/runtime/config.ts</code>.</caption>
+        <thead><tr><th>Env var</th><th>Default</th><th>Reaches the SDK as</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">ANTHROPIC_API_KEY</td><td class="num">required</td><td>credential; absent ⇒ clean error frame</td></tr>
+          <tr><td class="mono">MODEL_ID</td><td class="num">required</td><td class="mono">options.model</td></tr>
+          <tr><td class="mono">MODEL_EFFORT</td><td class="num">low</td><td class="mono">options.effort</td></tr>
+          <tr><td class="mono">MAX_THINKING_TOKENS</td><td class="num">unset</td><td class="mono">thinking: {type:"adaptive"}</td></tr>
+          <tr><td class="mono">MAX_MODEL_TURNS</td><td class="num">12</td><td class="mono">options.maxTurns</td></tr>
+          <tr><td class="mono">MAX_OUTPUT_TOKENS</td><td class="num">4096</td><td class="mono">env.CLAUDE_CODE_MAX_OUTPUT_TOKENS</td></tr>
+          <tr><td class="mono">MAX_HOPS</td><td class="num">4</td><td>hook budget, not an SDK option</td></tr>
+          <tr><td class="mono">TURN_TIMEOUT_MS</td><td class="num">120000</td><td>route <code>AbortController</code> → <code>options.abortController</code></td></tr>
+          <tr><td class="mono">SDK_STREAM_MODE</td><td class="num">final</td><td class="mono">options.includePartialMessages</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">The Prompt Trace is written before <code>query()</code> is called, carries the rendered system and user prompts, the per-agent tool grants and the resolved budgets, and runs every record through a redactor so no key can reach disk. Trace logs land in <code>project-context/2.build/logs/</code>, one JSONL file per conversation.</p>
+  </section>
+
+  <section>
+    <h2>What the SDK offers that this build does not use</h2>
+    <p>Each of these was available and declined for a stated reason, rather than simply not reached for.</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Capability</th><th>Why not</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">Session resume / fork</td><td>Conversation state would live in two places. History is replayed as prompt text so the SQLite transcript is what the model saw.</td></tr>
+          <tr><td class="mono">Built-in tools</td><td>All seventeen are in <code>disallowedTools</code>. A support crew needs no shell, no filesystem, no web.</td></tr>
+          <tr><td class="mono">External MCP servers</td><td>ADR-07: in-process, so there is no second process to authorize or fail to start.</td></tr>
+          <tr><td class="mono">System-prompt presets</td><td>The coding-assistant framing does not apply. The prompt is written from scratch.</td></tr>
+          <tr><td class="mono">Background subagents</td><td>The 0.3.x default. Forced off in <code>canUseTool</code> — an answer composed before the specialist returns is ungrounded.</td></tr>
+          <tr><td class="mono">ClaudeSDKClient</td><td>A turn is request-scoped and one-shot. The bidirectional client buys nothing the SSE route does not already provide.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="caveat">
+      <b>The honest limit.</b> The SDK path is opt-in and costs money to run, so CI and the offline demo exercise the deterministic engine instead. The SDK path is verified separately: <code>scripts/eval-sdk.mjs</code> drives a live server started with <code>CHAT_ENGINE=sdk</code>, and its 114 assertions check the SSE wire and the JSONL trace. Both engines satisfy the same DTO and <code>/api/health</code> reports which one is live — but they are only ever shown to agree on the 18 integration cases that run on both, not on arbitrary input.
+    </div>
+  </section>
+
+  <footer>
+    @anthropic-ai/claude-agent-sdk 0.3.241 · 1 query() call · 17 options · 5 AgentDefinition entries · 9 MCP tools · 4 hook events · 17 built-ins denied
+  </footer>
+
+</div>
