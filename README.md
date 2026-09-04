@@ -67,10 +67,37 @@ Other useful commands:
 
 ```bash
 npm run typecheck                        # strict TypeScript
-npm test                                 # 143 unit tests
+npm test                                 # 153 unit tests
+npm run observability                    # error rate, latency and cost from the trace logs
 npm run build && npm start               # production build
 NOVAMART_DUCKDB_PATH=/path/to/full.duckdb npm run dev   # use the 151 MB practice DB
 ```
+
+### Error rate, latency and cost
+
+`npm run observability` reads the JSONL trace logs the runtime already writes and reports the
+three numbers, with no added dependency and nothing to stand up:
+
+```bash
+npm run observability                      # everything on disk
+npm run observability -- --since 2026-09-01  # one window
+npm run observability -- --json            # machine-readable
+```
+
+It reports error rate with the fault events broken out, turn latency (p50/p95/max) alongside
+per-tool `durationMs`, and cost totals split **by agent path** — a one-hop
+`order-specialist` turn and an `order-specialist → escalation-handoff` turn are different
+products at different prices, and the average across them describes neither.
+
+Two things it will tell you that are worth knowing up front. Effectively all latency is the
+model: every DuckDB tool answers in under 25 ms, while the `Agent` delegation hop runs seconds.
+And turn cost is dominated by cached prompt handling rather than by the customer's actual
+question, so the cache hit ratio in the token line is the number to watch when spend moves.
+
+Because it is a reader rather than an exporter, it works on logs written before it existed —
+the baseline is your whole history, not "starting today". It covers the `sdk` engine only; the
+deterministic engine writes no trace, makes no model call and costs nothing, so it reports
+nothing there rather than reporting a misleading zero.
 
 The operator trace panel is in the page itself: add `?trace=1` to the URL (or tick **Trace**)
 and it shows the hop path, the tools each agent called, the citations, and the turn's

@@ -24,6 +24,29 @@ const SECRET_KEY_PATTERN = /(api[-_]?key|secret|token|password|authorization|cre
 /** Value-level catch-all for anything that looks like a provider key. */
 const SECRET_VALUE_PATTERN = /\b(sk-[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9._-]{8,})/g;
 
+/**
+ * Token USAGE counts, exempted from the secret-key rule above.
+ *
+ * `SECRET_KEY_PATTERN` matches the substring "token", which also matches `input_tokens`,
+ * `output_tokens` and every `cache_*_input_tokens` field the SDK reports. The whole usage
+ * block was therefore written to disk as `[REDACTED]`: `costUsd` survived, so a turn's price
+ * was visible but never its cause — a cache miss and a ballooned prompt looked identical.
+ *
+ * The exemption is two-part on purpose. The key has to read as a count — PLURAL `tokens`, in
+ * either convention this codebase uses: `input_tokens` from the SDK, `maxOutputTokens` from our
+ * own budgets — AND the value must not be a string. Singular is left alone, so `access_token`
+ * and `auth_token` still redact. The non-string half is what actually carries the safety:
+ * credentials are strings, usage is numbers and the objects holding them, so a secret
+ * mis-named `tokens` redacts anyway.
+ */
+const TOKEN_COUNT_KEY_SNAKE = /(^|_)tokens(_|$)/i;
+const TOKEN_COUNT_KEY_CAMEL = /[a-z]Tokens($|[A-Z_])/;
+
+function isUsageCount(key: string, value: unknown): boolean {
+  if (typeof value === "string") return false;
+  return TOKEN_COUNT_KEY_SNAKE.test(key) || TOKEN_COUNT_KEY_CAMEL.test(key);
+}
+
 const REDACTED = "[REDACTED]";
 const MAX_STRING = 2_000;
 
@@ -40,7 +63,8 @@ export function redact(value: unknown, depth = 0): unknown {
 
   const out: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-    out[key] = SECRET_KEY_PATTERN.test(key) ? REDACTED : redact(val, depth + 1);
+    const secretKey = SECRET_KEY_PATTERN.test(key) && !isUsageCount(key, val);
+    out[key] = secretKey ? REDACTED : redact(val, depth + 1);
   }
   return out;
 }

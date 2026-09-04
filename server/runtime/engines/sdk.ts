@@ -135,6 +135,12 @@ export const sdkEngine: TurnEngine = {
     const budgets = resolveBudgets();
     const streamMode = resolveSdkStreamMode();
     const tracer = createTracer(input.conversationId, "sdk");
+    /*
+     * Turn latency was previously only derivable by pairing `prompt_trace` with `turn_result`,
+     * which breaks on exactly the turns worth measuring: one that throws never writes a
+     * `turn_result` to pair with. Recorded on both terminal paths instead.
+     */
+    const turnStartedAt = Date.now();
     const temporal = toAgentTemporalView(input.temporal);
     const budget = createHopBudget(budgets.maxHops);
     const toolsTried: ToolAttempt[] = [];
@@ -331,6 +337,7 @@ export const sdkEngine: TurnEngine = {
             numTurns: result.num_turns,
             costUsd: result.total_cost_usd,
             usage: result.usage,
+            durationMs: Date.now() - turnStartedAt,
             hops: budget.hops,
             path: budget.path,
           });
@@ -533,7 +540,13 @@ export const sdkEngine: TurnEngine = {
       emit({ type: "done", status: askedForMore ? "needs_input" : "resolved" });
     } catch (err) {
       console.error("sdk engine turn failed", err);
-      tracer.log({ event: "turn_error", error: String(err) });
+      tracer.log({
+        event: "turn_error",
+        error: String(err),
+        durationMs: Date.now() - turnStartedAt,
+        hops: budget.hops,
+        path: budget.path,
+      });
       emit({
         type: "error",
         code: "turn_failed",
