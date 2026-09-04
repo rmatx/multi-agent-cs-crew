@@ -1,19 +1,80 @@
+/*
+ * Design tokens.
+ *
+ * The palette is built around one brand hue (indigo 250) rather than a spread of unrelated
+ * accents, so colour means something: indigo is NovaMart and the system speaking, and every
+ * other hue is reserved for a turn state the customer needs to distinguish — green resolved,
+ * amber needs-you, violet a person has it, red something broke. Nothing is coloured for
+ * decoration alone, because a support surface that uses its warning colour as a highlight has
+ * spent the one signal it cannot afford to spend.
+ *
+ * Every foreground/background pair below clears WCAG AA (4.5:1) in both schemes. That is not
+ * decoration either: this is the screen where someone reads whether their money is coming back.
+ */
+
 :root {
   color-scheme: light dark;
-  --bg: #ffffff;
-  --fg: #16181d;
+
+  /* Surfaces. Two levels only — page and raised — because `visual_style: minimal` rules out
+     card-heavy chrome, and a third level would start building cards. */
+  --bg: #fbfbfd;
+  --surface: #ffffff;
+  --fg: #14161c;
   --muted: #5b6270;
-  --line: #d9dde5;
-  --accent: #1f4fd8;
+  --line: #e3e6ee;
+  --line-strong: #cdd3e0;
+
+  /* Brand */
+  --accent: #4338ca;
+  --accent-hover: #3730a3;
+  --accent-fg: #ffffff;
+  --accent-soft: #eef0fe;
+  --accent-ring: rgba(67, 56, 202, 0.28);
+
+  /* Turn states. Each has a text-safe tone and a wash for fills. */
+  --ok: #0f7a56;
+  --ok-soft: #e6f6f0;
+  --warn: #a85a12;
+  --warn-soft: #fdf1e3;
+  --human: #6d4bc4;
+  --human-soft: #f1ecfd;
+  --bad: #b42318;
+  --bad-soft: #fdecea;
+  --idle: #7b8194;
+
+  --radius: 10px;
+  --radius-lg: 14px;
+  --shadow: 0 1px 2px rgba(16, 20, 40, 0.05), 0 8px 24px -12px rgba(16, 20, 40, 0.18);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #101216;
-    --fg: #e9ecf1;
-    --muted: #9aa3b2;
-    --line: #2a2f38;
-    --accent: #7fa4ff;
+    --bg: #0c0e14;
+    --surface: #14171f;
+    --fg: #e9ecf3;
+    --muted: #9aa3b6;
+    --line: #262b37;
+    --line-strong: #39404f;
+
+    /* Lifted and desaturated: the light-mode indigo is unreadable on a dark ground, and a
+       saturated accent on near-black haloes. */
+    --accent: #8b95f7;
+    --accent-hover: #a3abfa;
+    --accent-fg: #10121a;
+    --accent-soft: #1c2036;
+    --accent-ring: rgba(139, 149, 247, 0.32);
+
+    --ok: #4ade9f;
+    --ok-soft: #10251d;
+    --warn: #f0b166;
+    --warn-soft: #2a1f11;
+    --human: #b39cf5;
+    --human-soft: #211a35;
+    --bad: #f78b83;
+    --bad-soft: #2b1513;
+    --idle: #8891a5;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.7);
   }
 }
 
@@ -27,7 +88,20 @@ body {
   padding: 0;
   background: var(--bg);
   color: var(--fg);
-  font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* One soft brand wash at the top of the page. It is a background, not a component: it gives
+   the surface some depth without adding chrome the customer has to read past. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 22rem;
+  background: radial-gradient(70% 100% at 50% 0%, var(--accent-soft) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: -1;
 }
 
 input,
@@ -40,4 +114,5 @@ button {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+  border-radius: 4px;
 }

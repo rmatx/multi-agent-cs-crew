@@ -330,17 +330,19 @@ export default function ChatPage() {
            */
           <article className={styles.working} aria-live="polite">
             <span className={styles.role}>assistant</span>
-            <div className={styles.workingRow}>
-              <span className={styles.dots} aria-hidden="true">
+            <div className={styles.workingCard}>
+              <div className={styles.workingRow}>
+                <span className={styles.dots} aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+                <span>{status.hint}</span>
+              </div>
+              <div className={styles.skeleton} aria-hidden="true">
                 <span />
                 <span />
-                <span />
-              </span>
-              <span>{status.hint}</span>
-            </div>
-            <div className={styles.skeleton} aria-hidden="true">
-              <span />
-              <span />
+              </div>
             </div>
           </article>
         )}
