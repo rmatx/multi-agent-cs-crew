@@ -182,6 +182,16 @@
   </figure>
 
   <p>
+    The full three-page capture — <code>week5/assets/demo-capture.pdf</code> — runs a longer
+    conversation than one screenshot can hold, and the second page carries the part worth
+    reading. Asked for a human, the crew opens a ticket. Asked again, it answers from what the
+    conversation already established: <em>"I've already opened ticket STUB-4645DFE7 … there's no
+    need to open a separate request."</em> That reply used <strong>no tools and no specialist
+    hop</strong> — the operator trace on that turn reads <code>0 hops · 0 tool calls</code> —
+    because the session store had the ticket and the coordinator read it. Durable conversation
+    state is what makes that possible, and it is the thing a single screenshot cannot show.
+  </p>
+  <p>
     Three things in that capture are the demo's actual argument:
   </p>
   <ul>
@@ -198,8 +208,9 @@
   <div class="note bad">
     <span class="lbl">Found in this capture — DEF-13, open</span>
     <p>
-      Asked for a human twice, the crew answered correctly from memory ("there's no need to open a
-      separate request") and then opened a second ticket labelled <code>ungrounded</code> anyway.
+      Same turn, second half — page 2 of the capture. Having answered correctly from memory, the
+      crew then opened a second ticket labelled <code>ungrounded</code> anyway, in the same reply
+      that said no second ticket was needed.
       ADR-17's unaided-answer guard fired on a turn with <strong>0 hops and 0 tool calls</strong> —
       it cannot distinguish "answered with no evidence" from "answered from what this conversation
       already established". Recorded rather than patched mid-demo. Arize independently flagged the

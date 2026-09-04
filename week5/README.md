@@ -7,7 +7,7 @@
 | `assets/architecture.html` | Interactive architecture map (archify). Standalone — pan, zoom, four guided views, export. |
 | `assets/architecture.json` | The diagram's typed source, validated at `showcase` quality. |
 | `assets/demo-returns-boundary.png` | Live capture of the returns boundary, referenced by §1. |
-| `assets/demo-capture.pdf` | **Drop the demo PDF here** — §1 links to this path. |
+| `assets/demo-capture.pdf` | The operator's own 3-page demo capture, referenced by §1. |
 | `assets/architecture.visual-check.*` | Browser evidence for the diagram: receipt, contact sheet, screenshots at 1440×900 and 2048×1320, light and dark. |
 
 ## Regenerating
