@@ -746,8 +746,10 @@ are carried here so one table answers "what is open".
 | DEF-08 | Tickets opened for pleasantries — 4 of 8 sign-offs | Medium | **Fixed 2026-08-29** | — |
 | INT-03 | Clarifying question reported `resolved`, with a CSAT card | Medium | **Fixed 2026-08-29** | — |
 | DEF-09 | Returns eligibility ignored item category — an in-window order with an excluded item was told yes | Medium | **Fixed 2026-09-04** | — |
+| DEF-10 | Over-escalation on in-window returns — DEF-09's fix made the specialist hand off when it could not settle the category half; measured 2 in 5 | Medium | **Fixed 2026-09-04**, re-measured 5/5 | — |
+| DEF-11 | Processing-calendar answer inconsistent on returned orders — escalated 2 in 4, quoted the 3–5 day policy 1 in 4 | Low | **OPEN — accepted**, see evals.md EV-OQ-2 | `@backend.eng` |
 
-**All three were fixed the same day by `@backend.eng`; none is open.** No defect in any pass
+**DEF-07, DEF-08 and INT-03 were all fixed the same day by `@backend.eng`.** DEF-11 is the first defect this project has knowingly carried forward: it is a *cautious* failure (the customer reaches a human) rather than a wrong answer, and it was found late enough that fixing it would have meant changing an agent prompt without time to re-sample the paths DEF-10 showed such a change can break. No defect in any pass
 has been a safety defect — the zero-money-tools boundary held under every check.
 
 The prediction that DEF-08 and INT-03 shared a root was **half right**, and the half that was
@@ -839,7 +841,7 @@ Non-MVP tests and coverage, for the backlog.
 | AC coverage | 55 criteria mapped: **46 pass, 5 partial, 1 not covered**, 3 by-absence/out-of-scope |
 | Dependencies | **Changed 2026-09-04.** The project took its first added runtime dependencies (4 × OpenTelemetry + OpenInference conventions) for Arize export. Recorded in NOTICES with licences. Still no test-framework dependency |
 | Performance | Turn p95 **30.4 s** vs PRD < 30 s (missed, single-user); error rate 0.6%. Concurrency still unmeasured. Cost figures are the SDK's computed `total_cost_usd` (tokens × list price) — a usage estimate, **not** a statement of what was billed |
-| Defects open | **None.** DEF-07, DEF-08, INT-03 closed 2026-08-29; **DEF-09 found and fixed 2026-09-04** |
+| Defects open | **One, accepted.** DEF-07/08/INT-03 closed 2026-08-29; DEF-09 and DEF-10 found and fixed 2026-09-04; **DEF-11 open and accepted** (cautious failure, not a wrong answer) |
 | Files written by `@qa.eng` | 2026-08-29: `dateShift.test.ts`, `hooks.test.ts`, `eval-sdk.mjs`, `test-resolver.mjs`, `package.json`. 2026-09-04 (both passes): **this file only**. **`@qa.eng` has modified no application logic in any pass** — DEF-09's fix was `@backend.eng`'s |
 | Security handoff | `security.md` exists with no Critical findings; `@security.eng` ran before Deliver as `aamad.config.yml` requires |
 | Self-check | Required sections present: Sources, Assumptions, Open Questions, Audit. No Diagnostic raised |
