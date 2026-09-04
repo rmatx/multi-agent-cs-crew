@@ -80,6 +80,26 @@ could read `ANTHROPIC_API_KEY`. It enforces its budget from the run's own trace 
 (`scripts/ci-spend-gate.mjs`, default $6.00) and fails the job if a run overspends. Neither
 workflow deploys anything.
 
+### Finding test scenarios
+
+The database is 47,199 orders, so picking demo cases by hand is guesswork. `npm run query`
+reads it **read-only** and does the date arithmetic for you:
+
+```bash
+npm run query -- --scenarios        # ready-to-test cases with SHIFTED dates
+npm run query -- --schema           # tables, columns, row counts
+npm run query -- "SELECT status, count(*) FROM orders GROUP BY 1"
+```
+
+`--scenarios` is the useful one: it finds orders inside and just outside the 14-day return
+window, cancelled and returned orders, multi-item orders, customers with order history, and
+memberships in each state — and prints the date each one will **show as** under your pinned
+`AS_OF_DATE`, not the raw 2024–2025 date in the table.
+
+This is a developer CLI, not an agent tool. No agent in this system can run arbitrary SQL —
+they read through fixed parameterised repository functions with a named allowlist, and
+`security.md` records why that boundary holds.
+
 Other useful commands:
 
 ```bash
