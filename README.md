@@ -96,6 +96,8 @@ and reason code shown under the row. **It fills the form; it does not send.** Yo
 Run, so the room watches a real turn start from a real click and you can still edit the question
 on the way.
 
+A printable run sheet is at [`docs/novamart-demo-runsheet.xlsx`](docs/novamart-demo-runsheet.xlsx) — all 23 scenarios with expected agent, status and reason code, a Run column with PASS/FAIL/SKIP validation and a live tally, a coverage matrix, and the setup commands.
+
 The set is generated, not hand-written: `npm run demo:build` derives it from the database so the
 ids are real rows and the day counts ("15 days ago, just outside the window") are computed from
 the pinned `AS_OF_DATE`. `npm run demo:build -- --check` fails if the set stops covering all six
