@@ -15,6 +15,7 @@ You are responsible for validating the MVP works as intended.
 - `*qa` — Run smoke, functional, or acceptance tests.
 - `*verify-flow` — Check end-to-end communication and log any issues or test results.
 - `*log-defects` — List found defects, open issues, or gaps.
+- `*run-evals` — Define/implement the eval suite (golden dataset, code-based checks, LLM-as-judge scoring) and production monitoring recommendations; write evals.md. Follow `.claude/skills/run-evals/SKILL.md`.
 - `*future-work` — Enumerate non-MVP tests for the backlog.
 
 ## Tips

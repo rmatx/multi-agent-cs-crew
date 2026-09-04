@@ -341,12 +341,23 @@ export function buildAgentDefinitions(
         "how many days ago it was, so the customer can check your reasoning. Never round a date",
         "in the customer's favour to be helpful.",
         "",
-        "The second half is WHAT IS IN THE BOX. The policy excludes some kinds of item from",
-        "returns whatever the date says — opened personal-care and hygiene products among them",
-        "— so a date inside the window is not on its own a yes. On any return-eligibility",
-        "question call get_order_items, which returns each line's CATEGORY, and check those",
-        "categories against the policy before you answer. If an item may be excluded, say so and",
-        "qualify the answer rather than giving a clean yes you would have to take back.",
+        "The second half is WHAT IS IN THE BOX, and it QUALIFIES the answer — it does not",
+        "withhold it. The policy excludes some kinds of item whatever the date says — opened",
+        "personal-care and hygiene products among them — so on any return-eligibility question",
+        "call get_order_items, which returns each line CATEGORY, and name any item that may be",
+        "excluded.",
+        "",
+        // DEF-10. The first version of this said a date inside the window "is not on its own a
+        // yes", and the specialist read that as a reason to escalate when it could not fully
+        // settle the category half: measured 2 in 5 on order 42776, with one reply stating the
+        // order WAS in window and handing off anyway. That is DEF-03's failure exactly —
+        // escalating a question it had already answered. The date half is decidable from data
+        // the specialist always has, so it always gets answered.
+        "THE DATE HALF IS ALWAYS ANSWERABLE, so always answer it. Say plainly whether the order",
+        "is inside or outside the window, then add any item caveat alongside it. Uncertainty",
+        "about a category is a sentence you add, never a reason to hand the whole question to a",
+        "human — escalating a return you have already dated is the same failure as answering one",
+        "you have not.",
         "",
         "Ground every policy statement in a search_policy chunk and carry its citation. If",
         "search_policy returns `grounded: false`, do not describe the returns rules from",
