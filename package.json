@@ -16,7 +16,8 @@
     "eval:sdk": "node scripts/eval-sdk.mjs",
     "observability": "node scripts/observability.mjs",
     "prune:traces": "node --import ./scripts/test-resolver.mjs scripts/prune-traces.mjs",
-    "query": "node scripts/query.mjs"
+    "query": "node scripts/query.mjs",
+    "demo:build": "node scripts/build-demo-scenarios.mjs"
   },
   "repository": {
     "type": "git",

@@ -1,0 +1,131 @@
+/* Demo picker. Visually an operator tool, not part of the customer surface — dashed border and
+   a tinted ground, so nobody looking at a screenshot mistakes it for something a customer sees. */
+
+.bar {
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.caret {
+  font-size: 0.7rem;
+}
+
+.count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.hint {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.chip {
+  font-size: 0.74rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--tone, var(--line-strong));
+  background: var(--surface);
+  color: var(--tone, var(--fg));
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.chip:hover:not(:disabled) {
+  background: var(--tone, var(--accent));
+  color: var(--accent-fg);
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.active {
+  background: var(--tone, var(--accent));
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+
+/* Expected terminal status, so a presenter can see the shape of the answer before running it. */
+.resolved {
+  --tone: var(--ok);
+}
+.escalated {
+  --tone: var(--human);
+}
+.needsInput {
+  --tone: var(--warn);
+}
+
+.detail {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding-top: 0.15rem;
+  border-top: 1px solid var(--accent-ring);
+}
+
+.detail code {
+  font-size: 0.72rem;
+  color: var(--accent);
+  background: var(--surface);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+}
+
+.sep {
+  opacity: 0.5;
+}
+
+.note {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+@media (max-width: 30rem) {
+  .hint {
+    margin-left: 0;
+    flex: 1 0 100%;
+  }
+}

@@ -10,6 +10,8 @@
  */
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import DemoBar, { type DemoScenario } from "@/components/DemoBar";
+import demoData from "@/data/demo-scenarios.json";
 import type { ChatRequest } from "@shared/dto";
 import CsatPrompt from "@/components/CsatPrompt";
 import TracePanel, { type TurnMeta } from "@/components/TracePanel";
@@ -59,6 +61,35 @@ export default function ChatPage() {
   // Which turn engine the server is running. Read once from /api/health so the banner cannot
   // call a keyless coded lookup a "crew" — see `enginePrefix` in lib/status.ts.
   const [engine, setEngine] = useState<EngineId>(null);
+
+  /*
+   * Demo mode. OFF unless asked for: `NEXT_PUBLIC_DEMO_MODE=1` at build time, or `?demo=1` on
+   * the URL for a session that was not built with it.
+   *
+   * Read in an effect rather than during render because `window` does not exist on the server —
+   * reading it inline would make the server and client markup disagree and React would discard
+   * the tree. It also means the picker appears a frame late, which is invisible and correct:
+   * the customer surface renders first and the operator tool arrives after.
+   */
+  const [demoMode, setDemoMode] = useState(false);
+
+  useEffect(() => {
+    const fromEnv = process.env["NEXT_PUBLIC_DEMO_MODE"] === "1";
+    const fromUrl = new URLSearchParams(window.location.search).get("demo") === "1";
+    setDemoMode(fromEnv || fromUrl);
+  }, []);
+
+  /*
+   * Fills the form and stops. It deliberately does NOT send: the presenter presses Run, so the
+   * room watches a real turn begin from a real click, and the question can still be edited on
+   * the way. Auto-running would make a live demo indistinguishable from a recording.
+   */
+  const applyScenario = useCallback((scenario: DemoScenario) => {
+    setOrderId(scenario.identity.orderId?.toString() ?? "");
+    setUserId(scenario.identity.userId?.toString() ?? "");
+    setMessage(scenario.message);
+    setNotice(null);
+  }, []);
   const nextId = useRef(0);
   /*
    * Scroll anchor. A streaming answer grows downward past the fold, and a customer who has to
@@ -257,6 +288,14 @@ export default function ChatPage() {
           payments — those go to a human.
         </p>
       </header>
+
+      {demoMode && (
+        <DemoBar
+          scenarios={demoData.scenarios as DemoScenario[]}
+          onPick={applyScenario}
+          disabled={running}
+        />
+      )}
 
       <section className={styles.identityBar} aria-label="Your details">
         <div className={styles.field}>

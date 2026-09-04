@@ -80,6 +80,31 @@ could read `ANTHROPIC_API_KEY`. It enforces its budget from the run's own trace 
 (`scripts/ci-spend-gate.mjs`, default $6.00) and fails the job if a run overspends. Neither
 workflow deploys anything.
 
+### Demo mode
+
+For a live demo, `?demo=1` (or `NEXT_PUBLIC_DEMO_MODE=1`) shows a picker of 23 pre-built
+scenarios above the form:
+
+```bash
+CHAT_ENGINE=sdk AS_OF_DATE=2026-09-01 SDK_STREAM_MODE=live npm run dev
+open "http://localhost:3000/?demo=1"
+```
+
+Each chip fills the order/customer id and the question, and is tinted by the terminal status it
+should produce — green resolved, violet escalated, amber needs-input — with the expected agent
+and reason code shown under the row. **It fills the form; it does not send.** You still press
+Run, so the room watches a real turn start from a real click and you can still edit the question
+on the way.
+
+The set is generated, not hand-written: `npm run demo:build` derives it from the database so the
+ids are real rows and the day counts ("15 days ago, just outside the window") are computed from
+the pinned `AS_OF_DATE`. `npm run demo:build -- --check` fails if the set stops covering all six
+agents, all eight tools, every reason code, or any of the three terminal statuses — so it cannot
+rot into twenty ways of asking where my order is. Regenerate whenever you change the pin.
+
+**This is an operator tool.** It lists real order ids belonging to other customers, so it stays
+off for anything customer-facing.
+
 ### Finding test scenarios
 
 The database is 47,199 orders, so picking demo cases by hand is guesswork. `npm run query`
