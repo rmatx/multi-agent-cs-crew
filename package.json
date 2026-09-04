@@ -18,7 +18,8 @@
     "prune:traces": "node --import ./scripts/test-resolver.mjs scripts/prune-traces.mjs",
     "query": "node scripts/query.mjs",
     "demo:build": "node scripts/build-demo-scenarios.mjs",
-    "demo": "bash scripts/demo.sh"
+    "demo": "bash scripts/demo.sh",
+    "demo:runsheet": "python3 scripts/build-demo-runsheet.py"
   },
   "repository": {
     "type": "git",
