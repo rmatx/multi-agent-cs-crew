@@ -60,6 +60,13 @@ export default function ChatPage() {
   // call a keyless coded lookup a "crew" — see `enginePrefix` in lib/status.ts.
   const [engine, setEngine] = useState<EngineId>(null);
   const nextId = useRef(0);
+  /*
+   * Scroll anchor. A streaming answer grows downward past the fold, and a customer who has to
+   * chase it is reading a support reply while fighting the page. `block: "nearest"` scrolls
+   * only when the anchor is actually out of view, so someone who has deliberately scrolled up
+   * to re-read an earlier turn is not yanked back down on every delta.
+   */
+  const endRef = useRef<HTMLDivElement>(null);
 
   const running = isRunning(state);
   const error = errorOf(state);
@@ -207,6 +214,15 @@ export default function ChatPage() {
   }, [running]);
 
   const live = state.phase === "idle" ? "" : state.text;
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({
+      // `auto` rather than `smooth`: a smooth scroll re-triggered on every streaming delta
+      // never settles, and the text ends up permanently in motion under the reader.
+      behavior: "auto",
+      block: "nearest",
+    });
+  }, [live, transcript.length, running]);
   const doneStatus = state.phase === "done" ? state.status : null;
   const escalation = escalationOf(state);
   const conversationId = conversationIdOf(state);
@@ -285,7 +301,10 @@ export default function ChatPage() {
 
       <section className={styles.messages} aria-live="polite" aria-label="Conversation">
         {transcript.map((turn) => (
-          <article key={turn.id} className={styles.message}>
+          <article
+            key={turn.id}
+            className={`${styles.message} ${turn.role === "you" ? styles.you : ""}`}
+          >
             <span className={styles.role}>{turn.role}</span>
             <p className={styles.body}>{plainText(turn.text)}</p>
           </article>
@@ -295,10 +314,37 @@ export default function ChatPage() {
             <span className={styles.role}>assistant</span>
             {/* Stripped at render, not stored stripped: the transcript keeps what the server
                 actually sent, so a trace and the screen never disagree. */}
-            <p className={styles.body}>{plainText(live)}</p>
+            <p className={`${styles.body} ${running ? styles.streaming : ""}`}>{plainText(live)}</p>
           </article>
         )}
-        {running && live.length === 0 && <p className={styles.status}>{status.hint}</p>}
+        {running && live.length === 0 && (
+          /*
+           * Measured time to first token is 10-16s on the sdk engine, so this is the state a
+           * customer spends the most time looking at. It deliberately occupies the shape the
+           * answer will occupy — same role label, same column — so the wait reads as the reply
+           * being written rather than as nothing happening.
+           *
+           * `aria-live="polite"` and not `assertive`: a screen-reader user should hear that it
+           * is working without having the announcement interrupt them, and the same hint text
+           * carries the state for anyone who has motion switched off.
+           */
+          <article className={styles.working} aria-live="polite">
+            <span className={styles.role}>assistant</span>
+            <div className={styles.workingRow}>
+              <span className={styles.dots} aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+              <span>{status.hint}</span>
+            </div>
+            <div className={styles.skeleton} aria-hidden="true">
+              <span />
+              <span />
+            </div>
+          </article>
+        )}
+        <div ref={endRef} />
       </section>
 
       <section className={styles.results} aria-label="Turn result">
