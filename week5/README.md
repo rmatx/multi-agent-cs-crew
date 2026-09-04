@@ -2,7 +2,8 @@
 
 | File | What |
 | --- | --- |
-| `submission.html` | **The submission.** Open in a browser; print to PDF for handing in. |
+| `NovaMart-Week5-Submission.pdf` | **Hand this in.** 8 pages, all figures embedded. |
+| `submission.html` | The source. Open in a browser for links and the interactive diagram. |
 | `assets/architecture.html` | Interactive architecture map (archify). Standalone — pan, zoom, four guided views, export. |
 | `assets/architecture.json` | The diagram's typed source, validated at `showcase` quality. |
 | `assets/demo-returns-boundary.png` | Live capture of the returns boundary, referenced by §1. |
@@ -10,6 +11,15 @@
 | `assets/architecture.visual-check.*` | Browser evidence for the diagram: receipt, contact sheet, screenshots at 1440×900 and 2048×1320, light and dark. |
 
 ## Regenerating
+
+Rebuild the PDF after editing the HTML:
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --headless --disable-gpu --no-pdf-header-footer --virtual-time-budget=12000 \
+  --print-to-pdf="$PWD/week5/NovaMart-Week5-Submission.pdf" \
+  "file://$PWD/week5/submission.html"
+```
 
 ```bash
 npm run observability      # the numbers in §2

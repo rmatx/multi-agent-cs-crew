@@ -61,7 +61,9 @@
   code { font-family: "IBM Plex Mono", monospace; font-size: .87em; background: var(--accent-soft);
          color: var(--accent); padding: .1em .36em; border-radius: 3px; }
 
-  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem,1fr)); gap: 1px;
+  /* auto-fit left a dangling cell when the count did not divide evenly, which reads as a
+     rendering fault rather than a design. Fixed tracks, wrapping to fewer on narrow screens. */
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
              background: var(--rule); border: 1px solid var(--rule); border-radius: 8px;
              overflow: hidden; margin: 1.6rem 0; }
   .metric { background: var(--surface); padding: .9rem 1rem; }
@@ -69,6 +71,8 @@
                font-variant-numeric: tabular-nums; letter-spacing: -.02em; display: block; line-height: 1.1; }
   .metric .k { font-size: .72rem; color: var(--ink-faint); margin-top: .3rem; display: block; }
   .metric.hero .n { color: var(--accent); }
+  .metrics.four { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 34rem) { .metrics, .metrics.four { grid-template-columns: repeat(2, 1fr); } }
 
   table { border-collapse: collapse; width: 100%; font-size: .9rem; margin: 1rem 0; }
   .scroll { overflow-x: auto; }
@@ -102,12 +106,6 @@
   li { margin-bottom: .4rem; }
   li::marker { color: var(--ink-faint); }
 
-  .frame { border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; margin: 1.4rem 0;
-           background: var(--surface); box-shadow: var(--shadow); }
-  .frame iframe { width: 100%; height: 620px; border: 0; display: block; }
-  .frame .bar { font-family: "IBM Plex Mono", monospace; font-size: .72rem; color: var(--ink-faint);
-                padding: .5rem .8rem; border-bottom: 1px solid var(--rule); }
-
   pre { font-family: "IBM Plex Mono", monospace; font-size: .78rem; line-height: 1.5;
         background: var(--surface); border: 1px solid var(--rule); border-radius: 8px;
         padding: .9rem 1rem; overflow-x: auto; margin: 1rem 0; }
@@ -115,6 +113,26 @@
   footer { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--rule);
            font-family: "IBM Plex Mono", monospace; font-size: .73rem; color: var(--ink-faint); }
   footer p { max-width: none; margin-bottom: .35rem; }
+
+  /* Print. The submission is handed in as a PDF, so the printed page is a first-class output
+     rather than a fallback: force the light palette (a dark ground wastes toner and prints
+     grey-on-grey), keep figures and tables off page breaks, and expand link targets that a
+     reader cannot click on paper. */
+  @media print {
+    :root {
+      --ground: #fff; --surface: #fff; --ink: #14181f; --ink-soft: #3d4552;
+      --ink-faint: #5f6875; --rule: #d5dae2; --rule-firm: #b8c0cc;
+      --accent: #0b5250; --accent-soft: #eef5f4; --shadow: none;
+    }
+    body { background: #fff; color: #14181f; font-size: 10.5pt; }
+    .wrap { max-width: none; padding: 0; }
+    h2 { break-after: avoid; page-break-after: avoid; }
+    h3 { break-after: avoid; page-break-after: avoid; }
+    figure, table, .metrics, .note, .callout, pre { break-inside: avoid; page-break-inside: avoid; }
+    figure img { box-shadow: none; }
+    .metric .n { font-size: 1.3rem; }
+    footer { break-inside: avoid; }
+  }
 </style>
 
 <div class="wrap">
@@ -264,7 +282,7 @@ CACHE        74.0% hit ratio on cacheable input</pre>
     design. Satisfying it was not paperwork.
   </p>
 
-  <div class="metrics">
+  <div class="metrics four">
     <div class="metric hero"><span class="n">2</span><span class="k">defects found</span></div>
     <div class="metric hero"><span class="n">50%</span><span class="k">of items were new coverage</span></div>
     <div class="metric"><span class="n">5/5</span><span class="k">categories at threshold</span></div>
@@ -321,10 +339,15 @@ CACHE        74.0% hit ratio on cacheable input</pre>
     interactive — four guided views walk a customer turn, the dual engine, the grounding path, and
     observability.
   </p>
-  <div class="frame">
-    <div class="bar">week5/assets/architecture.html · open standalone for pan, zoom and guided views</div>
-    <iframe src="assets/architecture.html" title="NovaMart runtime architecture" loading="lazy"></iframe>
-  </div>
+  <figure>
+    <img src="assets/architecture.visual-check.1440x900.light.png"
+         alt="Architecture map: Chat UI to POST /api/chat, branching to the deterministic engine and the Claude Agent SDK crew, the crew reaching in-process MCP tools across an allowlist boundary, and those tools reading DuckDB, the policy corpus, the session and ticket stores and the Nager.Date holiday API; the trace log exports to Arize AX">
+    <figcaption>
+      Rendered from <code>week5/assets/architecture.json</code>. The interactive version —
+      pan, zoom, search, four guided views and PNG/SVG export — is
+      <code>week5/assets/architecture.html</code>; open it standalone.
+    </figcaption>
+  </figure>
   <p>
     The red dashed edge is the point of the diagram. Every tool call from the crew crosses one
     allowlist, and no path in the system reaches an action that moves money — there is no such tool
