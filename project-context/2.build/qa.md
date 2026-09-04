@@ -8,6 +8,135 @@ Runtime: `claude-agent-sdk` (`AAMAD_TARGET_RUNTIME`)
 | Sprint 1 validation | 2026-08-25 | `8b9a34c` | Slices A and B, both engines |
 | Sprint 2 re-test | 2026-08-28 | `77abed5` | Six agents, durable stores |
 | **Full QA pass** | **2026-08-29** | **`09e8184`** | **Unit + integration + smoke + flow, all 55 ACs mapped** |
+| **Re-test + first latency measurement** | **2026-09-04** | **`f0bbcc2`** | **Unit + eval + smoke re-run on the observability build; p95 measured** |
+
+---
+
+# Re-test — 2026-09-04
+
+## Verdict
+
+**153 / 153 unit · 114 / 114 eval · 7 / 7 smoke.** No defect opened. Every check that passed on
+2026-08-29 still passes on a build that has since changed the trace layer.
+
+This pass exists because `@backend.eng` modified `redact()` and added turn-level timing, and two
+recorded QA claims rested on the code that changed: **AC-TRACE-03** ("no secret in the trace
+payload") and the Audit's unit count. A criterion whose evidence predates the change is not
+evidence. Both were re-verified rather than assumed.
+
+The pass also produces the project's **first measurement of turn latency**, which QA-OQ-5 has
+been asking for since 2026-08-29. The number is not comfortable.
+
+## Unit (`*test-unit`)
+
+`npm test` — **153 tests, 153 pass, 0 fail, 8.0 s.** Up from 143; the ten new tests are
+`server/runtime/trace.test.ts`, authored by `@backend.eng` alongside the redaction change.
+
+QA's interest in that file is narrow and specific: it is the only thing standing behind
+AC-TRACE-03 now that the redaction rule is looser than the rule QA signed off on. It pins both
+directions — usage counts survive, credentials do not — which is the right shape, because a
+regression either way is silent on disk.
+
+## Integration (`*test-integration`)
+
+`npm run eval:sdk` re-run in full against a live server (`CHAT_ENGINE=sdk`,
+`AS_OF_DATE=2026-09-01`): **114 / 114 across all 9 scripts.** Unchanged from 2026-08-29 — same
+assertions, same result, on a build eleven commits later. Slice G still holds `hops === 1`, and
+every slice still asserts zero money tools invoked at runtime.
+
+Run cost **$1.76** across 9 slices, measured rather than estimated (see Latency and cost below).
+
+## Smoke (`*qa`)
+
+Deterministic engine, keyless, `AS_OF_DATE=2026-09-01`. All seven cases match their recorded
+expectations exactly.
+
+| # | Case | Result |
+|---|---|---|
+| S1 | `GET /api/health` | `ok` · duckdb `ok` · stores `ok` · engine `deterministic` |
+| S2 | WISMO, order 46101 | `resolved` — "Placed 2026-09-01 (today)" |
+| S3 | Refund request | `escalated`, ticket `STUB-F914502D`, `payment_or_refund` |
+| S4 | Unknown order 99999999 | `needs_input`, no invented tracking |
+| S5 | No identity supplied | `needs_input` |
+| S6 | Malformed JSON body | `400` |
+| S7 | Missing `message` | `400` |
+
+## AC-TRACE-03 re-verified after the redaction change
+
+The change widens what survives `redact()`: `*_tokens` counts (and their camelCase form) are no
+longer treated as secrets, because matching the substring "token" had been writing the entire
+usage block to disk as `[REDACTED]`.
+
+Verified against a synthetic `prompt_trace` record carrying a provider key in four shapes — as
+an env var, as an `authorization` header, as `access_token`, and embedded mid-sentence inside
+`systemPrompt`. **All four redacted; usage counts and budgets preserved; the key appears
+nowhere in the output.** Separately, the real `ANTHROPIC_API_KEY` from `.env.local` does not
+appear in any file under `project-context/2.build/logs/`.
+
+**AC-TRACE-03 stands.** The narrower reading QA should carry forward: the guarantee now rests on
+a value-type rule (credentials are strings, usage is numbers) rather than on a key-name rule
+alone. A secret that is a *number* would pass — not a real shape for a credential, but the
+assumption is now load-bearing and worth naming.
+
+## Latency and cost — the first measurement (`*qa`)
+
+`npm run observability` reads the JSONL traces the runtime already writes. Across the project's
+whole history — **353 turns, 332 conversations**:
+
+| Metric | Value | Against |
+|---|---|---|
+| Error rate | **0.6%** (2/353 turns) | no target stated |
+| Turn latency p50 | **16.0 s** | — |
+| Turn latency **p95** | **30.4 s** | **PRD target: p95 < 30 s** |
+| Turn latency max | 63.1 s | — |
+| Total spend | $53.21 over 353 turns | — |
+
+**The p95 target is missed, at single-user load, before any concurrency is applied.** 30.4 s
+against a < 30 s target is marginal rather than catastrophic, and today's 12-turn window came in
+at 27.8 s on a warm cache — but the honest reading is that the target is at the edge and the
+≥ 5-concurrent half of it has still never been exercised.
+
+Two structural facts the measurement settles, both of which narrow where any fix could come
+from:
+
+1. **The data layer is not the cost.** Every DuckDB tool answers in under 25 ms (`get_order`
+   p95 11 ms). The `Agent` delegation hop is p50 6.8 s, p95 14.8 s. No query optimisation moves
+   the number; only hop count or model configuration will.
+2. **A second hop roughly doubles the wall clock.** `order-specialist` alone runs p95 28.6 s;
+   `order-specialist → escalation-handoff` runs p95 53.8 s. This is direct evidence for the SAD
+   chain exception that lets `returns-advisor` read order *and* policy itself — the design
+   choice is visible in the latency data, not just in the hop count slice G asserts.
+
+Spend is dominated by cached prompt handling (75.8% cache hit ratio on cacheable input), not by
+the customer's question — so cost scales with conversation setup, not with question complexity.
+
+## AC-TRACE-01 — closer, still partial
+
+Future work item 3 called for per-hop latency. What now exists is **turn-level** `durationMs`
+(on both `turn_result` and `turn_error`) and **per-tool** `durationMs`. Per-*hop* timing is
+derivable offline from the `agent_hop` → `agent_stop` timestamps but is still neither captured
+as a field nor displayed in the trace panel, which is what the criterion asks for.
+
+**AC-TRACE-01 remains Partial.** Recorded precisely so the next pass does not inherit a
+half-closed criterion as a closed one.
+
+## DEF-08 regression coverage — checked, and better than the register implied
+
+DEF-08 is marked Fixed with future-work item 2 still open ("a pleasantry eval slice, so DEF-08
+cannot regress"). That reads as an unguarded fix. It is not:
+`server/runtime/groundingGuard.test.ts` covers all four failing sign-offs from the defect table
+plus five more, and — the part that matters — the negative cases that make the fix falsifiable:
+`"thanks, but where is my refund"`, `"ok bye, cancel my membership"` and `"Is that all?"` must
+NOT be treated as sign-offs.
+
+The guard is a pure function, so unit coverage is the strong form of this test and an eval slice
+would add live confirmation rather than new information. **Future work item 2 is downgraded from
+a coverage gap to a nice-to-have**, with the reason recorded.
+
+## Defects
+
+**None found.** No check in this pass failed, and the defect register is unchanged: every DEF-*
+and INT-* item remains closed.
 
 ---
 
@@ -533,10 +662,15 @@ Non-MVP tests and coverage, for the backlog.
 
 1. ~~**Close the three-hat gap**~~ **Done 2026-08-29** — runtime-derived `device` /
    `app_version`, session-persisted, plus the full AC-ESC-05 category map and eval slice I.
-2. **A pleasantry eval slice**, so DEF-08 cannot regress once fixed — the sign-off table above
-   is the fixture.
+2. ~~**A pleasantry eval slice**, so DEF-08 cannot regress once fixed~~ **Downgraded
+   2026-09-04** — `groundingGuard.test.ts` already covers all four failing sign-offs plus the
+   negative cases that make the fix falsifiable. The guard is a pure function, so unit coverage
+   is the strong form; a live slice would confirm rather than inform.
 3. **Per-hop latency** in the trace, closing AC-TRACE-01, and `alignMaxDateToToday` in the
-   panel, closing AC-TIME-05.
+   panel, closing AC-TIME-05. **Partially advanced 2026-09-04**: turn-level and per-tool
+   `durationMs` now exist and `npm run observability` reports them, but per-*hop* timing is
+   still not captured as a field or displayed in the panel, which is what the criterion asks
+   for. AC-TRACE-01 stays Partial.
 4. **Citation precision**: assert that returned citations are relevant to the question, not
    merely present.
 5. **A second eval profile** for budget-constrained runs (`MAX_HOPS=1`), so the forced-escalation
@@ -546,8 +680,12 @@ Non-MVP tests and coverage, for the backlog.
    `TracePanel` and `CsatPrompt` are verified only by browser driving. A component harness
    would need a test renderer — the first genuine test dependency this project would take on,
    so it needs a deliberate decision rather than a default yes.
-7. **Load**: PRD targets ≥ 5 concurrent chats and turn p95 < 30 s. Neither has been measured;
-   nothing here has run more than one turn at a time.
+7. **Load**: PRD targets ≥ 5 concurrent chats and turn p95 < 30 s. **Half-measured
+   2026-09-04 — and the measured half misses.** Turn p95 is **30.4 s over 353 turns** against a
+   < 30 s target, at single-user load with no concurrency applied. The ≥ 5-concurrent half is
+   still unexercised; nothing here has run more than one turn at a time. Since latency is
+   dominated by the model hop (p95 14.8 s) and not the data layer (< 25 ms), concurrency is
+   likely to make this worse rather than reveal headroom.
 8. **Reliability sampling as a routine**, not an ad-hoc reaction. DEF-03 and the slice G
    flake were both found by sampling a behaviour repeatedly; nothing does that on a schedule.
 9. **`npm run eval:sdk` in CI** behind a secret and a spend cap (DEP-OQ-4), so model-behaviour
@@ -578,7 +716,7 @@ Non-MVP tests and coverage, for the backlog.
 | QA-OQ-2 | ~~Is DEF-04 acceptable for Sprint 1?~~ **Superseded** by INT-03 | `@backend.eng` |
 | QA-OQ-3 | Should the runtime decide `needs_input` after the turn, as ADR-17 already does for the hop budget and unaided answers? It would close INT-03 and probably DEF-08 in one change. | `@backend.eng` / `@system.arch` |
 | QA-OQ-4 | Is a React component-test harness worth the project's first test-framework dependency, or is browser driving sufficient for MVP? | `@qa.eng` / operator |
-| QA-OQ-5 | Nothing has measured the PRD's ≥5-concurrent-chats and p95 < 30 s targets. Do they need evidence before the capstone demo? | Operator |
+| QA-OQ-5 | ~~Nothing has measured the PRD's ≥5-concurrent-chats and p95 < 30 s targets.~~ **Partially answered 2026-09-04**: p95 is measured at **30.4 s against a < 30 s target** — the evidence now exists and is unfavourable. Concurrency remains unmeasured. Open question is no longer "is there evidence" but "does a marginally-missed p95 need fixing, scoping, or stating plainly before the demo?" | Operator |
 
 ## Audit
 
@@ -586,16 +724,17 @@ Non-MVP tests and coverage, for the backlog.
 | ----- | ----- |
 | Persona | `@qa.eng` |
 | Actions | `*test-unit`, `*test-integration`, `*qa`, `*verify-flow`, `*log-defects`, `*future-work` |
-| Timestamp | 2026-08-25 (Sprint 1); 2026-08-28 (Sprint 2 re-test); **2026-08-29 (full pass)** |
-| Commit under test | `09e8184` |
+| Timestamp | 2026-08-25 (Sprint 1); 2026-08-28 (Sprint 2 re-test); 2026-08-29 (full pass); **2026-09-04 (re-test + first latency measurement)** |
+| Commit under test | `09e8184` (2026-08-29); **`f0bbcc2` (2026-09-04)** |
 | Resolved runtime | `AAMAD_TARGET_RUNTIME=claude-agent-sdk` (env, matches `aamad.config.yml`) |
 | Model at verification | `claude-sonnet-5`, `effort: low`, `SDK_STREAM_MODE=live` |
-| Unit | **143 / 143**, Node built-in runner, no test framework dependency |
-| Eval | **114 / 114** across 9 scripts, `AS_OF_DATE=2026-09-01` |
-| Smoke | 7 / 7 on the keyless engine |
+| Unit | **153 / 153**, Node built-in runner, no test framework dependency (was 143; +10 from `trace.test.ts`) |
+| Eval | **114 / 114** across 9 scripts, `AS_OF_DATE=2026-09-01` — re-run in full on 2026-09-04, unchanged |
+| Smoke | 7 / 7 on the keyless engine — re-run 2026-09-04, unchanged |
 | Flow | Verified in a browser end to end, both engines, plus mock mode |
 | AC coverage | 55 criteria mapped: **46 pass, 5 partial, 1 not covered**, 3 by-absence/out-of-scope |
-| Defects open | **None.** DEF-07, DEF-08 and INT-03 were all closed by `@backend.eng` on 2026-08-29 |
-| Files written by `@qa.eng` | `server/data/dateShift.test.ts` (new), `server/runtime/hooks.test.ts` (new), `scripts/eval-sdk.mjs` (slice G assertions), `scripts/test-resolver.mjs` (relative-import resolution), `package.json` (test glob), this file. **No application logic was modified** |
+| Performance | **First measurement 2026-09-04**: turn p95 **30.4 s** vs PRD < 30 s (missed, single-user); error rate 0.6% over 353 turns; $53.21 total spend. Concurrency unmeasured |
+| Defects open | **None.** DEF-07, DEF-08 and INT-03 closed by `@backend.eng` on 2026-08-29; no defect opened on 2026-09-04 |
+| Files written by `@qa.eng` | 2026-08-29: `server/data/dateShift.test.ts` (new), `server/runtime/hooks.test.ts` (new), `scripts/eval-sdk.mjs` (slice G assertions), `scripts/test-resolver.mjs`, `package.json` (test glob). **2026-09-04: this file only** — the pass executed existing checks and authored none. **No application logic was modified in either pass** |
 | Security handoff | `security.md` exists with no Critical findings; `@security.eng` ran before Deliver as `aamad.config.yml` requires |
 | Self-check | Required sections present: Sources, Assumptions, Open Questions, Audit. No Diagnostic raised |
