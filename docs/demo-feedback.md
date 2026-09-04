@@ -90,3 +90,60 @@ same entry it appends to `data/outbox.md`, and the full packet is at
 
 - Both items were raised during a live demo run and confirmed by reading the code, not by
   re-running the app — the demo server was left untouched.
+
+---
+
+## ENH-02 — Crew status bar: show every agent, light the one answering
+
+**Enhancement. Open.** Requested during the demo.
+
+The banner currently says only what the *turn* is doing:
+
+> Crew: handed off — A person has this now.
+
+**Request:** an LED-style strip along the top showing **all six agents**, with the one handling
+the current turn highlighted — so an audience can see who picked the question up, and that a
+crew exists at all rather than one model in a trench coat.
+
+## ENH-03 — Name the answering agent next to `ASSISTANT`
+
+**Enhancement. Open.** Same idea at message level: the transcript label reads `ASSISTANT`, and it
+should read `ASSISTANT · returns-advisor` (or similar) so a scrolled-back transcript still shows
+which specialist produced each answer.
+
+### One design decision both of these need first
+
+**Agent identity is currently operator-only, by construction.** `server/runtime/engines/sdk.ts`
+gates every `agent_hop` and `tool_call` frame behind a single check:
+
+```ts
+// Trace frames are operator-only: gated here, once, rather than at each call site.
+const emitTrace = (event: StreamEvent): void => {
+  if (input.trace) emit(event);
+};
+```
+
+So with trace off the client **never learns which agent answered** — the information does not
+reach the browser at all. That is deliberate: `AC-CHAT-03` requires no raw tool JSON in customer
+text, and the trace panel is explicitly an operator surface behind `OPERATOR_KEY`.
+
+Three routes, in increasing cost:
+
+1. **Demo/trace-gated only (cheapest, recommended first).** Both features render when
+   `?trace=1` or demo mode is on, using the `agent_hop` frames that already arrive. Zero
+   contract change, zero customer-facing risk, and it covers the demo — which is what prompted
+   the request.
+2. **Ungate `agent_hop` for all turns.** Makes agent identity customer-visible. That is a
+   product decision, not a styling one: does a customer benefit from reading
+   `escalation-handoff`? If yes, the ids need customer-facing display names ("Returns
+   specialist", not `returns-advisor`).
+3. **A new non-trace frame carrying a friendly agent label.** Cleanest for customers, but it
+   touches `packages/shared/src/dto.ts`, which is under the SAD's contract freeze — that is an
+   `@integration.eng` conversation, not a frontend change.
+
+**Recommendation:** build route 1 for the demo. Route 2 or 3 only if agent identity is decided
+to be customer-facing, which is a PRD question.
+
+**Also worth noting for ENH-02:** the deterministic engine emits no `agent_hop` frames at all, so
+a crew strip would sit empty during a free rehearsal. It should show an honest "keyless engine —
+no crew running" state rather than a row of dead LEDs, or the rehearsal will look broken.
