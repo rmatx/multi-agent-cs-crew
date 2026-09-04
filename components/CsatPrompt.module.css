@@ -3,27 +3,33 @@
 
 .card {
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 0.7rem 0.8rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 0.45rem 0.6rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.45rem;
 }
 
+/* One row: question, scale, dismiss. It wraps rather than shrinking the targets, so a narrow
+   screen gets two lines instead of five buttons too small to hit. */
 .row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
 .question {
   margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .dismiss {
   margin-left: auto;
+  font-size: 0.8rem;
   background: transparent;
   border: 0;
   color: var(--muted);
@@ -39,25 +45,93 @@
 
 .scores {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.25rem;
 }
 
+/* 1.75rem squares. Small, but still a comfortable pointer target, and the scale now costs one
+   line rather than the five stacked number-and-label tiles it replaces. */
 .score {
-  flex: 1 1 6rem;
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
-  padding: 0.4rem 0.3rem;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: transparent;
+  justify-content: center;
+  padding: 0;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--muted);
   cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
 }
 
 .score:hover:not(:disabled) {
   border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/*
+ * The word, on hover and on keyboard focus.
+ *
+ * `title` already gives a native tooltip, but it is slow to appear and invisible to a keyboard
+ * user tabbing the scale — so this shows the same word immediately on either. Marked
+ * aria-hidden because the button's aria-label already carries it; announcing it twice is worse
+ * than not styling it at all.
+ */
+.tip {
+  position: absolute;
+  bottom: calc(100% + 0.3rem);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.15rem 0.4rem;
+  font-size: 0.68rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: var(--accent-fg);
+  background: var(--fg);
+  border-radius: 5px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease;
+  z-index: 2;
+}
+
+.score:hover .tip,
+.score:focus-visible .tip {
+  opacity: 1;
+}
+
+/* Hover does not exist on touch, where the tooltip would never fire — show the word under the
+   scale instead of leaving the numbers unexplained. */
+@media (hover: none) {
+  .tip {
+    position: static;
+    transform: none;
+    opacity: 1;
+    background: transparent;
+    color: var(--muted);
+    padding: 0;
+    font-size: 0.6rem;
+  }
+
+  .score {
+    width: auto;
+    min-width: 3.4rem;
+    height: auto;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.3rem 0.35rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tip {
+    transition: none;
+  }
 }
 
 .score:disabled {
@@ -65,50 +139,62 @@
   cursor: default;
 }
 
-.chosen {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.scoreNumber {
+.chosen,
+.chosen:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-fg);
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.scoreLabel {
-  font-size: 0.7rem;
-  color: var(--muted);
-  text-align: center;
 }
 
 .commentRow {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
+  animation: reveal 140ms ease-out;
 }
 
-.commentLabel {
-  font-size: 0.78rem;
-  color: var(--muted);
-  flex: 1 0 100%;
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .commentRow {
+    animation: none;
+  }
 }
 
 .comment {
-  flex: 1 1 12rem;
+  flex: 1 1 auto;
   min-width: 0;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: transparent;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.82rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--bg);
+}
+
+.comment:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+  outline: none;
 }
 
 .commentSend {
-  padding: 0.35rem 0.8rem;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: transparent;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.82rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface);
   cursor: pointer;
+}
+
+.commentSend:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .commentSend:disabled {
@@ -118,11 +204,12 @@
 
 .thanks {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 
 .problem {
   margin: 0;
-  font-size: 0.8rem;
-  color: #b4291f;
+  font-size: 0.78rem;
+  color: var(--bad);
 }

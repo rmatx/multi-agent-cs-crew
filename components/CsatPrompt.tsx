@@ -63,6 +63,40 @@ export default function CsatPrompt({ conversationId, onDismiss }: Props) {
     <section className={styles.card} aria-label="How did that go?">
       <div className={styles.row}>
         <p className={styles.question}>Did that answer your question?</p>
+
+        <div className={styles.scores} role="group" aria-label="Rating">
+          {SCORES.map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={`${styles.score} ${score === value ? styles.chosen : ""}`}
+              /*
+               * The number is shown; the word moves to hover and to the accessible name.
+               *
+               * `title` gives the pointer tooltip, and `aria-label` carries the same words to a
+               * screen reader — a tooltip alone would put the meaning of the scale out of reach
+               * of anyone not using a mouse. `.tip` under it covers touch, where hover does not
+               * exist at all.
+               */
+              aria-label={`${value} — ${SCORE_LABELS[value]}`}
+              title={SCORE_LABELS[value]}
+              aria-pressed={score === value}
+              disabled={sending}
+              onClick={() => {
+                setScore(value);
+                // A rating with no comment is the common case, so one click completes it. The
+                // comment box appears after, and re-submits if they add something.
+                void submit(value, comment);
+              }}
+            >
+              {value}
+              <span className={styles.tip} aria-hidden="true">
+                {SCORE_LABELS[value]}
+              </span>
+            </button>
+          ))}
+        </div>
+
         <button
           type="button"
           className={styles.dismiss}
@@ -73,52 +107,32 @@ export default function CsatPrompt({ conversationId, onDismiss }: Props) {
         </button>
       </div>
 
-      <div className={styles.scores} role="group" aria-label="Rating">
-        {SCORES.map((value) => (
-          <button
-            key={value}
-            type="button"
-            className={`${styles.score} ${score === value ? styles.chosen : ""}`}
-            aria-pressed={score === value}
+      {/* Only after a score. Before one there is nothing to attach a comment TO — the Send
+          button was permanently disabled — so it was reserving height to be unusable. */}
+      {score !== null && (
+        <div className={styles.commentRow}>
+          <input
+            id="csat-comment"
+            className={styles.comment}
+            value={comment}
             disabled={sending}
-            onClick={() => {
-              setScore(value);
-              // A rating with no comment is the common case, so one click completes it. The
-              // comment box below stays available and re-submits if they add something.
-              void submit(value, comment);
+            placeholder="Anything to add? (optional)"
+            aria-label="Anything to add? (optional)"
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void submit(score, comment);
             }}
+          />
+          <button
+            type="button"
+            className={styles.commentSend}
+            disabled={sending || comment.trim().length === 0}
+            onClick={() => void submit(score, comment)}
           >
-            <span className={styles.scoreNumber}>{value}</span>
-            <span className={styles.scoreLabel}>{SCORE_LABELS[value]}</span>
+            Send
           </button>
-        ))}
-      </div>
-
-      <div className={styles.commentRow}>
-        <label className={styles.commentLabel} htmlFor="csat-comment">
-          Anything to add? (optional)
-        </label>
-        <input
-          id="csat-comment"
-          className={styles.comment}
-          value={comment}
-          disabled={sending}
-          onChange={(e) => setComment(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && score !== null) void submit(score, comment);
-          }}
-        />
-        <button
-          type="button"
-          className={styles.commentSend}
-          disabled={sending || score === null}
-          onClick={() => {
-            if (score !== null) void submit(score, comment);
-          }}
-        >
-          Send
-        </button>
-      </div>
+        </div>
+      )}
 
       {problem !== null && <p className={styles.problem}>{problem}</p>}
     </section>
