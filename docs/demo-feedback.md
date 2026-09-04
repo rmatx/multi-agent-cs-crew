@@ -175,3 +175,53 @@ running" note on the deterministic engine rather than six dead LEDs.
 **One bug found while verifying.** The first cut labelled only *transcript* entries, which are
 written on the following turn — so the answer actually on screen, the one an audience looks at,
 was the only one without an agent name. The live message carries the tag too now.
+
+---
+
+## DEF-13 — A correct coordinator answer is force-escalated as `ungrounded`
+
+**Severity: medium. Open.** Found in the operator's own demo capture
+(`week5/assets/demo-capture.pdf`, page 2), which is why it matters: it is visible in a document
+going to a reviewer.
+
+**Observed.** The customer asked for a human twice. The second time:
+
+> I've already opened ticket STUB-4645DFE7 … **There's no need to open a separate request** —
+> that ticket has you covered.
+>
+> **Ticket STUB-AB902A64 is open with our support team.** … Reason: **ungrounded**. A human will
+> pick this up — I can't process refunds, cancellations, or payments myself.
+
+Three things wrong in one reply: it says no separate ticket is needed and then opens one; the
+reason code is `ungrounded` when the customer requested a human
+(`customer_requested_human` exists for exactly this); and the closing line is refund boilerplate
+on an escalation with nothing to do with money.
+
+**Root cause.** ADR-17's unaided-answer guard. `sdk.ts` forces an escalation when
+`isUnaidedAnswer(...)` is true, and the coordinator had answered **correctly from conversation
+memory** — the operator trace on that turn reads `0 hops · 0 tool calls`. The guard cannot
+distinguish "answered with no evidence" from "answered from what this conversation already
+established", so a good answer is punished as a hallucination.
+
+The guard's asymmetry is deliberate and documented — it prefers a needless escalation to an
+ungrounded answer. DEF-08 was the same trade misfiring on pleasantries. This is the third time
+that preference has produced a wrong-feeling turn, which suggests the guard needs a notion of
+"grounded in the conversation" rather than only "grounded in a tool call".
+
+**Independently corroborated.** Arize's demo report flagged the same closing line without seeing
+this trace: *"Escalation wording is overly payment-specific — the handoff response uses
+boilerplate about refunds, cancellations, or billing even when the escalation was triggered by
+another issue type."*
+
+**Recommended fix** (`@backend.eng` + `@system.arch`, since it touches ADR-17):
+
+1. Treat a reply that restates a ticket already open on this conversation as grounded — the
+   session store holds that ticket, so the runtime can check rather than guess.
+2. When an escalation is forced, carry the *customer's* intent into the reason code instead of
+   defaulting to `ungrounded`.
+3. Make the closing sentence reason-aware rather than always naming refunds (Arize finding 3).
+
+**Note on the duplicate ticket.** `createTicketStub` is idempotent per
+`(conversation_id, reason_code)`, so the second ticket was created only because its reason code
+differed — `ungrounded` vs `customer_requested_human`. Fixing 2 above closes this as a side
+effect.
