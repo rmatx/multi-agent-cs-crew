@@ -1,6 +1,7 @@
-# Arize AX tracing — investigated 2026-09-04, not working
+# Arize AX tracing — investigated 2026-09-04, not possible via the SDK
 
-**Status: blocked on the app side. Do not plan a demo around it.**
+**Status: CLOSED. The Claude Agent SDK emits no trace spans, so there is nothing for Arize to
+ingest. This is a property of the runtime, not a configuration mistake.**
 
 Nothing in the repo is wired to Arize. This file records what was tried, what was proved, and
 exactly where it stops, so the next attempt starts from the blocker instead of the beginning.
@@ -48,8 +49,21 @@ console.log([...arr.matchAll(/"(OTEL[A-Z0-9_]*)"/g)].map(m=>m[1]).join("\n"));
 **Passing the endpoint explicitly still did not produce a trace.** `ClaudeAgentOptions.env`
 replaces the allowlist wholesale, so the endpoint can be forced through it. That was implemented,
 typechecked, and run against a real turn: still no spans, still no project created in the space.
-So the missing endpoint is *a* bug but not *the* blocker — the subprocess appears not to emit
-trace spans in SDK (non-interactive) mode at all, whatever it is pointed at.
+
+**The subprocess emits no spans at all — confirmed, not inferred.** A minimal OTLP receiver was
+run on `127.0.0.1:4318`, which is the OTLP default, so the allowlist could not interfere. One real
+turn with `OTEL_TRACES_EXPORTER=otlp` produced:
+
+```
+3 x POST /v1/logs      claude_code.api_request, claude_code.hook_execution_start
+5 x POST /v1/metrics   claude_code.cost.usage, claude_code.session.count
+0 x POST /v1/traces    nothing, ever
+```
+
+That closes the question. The runtime exports **metrics and events, never spans.** Arize AX
+builds a project from trace spans, so no configuration of endpoint, headers or project name could
+ever have made this work — the missing endpoint variable was a genuine bug, but it was never the
+reason nothing arrived.
 
 That change was reverted rather than left in place. It replaces what the subprocess sees on every
 turn, which is a real behavioural change to carry into a demo in exchange for a feature that does
@@ -59,18 +73,21 @@ not work.
 
 Three live turns, about $0.75.
 
-## If picking this up again
+## The only remaining route
 
-1. Confirm whether the SDK subprocess emits trace spans at all in non-interactive mode — stand up
-   a local OTLP collector on `localhost:4318` and watch for anything. That is the one question
-   this investigation could not close, and it decides everything after it.
-2. If it does emit: the fix is `ClaudeAgentOptions.env` carrying the endpoint (see above), plus a
-   check on whether the spans use OpenInference semantic conventions. Claude Code's own schema
-   will land but will not render as rich LLM traces — no `openinference.span.kind`, no
-   `input.value`/`output.value`.
-3. If it does not: the only real route is emitting OpenInference spans from `server/runtime/trace.ts`,
-   which already holds every hop, tool call, duration, token count and cost the traces would need.
-   That is a dependency decision, not an afternoon.
+Emit OpenInference spans from `server/runtime/trace.ts`. It already holds everything a span needs
+— hop path, agent id, tool name, input, result, `durationMs`, token counts, `costUsd`, and a
+`turnId` to parent them by — so the work is translation, not instrumentation. It costs an
+OpenTelemetry dependency in a repo that has taken none, and it is a deliberate decision rather
+than an afternoon.
+
+Do not retry the env-var route. It is not a configuration problem.
+
+## One more thing worth knowing before exporting any of this
+
+The telemetry that *does* flow carries identity: `user.email`, `user.id`, `organization.id` and
+`session.id` were all present in the captured payloads. Sending it to a third party sends those
+too. That is a `security.md` question (see SEC-03 on trace content), not just a plumbing one.
 
 ## What to use instead, today
 
