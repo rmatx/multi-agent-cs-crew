@@ -16,6 +16,7 @@
 
 import type { EscalationPackage, ReasonCode } from "@shared/dto";
 import { ticketStubDb } from "@/server/data/sqlite";
+import { writeHandoffArtifacts } from "./handoffArtifacts";
 
 const REASON_CODES: readonly ReasonCode[] = [
   "customer_requested_human",
@@ -149,6 +150,24 @@ export function createTicketStub(
   // produces a stable created_at date component.
   const created_at = `${clock.asOf}T00:00:00.000Z`;
   const stub: StoredStub = { ...pkg, ticket_stub_id, created_at };
+
+  /*
+   * Human-readable artifacts, written HERE because this is the one place both engines meet.
+   *
+   * The first attempt hooked the sdk engine's tool wrapper, which produced nothing on the
+   * deterministic path — that engine calls this function directly and never touches the MCP
+   * tool server. Escalation is structural on both engines (ADR-16), so the artifact has to be
+   * too, or the keyless demo silently loses the handoff packet.
+   *
+   * Written by the RUNTIME, not by a tool the model calls: an observation of something that
+   * already happened is not the model's to reproduce, and a `send_email` tool would add an
+   * outbound-communication capability to a registry that asserts every tool by name. Nothing
+   * here sends anything — see handoffArtifacts.ts.
+   */
+  writeHandoffArtifacts(
+    { ...stub, conversation_id: stub.conversationId },
+    clock.asOf,
+  );
 
   db.prepare(
     `INSERT INTO ticket_stubs (

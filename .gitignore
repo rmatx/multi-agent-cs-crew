@@ -24,6 +24,13 @@ project-context/2.build/logs/
 data/fixtures/*.duckdb
 !data/fixtures/novamart_ci.duckdb
 
+# Handoff artifacts. Human-readable ticket packets and the simulated outbound queue — they
+# carry the SAME customer content as the trace logs (SEC-03), PII-scrubbed at write and swept
+# by `npm run prune:traces`. Ignored for the same reason the logs are: .gitignore prevents
+# commit, which is the one thing it is good for.
+data/tickets/
+data/outbox.md
+
 # Runtime-generated stores (SQLite, ADR-10)
 data/*.sqlite
 
@@ -36,3 +43,6 @@ data/*.sqlite-shm
 
 # Browser-driven verification artifacts (Playwright MCP snapshots and console logs).
 .playwright-mcp/
+
+# Office lock files
+~$*

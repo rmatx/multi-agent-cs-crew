@@ -14,6 +14,11 @@
  */
 
 import { randomUUID } from "node:crypto";
+import {
+  exportTurnSpans,
+  resolveArizeConfig,
+  type TraceRecordLike,
+} from "./openinference";
 import { appendFile, mkdir, readdir, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 
@@ -229,15 +234,27 @@ export function createTracer(conversationId: string, engineId: string): Tracer {
   const file = path.join(LOG_DIR, `${sanitiseId(conversationId)}.jsonl`);
   const turnId = randomUUID();
   let queue: Promise<void> = Promise.resolve();
+  /*
+   * This turn's records, kept so they can be replayed as OpenInference spans on flush.
+   *
+   * Turn-scoped and bounded — one tracer is built per turn, and a turn writes tens of records,
+   * not thousands. Nothing is retained past `flush()`. See `openinference.ts` for why export is
+   * a replay rather than live instrumentation.
+   */
+  const collected: TraceRecordLike[] = [];
 
   const log = (record: TraceRecord): void => {
-    const line = `${JSON.stringify({
+    const payload = {
       ts: new Date().toISOString(),
       conversationId,
       turnId,
       engine: engineId,
       ...(redact(record) as Record<string, unknown>),
-    })}\n`;
+    };
+    // The REDACTED payload is what is replayed, so a span can never carry a secret or a piece
+    // of customer PII the log file itself would not carry.
+    collected.push(payload as unknown as TraceRecordLike);
+    const line = `${JSON.stringify(payload)}\n`;
     queue = queue
       .then(async () => {
         await mkdir(LOG_DIR, { recursive: true });
@@ -258,6 +275,16 @@ export function createTracer(conversationId: string, engineId: string): Tracer {
       } catch {
         /* already handled above */
       }
+      // Export is best-effort and last: the customer's answer has already been sent by the time
+      // this runs, so nothing here can affect a turn. A misconfigured collector must degrade to
+      // "no traces in Arize", never to a failed turn.
+      try {
+        const cfg = resolveArizeConfig();
+        if (cfg !== null && collected.length > 0) exportTurnSpans(collected, cfg);
+      } catch (err: unknown) {
+        console.warn("openinference export failed (non-fatal)", err);
+      }
+      collected.length = 0;
     },
   };
 }
