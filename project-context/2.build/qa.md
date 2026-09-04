@@ -9,6 +9,106 @@ Runtime: `claude-agent-sdk` (`AAMAD_TARGET_RUNTIME`)
 | Sprint 2 re-test | 2026-08-28 | `77abed5` | Six agents, durable stores |
 | **Full QA pass** | **2026-08-29** | **`09e8184`** | **Unit + integration + smoke + flow, all 55 ACs mapped** |
 | **Re-test + first latency measurement** | **2026-09-04** | **`f0bbcc2`** | **Unit + eval + smoke re-run on the observability build; p95 measured** |
+| **Demo-readiness pass** | **2026-09-04** | **`62e7970`** | **Unit + eval + smoke on the demo build; DEF-09 found and fixed; first added runtime dependency** |
+
+---
+
+# Demo-readiness pass — 2026-09-04
+
+## Verdict
+
+**160 / 160 unit · 114 / 114 eval · 8 / 8 smoke.** One defect found and fixed in this pass
+(**DEF-09**, a wrong answer rather than a crash). The build changed substantially since the
+morning re-test — vendor trace export, handoff artifacts, a demo surface, and the project's
+first added runtime dependencies — so this pass exists to say what is now true rather than to
+re-confirm what already was.
+
+## DEF-09 — Returns eligibility ignored what was in the box. Severity: **medium**. FIXED.
+
+**Found by reading the data against the policy, not by a failing test** — which is why no
+existing check caught it. `data/policy/returns.md` excludes opened personal-care and hygiene
+products from returns regardless of date. 82 of 500 products are `beauty`. `returns-advisor`
+decided eligibility from the 14-day window alone, so an in-window order containing such an item
+was told **yes** outright. Order 44279 (7 days old, contains a supplement) is one of several
+reproducing cases.
+
+Root cause was a single prompt line: *"Add get_order_items only when the customer asks what is
+in the order."* On a returns question the advisor was instructed NOT to read the items, so no
+category could reach it even once one existed. The codebase had already learned this lesson
+from the opposite direction — the comment immediately below that line records `order-specialist`
+losing context to an optional tool at low effort. Here the same optionality produced a wrong
+answer instead of a thin one.
+
+**Fix** (`@backend.eng`, one column and one instruction): `getOrderItems` now selects
+`p.category` — deliberately not `price` or `cost`, which the crew has no business seeing — and
+the advisor is told eligibility has two halves. No new tool and no allowlist change was needed:
+`returns-advisor` already held `get_order_items`.
+
+**Verified live.** Before: an unqualified yes. After: *"you're eligible based on timing… one
+note: the order includes an ImmunePlus Supplements item, and if it's been opened,
+supplement/personal-care items are sometimes excluded regardless of the date. The shoes and
+lighting item don't have that concern."*
+
+## Unit (`*test-unit`)
+
+`npm test` — **160 tests, 160 pass, 0 fail, 7.9 s.** Up from 153; the six new tests are the PII
+scrubber and retention window added with the SEC-03 mitigation.
+
+## Integration (`*test-integration`)
+
+`npm run eval:sdk` — **114 / 114 across all 9 scripts**, re-run *because* this pass changed a
+prompt slice G asserts on. **Slice G still holds `hops === 1`**: the added `get_order_items`
+call is same-agent, so it costs a tool call and not a hop, and *"an in-window order is told it
+can be returned"* still passes because a qualified yes is still a yes. That assertion surviving
+a behaviour change it was not written for is the strongest evidence the slice tests a contract
+rather than a phrasing.
+
+## Smoke (`*qa`) — keyless, no API spend
+
+| # | Case | Result |
+|---|---|---|
+| S1 | `GET /api/health` | `ok` · duckdb `ok` · stores `ok` |
+| S2 | WISMO, order 46101 | `resolved` |
+| S3 | Refund | `escalated`, `payment_or_refund` |
+| S4 | Unknown order | `needs_input` |
+| S5 | No identity | `needs_input` |
+| S6 | Malformed JSON | `400` |
+| S7 | Missing `message` | `400` |
+| S8 | **Handoff artifacts written** | ticket packet + `data/outbox.md` present |
+
+S8 is new. Escalation is structural on both engines (ADR-16), so the artifacts are too — they
+appear on the keyless path, which is what makes a zero-spend rehearsal show the whole handoff.
+
+## What changed under this build, and what QA is asserting about it
+
+**Arize trace export.** `server/runtime/openinference.ts` replays each finished turn as an
+OpenInference span tree. Verified in Arize: `AGENT novamart.turn → CHAIN <specialist> → TOOL
+<tool>`, every span carrying an explicit OK/ERROR status rather than `UNSET`. It is a REPLAY —
+built after the turn from records `trace.ts` already writes — so QA's interest is narrow and
+met: nothing on the turn's hot path changed, and `resolveArizeConfig()` returns null without
+`ARIZE_*`, so an unconfigured deployment constructs no provider and exports nothing.
+
+**The project took its first added runtime dependencies** (four OpenTelemetry packages plus the
+OpenInference conventions). That ends a stated position, and NOTICES now records it with
+licences and rationale rather than leaving the old claim to rot.
+
+**Two more surfaces now hold customer content** — the handoff artifacts and, when configured,
+the Arize export, which sends it to a third party. Both are recorded under SEC-03, which was
+widened in the same pass. QA's position: the artifacts inherit the scrubber, the gitignore and
+the retention sweep, so they add copies rather than a new class of exposure; the Arize export is
+a *data-sharing decision*, and the right control is that it is off unless two variables are set.
+
+## AC-TRACE-01 — now arguably closeable, deliberately left Partial
+
+The criterion has been Partial because per-hop latency was "not captured or displayed". Arize
+now displays exactly that (`returns-advisor — 7190ms`). QA is **not** closing it, for two
+reasons: the criterion names the operator trace panel, and the panel still does not show it; and
+a criterion satisfied only when an optional third-party export is configured is not satisfied by
+the build. Recorded so the next pass does not have to re-derive the argument.
+
+## Defects
+
+**DEF-09 found and fixed in this pass.** No other defect opened. The register below is updated.
 
 ---
 
@@ -645,6 +745,7 @@ are carried here so one table answers "what is open".
 | DEF-07 | Explicit operator budget silently replaced by the default | Low | **Fixed 2026-08-29** | — |
 | DEF-08 | Tickets opened for pleasantries — 4 of 8 sign-offs | Medium | **Fixed 2026-08-29** | — |
 | INT-03 | Clarifying question reported `resolved`, with a CSAT card | Medium | **Fixed 2026-08-29** | — |
+| DEF-09 | Returns eligibility ignored item category — an in-window order with an excluded item was told yes | Medium | **Fixed 2026-09-04** | — |
 
 **All three were fixed the same day by `@backend.eng`; none is open.** No defect in any pass
 has been a safety defect — the zero-money-tools boundary held under every check.
@@ -673,6 +774,9 @@ Non-MVP tests and coverage, for the backlog.
    for. AC-TRACE-01 stays Partial.
 4. **Citation precision**: assert that returned citations are relevant to the question, not
    merely present.
+4b. **A returns slice with an excluded item**, so DEF-09 cannot regress. Order 44279 (in-window,
+   contains a supplement) is the fixture. The existing slice G uses an order with no excluded
+   item, so it passes either way — which is exactly why DEF-09 survived a green eval suite.
 5. **A second eval profile** for budget-constrained runs (`MAX_HOPS=1`), so the forced-escalation
    path has live coverage as well as unit coverage. Blocked today because the harness assumes
    one server process.
@@ -724,17 +828,18 @@ Non-MVP tests and coverage, for the backlog.
 | ----- | ----- |
 | Persona | `@qa.eng` |
 | Actions | `*test-unit`, `*test-integration`, `*qa`, `*verify-flow`, `*log-defects`, `*future-work` |
-| Timestamp | 2026-08-25 (Sprint 1); 2026-08-28 (Sprint 2 re-test); 2026-08-29 (full pass); **2026-09-04 (re-test + first latency measurement)** |
-| Commit under test | `09e8184` (2026-08-29); **`f0bbcc2` (2026-09-04)** |
+| Timestamp | 2026-08-25 (Sprint 1); 2026-08-28 (Sprint 2 re-test); 2026-08-29 (full pass); 2026-09-04 (re-test + first latency measurement); **2026-09-04 (demo-readiness pass)** |
+| Commit under test | `09e8184` (2026-08-29); `f0bbcc2` (2026-09-04); **`62e7970` (2026-09-04, demo-readiness)** |
 | Resolved runtime | `AAMAD_TARGET_RUNTIME=claude-agent-sdk` (env, matches `aamad.config.yml`) |
 | Model at verification | `claude-sonnet-5`, `effort: low`, `SDK_STREAM_MODE=live` |
-| Unit | **153 / 153**, Node built-in runner, no test framework dependency (was 143; +10 from `trace.test.ts`) |
-| Eval | **114 / 114** across 9 scripts, `AS_OF_DATE=2026-09-01` — re-run in full on 2026-09-04, unchanged |
-| Smoke | 7 / 7 on the keyless engine — re-run 2026-09-04, unchanged |
+| Unit | **160 / 160**, Node built-in runner, still no test-framework dependency (143 → 153 → 160) |
+| Eval | **114 / 114** across 9 scripts, `AS_OF_DATE=2026-09-01` — re-run twice on 2026-09-04, including after the DEF-09 prompt change; slice G's `hops === 1` held |
+| Smoke | **8 / 8** on the keyless engine — S8 added for the handoff artifacts |
 | Flow | Verified in a browser end to end, both engines, plus mock mode |
 | AC coverage | 55 criteria mapped: **46 pass, 5 partial, 1 not covered**, 3 by-absence/out-of-scope |
-| Performance | **First measurement 2026-09-04**: turn p95 **30.4 s** vs PRD < 30 s (missed, single-user); error rate 0.6% over 353 turns; $53.21 total spend. Concurrency unmeasured |
-| Defects open | **None.** DEF-07, DEF-08 and INT-03 closed by `@backend.eng` on 2026-08-29; no defect opened on 2026-09-04 |
-| Files written by `@qa.eng` | 2026-08-29: `server/data/dateShift.test.ts` (new), `server/runtime/hooks.test.ts` (new), `scripts/eval-sdk.mjs` (slice G assertions), `scripts/test-resolver.mjs`, `package.json` (test glob). **2026-09-04: this file only** — the pass executed existing checks and authored none. **No application logic was modified in either pass** |
+| Dependencies | **Changed 2026-09-04.** The project took its first added runtime dependencies (4 × OpenTelemetry + OpenInference conventions) for Arize export. Recorded in NOTICES with licences. Still no test-framework dependency |
+| Performance | Turn p95 **30.4 s** vs PRD < 30 s (missed, single-user); error rate 0.6%. Concurrency still unmeasured. Cost figures are the SDK's computed `total_cost_usd` (tokens × list price) — a usage estimate, **not** a statement of what was billed |
+| Defects open | **None.** DEF-07, DEF-08, INT-03 closed 2026-08-29; **DEF-09 found and fixed 2026-09-04** |
+| Files written by `@qa.eng` | 2026-08-29: `dateShift.test.ts`, `hooks.test.ts`, `eval-sdk.mjs`, `test-resolver.mjs`, `package.json`. 2026-09-04 (both passes): **this file only**. **`@qa.eng` has modified no application logic in any pass** — DEF-09's fix was `@backend.eng`'s |
 | Security handoff | `security.md` exists with no Critical findings; `@security.eng` ran before Deliver as `aamad.config.yml` requires |
 | Self-check | Required sections present: Sources, Assumptions, Open Questions, Audit. No Diagnostic raised |
