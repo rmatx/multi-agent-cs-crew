@@ -82,6 +82,11 @@ function readConversation(text) {
   const toolDurations = new Map();
   let pendingStart = null;
 
+  // turnId → prompt_trace ts. Records written before turnId shipped fall back to `pendingStart`,
+  // the positional pairing this replaces: it assumes the next turn_result belongs to the last
+  // prompt_trace, which is true only while turns of one conversation never overlap.
+  const startsByTurn = new Map();
+
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     let rec;
@@ -91,7 +96,10 @@ function readConversation(text) {
       continue; // A partially-flushed last line is expected; it is not a data error.
     }
 
-    if (rec.event === "prompt_trace") pendingStart = rec.ts;
+    if (rec.event === "prompt_trace") {
+      pendingStart = rec.ts;
+      if (rec.turnId) startsByTurn.set(rec.turnId, rec.ts);
+    }
 
     if (rec.event === "tool_result" && typeof rec.durationMs === "number") {
       const list = toolDurations.get(rec.tool) ?? [];
@@ -104,10 +112,13 @@ function readConversation(text) {
     }
 
     if (rec.event === "turn_result" || rec.event === "turn_error") {
-      const derived = pendingStart ? ms(pendingStart, rec.ts) : null;
+      const startTs = (rec.turnId && startsByTurn.get(rec.turnId)) ?? pendingStart;
+      const derived = startTs ? ms(startTs, rec.ts) : null;
       const measured = typeof rec.durationMs === "number" ? rec.durationMs : null;
       turns.push({
         ts: rec.ts,
+        turnId: rec.turnId ?? null,
+        correlated: Boolean(rec.turnId),
         ok: rec.event === "turn_result" && rec.subtype === "success",
         failed: rec.event === "turn_error" || (rec.event === "turn_result" && rec.subtype !== "success"),
         subtype: rec.event === "turn_error" ? "exception" : (rec.subtype ?? "unknown"),
@@ -199,8 +210,26 @@ async function main() {
   const faultCounts = [...faults.reduce((m, f) => m.set(f.event, (m.get(f.event) ?? 0) + 1), new Map())]
     .sort((a, b) => b[1] - a[1]);
 
+  // Run rate, by calendar day. The doc-standard "minimum dashboard" metric this was missing:
+  // error rate and latency say how well turns went, run rate says whether anyone ran any.
+  const byDay = new Map();
+  for (const t of turns) {
+    const day = String(t.ts).slice(0, 10);
+    const e = byDay.get(day) ?? { turns: 0, failed: 0, cost: 0 };
+    e.turns += 1;
+    if (t.failed) e.failed += 1;
+    e.cost += t.costUsd ?? 0;
+    byDay.set(day, e);
+  }
+  const days = [...byDay].sort((a, b) => a[0].localeCompare(b[0]));
+
   const report = {
     window: { since: args.since, conversations: files.length, turns: turns.length },
+    correlation: {
+      withTurnId: turns.filter((t) => t.correlated).length,
+      positional: turns.filter((t) => !t.correlated).length,
+    },
+    runRate: Object.fromEntries(days.map(([d, v]) => [d, v])),
     errorRate: { failedTurns: failed.length, totalTurns: turns.length, rate: failed.length / turns.length },
     latencyMs: latency,
     costUsd: cost,
@@ -223,7 +252,12 @@ async function main() {
   const pct = (n) => `${(n * 100).toFixed(1)}%`;
 
   console.log(`\nNovaMart — sdk engine observability`);
-  console.log(`${turns.length} turns across ${files.length} conversation log(s)${args.since ? ` since ${args.since}` : ""}\n`);
+  console.log(`${turns.length} turns across ${files.length} conversation log(s)${args.since ? ` since ${args.since}` : ""}`);
+  const positional = report.correlation.positional;
+  if (positional > 0) {
+    console.log(`${positional} turn(s) correlated positionally — written before turnId shipped.`);
+  }
+  console.log();
 
   console.log(`ERROR RATE   ${pct(report.errorRate.rate)}  (${failed.length}/${turns.length} turns failed)`);
   if (faultCounts.length > 0) {
@@ -251,6 +285,15 @@ async function main() {
     console.log(`  tokens over ${withTokens.length} turn(s): in ${sum.input}  out ${sum.output}  cache read ${sum.cacheRead}  cache write ${sum.cacheWrite}`);
     if (cacheable > 0) console.log(`  cache hit ratio ${pct(sum.cacheRead / cacheable)} of cacheable input`);
   }
+
+  console.log(`\nRUN RATE`);
+  const busiest = Math.max(...days.map(([, v]) => v.turns), 1);
+  for (const [day, v] of days.slice(-14)) {
+    const bar = "\u2588".repeat(Math.max(1, Math.round((v.turns / busiest) * 24)));
+    const flag = v.failed > 0 ? `  ${v.failed} failed` : "";
+    console.log(`  ${day}  ${String(v.turns).padStart(4)} turns  ${usd(v.cost).padStart(9)}  ${bar}${flag}`);
+  }
+  if (days.length > 14) console.log(`  (${days.length - 14} earlier day(s) not shown)`);
 
   console.log(`\nBY AGENT PATH`);
   for (const [p, v] of Object.entries(report.byPath).sort((a, b) => b[1].costUsd - a[1].costUsd)) {

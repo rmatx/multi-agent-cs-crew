@@ -13,6 +13,7 @@
  * mkdir), which is why no `.gitkeep` un-ignore is needed. Flagged rather than fixed.
  */
 
+import { randomUUID } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -76,6 +77,17 @@ export type TraceRecord = {
 
 export type Tracer = {
   readonly conversationId: string;
+  /**
+   * Correlation id for THIS turn, stamped on every record the turn writes.
+   *
+   * `conversationId` identifies the whole thread, which is one level too coarse to correlate
+   * with: a conversation holds many turns, and `agentRunId` only identifies one agent
+   * invocation inside a turn. Without this, a reader has to pair `prompt_trace` with the next
+   * `turn_result` positionally — which is what the observability script did, and which silently
+   * mis-pairs the moment two turns of one conversation overlap. This is the key the SSE `done`
+   * frame, the operator endpoint and the JSONL all agree on.
+   */
+  readonly turnId: string;
   /** Fire-and-forget append. Never throws, never awaited on the hot path. */
   log(record: TraceRecord): void;
   /** Await outstanding writes before the turn closes. Never throws. */
@@ -84,12 +96,14 @@ export type Tracer = {
 
 export function createTracer(conversationId: string, engineId: string): Tracer {
   const file = path.join(LOG_DIR, `${sanitiseId(conversationId)}.jsonl`);
+  const turnId = randomUUID();
   let queue: Promise<void> = Promise.resolve();
 
   const log = (record: TraceRecord): void => {
     const line = `${JSON.stringify({
       ts: new Date().toISOString(),
       conversationId,
+      turnId,
       engine: engineId,
       ...(redact(record) as Record<string, unknown>),
     })}\n`;
@@ -105,6 +119,7 @@ export function createTracer(conversationId: string, engineId: string): Tracer {
 
   return {
     conversationId,
+    turnId,
     log,
     flush: async () => {
       try {

@@ -84,8 +84,8 @@ npm run observability -- --since 2026-09-01  # one window
 npm run observability -- --json            # machine-readable
 ```
 
-It reports error rate with the fault events broken out, turn latency (p50/p95/max) alongside
-per-tool `durationMs`, and cost totals split **by agent path** — a one-hop
+It reports run rate by day, error rate with the fault events broken out, turn latency
+(p50/p95/max) alongside per-tool `durationMs`, and cost totals split **by agent path** — a one-hop
 `order-specialist` turn and an `order-specialist → escalation-handoff` turn are different
 products at different prices, and the average across them describes neither.
 
@@ -93,6 +93,12 @@ Two things it will tell you that are worth knowing up front. Effectively all lat
 model: every DuckDB tool answers in under 25 ms, while the `Agent` delegation hop runs seconds.
 And turn cost is dominated by cached prompt handling rather than by the customer's actual
 question, so the cache hit ratio in the token line is the number to watch when spend moves.
+
+Every record a turn writes carries a `turnId`, so a turn is addressable across the JSONL, the
+operator endpoint and this report. Without it a reader has to assume the next `turn_result`
+belongs to the last `prompt_trace`, which is true only while two turns of one conversation never
+overlap. Older records report `null` and are counted as positionally correlated rather than
+being silently grouped under the wrong turn.
 
 Because it is a reader rather than an exporter, it works on logs written before it existed —
 the baseline is your whole history, not "starting today". It covers the `sdk` engine only; the

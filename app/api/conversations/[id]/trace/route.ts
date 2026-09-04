@@ -96,6 +96,9 @@ export async function GET(
     .filter((line) => HOP_EVENTS.has(String(line.event)))
     .map((line) => ({
       ts: line.ts ?? null,
+      // Correlation key. Present only on records written after turnId shipped; older lines
+      // report null rather than being silently grouped under the wrong turn.
+      turnId: line["turnId"] ?? null,
       event: line.event ?? null,
       agentId: line["agentId"] ?? line["agent_type"] ?? null,
       tool: line["tool"] ?? null,
@@ -112,7 +115,9 @@ export async function GET(
     hops,
     turns: turnResults.map((line) => ({
       ts: line.ts ?? null,
+      turnId: line["turnId"] ?? null,
       hops: line["hops"] ?? null,
+      durationMs: line["durationMs"] ?? null,
       path: line["path"] ?? null,
       numTurns: line["numTurns"] ?? null,
       costUsd: line["costUsd"] ?? null,

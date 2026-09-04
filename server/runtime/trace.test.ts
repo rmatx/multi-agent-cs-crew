@@ -10,7 +10,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { redact, sanitiseId } from "./trace";
+import { createTracer, redact, sanitiseId } from "./trace";
 
 const asRecord = (value: unknown): Record<string, unknown> => value as Record<string, unknown>;
 
@@ -132,4 +132,15 @@ test("sanitiseId cannot climb out of the log directory", () => {
   assert.equal(sanitiseId("../../etc/passwd"), ".._.._etc_passwd");
   assert.equal(sanitiseId(""), "unknown");
   assert.equal(sanitiseId("a/b\\c"), "a_b_c");
+});
+
+test("each turn gets its own correlation id, stable within the turn", () => {
+  // One tracer is created per turn (sdk.ts runTurn), so tracer identity IS turn identity.
+  const a = createTracer("conv-1", "sdk");
+  const b = createTracer("conv-1", "sdk");
+
+  assert.match(a.turnId, /^[0-9a-f-]{36}$/);
+  assert.notEqual(a.turnId, b.turnId, "two turns of one conversation must not share an id");
+  assert.equal(a.turnId, a.turnId, "the id is stable for the life of the turn");
+  assert.equal(a.conversationId, b.conversationId);
 });
