@@ -1,0 +1,482 @@
+<title>NovaMart Week 5 Submission</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;600&family=IBM+Plex+Serif:wght@400;600&display=swap">
+
+<style>
+  :root {
+    --ground: #f7f8fa; --surface: #fff; --ink: #14181f; --ink-soft: #4a5361;
+    --ink-faint: #78828f; --rule: #e2e6ec; --rule-firm: #c9d0da;
+    --accent: #0f6d6a; --accent-soft: #e6f2f1;
+    --ok: #1a7343; --ok-soft: #e7f4ec;
+    --warn: #9a5a10; --warn-soft: #fdf2e3;
+    --bad: #a8332a; --bad-soft: #fceceb;
+    --measure: 70ch;
+    --shadow: 0 1px 2px rgba(20,24,31,.04), 0 10px 30px -18px rgba(20,24,31,.26);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1014; --surface: #151a20; --ink: #e8ecf1; --ink-soft: #a3adba;
+      --ink-faint: #7b8593; --rule: #242b34; --rule-firm: #38414d;
+      --accent: #5ec4bd; --accent-soft: #102b2a;
+      --ok: #64d094; --ok-soft: #0f2419;
+      --warn: #e2a955; --warn-soft: #2a1e0e;
+      --bad: #f08a80; --bad-soft: #2c1513;
+      --shadow: 0 1px 2px rgba(0,0,0,.5), 0 10px 30px -18px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1014; --surface: #151a20; --ink: #e8ecf1; --ink-soft: #a3adba;
+    --ink-faint: #7b8593; --rule: #242b34; --rule-firm: #38414d;
+    --accent: #5ec4bd; --accent-soft: #102b2a;
+    --ok: #64d094; --ok-soft: #0f2419;
+    --warn: #e2a955; --warn-soft: #2a1e0e;
+    --bad: #f08a80; --bad-soft: #2c1513;
+    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 10px 30px -18px rgba(0,0,0,.8);
+  }
+
+  body {
+    background: var(--ground); color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 54rem; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
+
+  header { border-bottom: 2px solid var(--ink); padding-bottom: 1.4rem; margin-bottom: 1.6rem; }
+  .eyebrow { font-family: "IBM Plex Mono", monospace; font-size: .72rem; letter-spacing: .13em;
+             text-transform: uppercase; color: var(--accent); margin: 0 0 .8rem; }
+  h1 { font-family: "IBM Plex Serif", Georgia, serif; font-size: clamp(1.9rem, 4.2vw, 2.6rem);
+       font-weight: 600; line-height: 1.14; letter-spacing: -.02em; margin: 0 0 .6rem; text-wrap: balance; }
+  .standfirst { font-size: 1.05rem; color: var(--ink-soft); margin: 0; max-width: var(--measure); }
+  .meta { font-family: "IBM Plex Mono", monospace; font-size: .73rem; color: var(--ink-faint);
+          margin-top: 1.1rem; display: flex; flex-wrap: wrap; gap: .35rem 1.3rem; }
+
+  h2 { font-family: "IBM Plex Serif", Georgia, serif; font-size: 1.35rem; font-weight: 600;
+       letter-spacing: -.01em; margin: 2.8rem 0 .9rem; text-wrap: balance;
+       padding-top: 1.4rem; border-top: 1px solid var(--rule); }
+  h2 .num { font-family: "IBM Plex Mono", monospace; font-size: .82rem; color: var(--accent);
+            margin-right: .5rem; font-weight: 500; }
+  h3 { font-size: 1rem; font-weight: 600; margin: 1.7rem 0 .5rem; }
+  p { margin: 0 0 .9rem; max-width: var(--measure); }
+  code { font-family: "IBM Plex Mono", monospace; font-size: .87em; background: var(--accent-soft);
+         color: var(--accent); padding: .1em .36em; border-radius: 3px; }
+
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem,1fr)); gap: 1px;
+             background: var(--rule); border: 1px solid var(--rule); border-radius: 8px;
+             overflow: hidden; margin: 1.6rem 0; }
+  .metric { background: var(--surface); padding: .9rem 1rem; }
+  .metric .n { font-family: "IBM Plex Mono", monospace; font-size: 1.55rem; font-weight: 500;
+               font-variant-numeric: tabular-nums; letter-spacing: -.02em; display: block; line-height: 1.1; }
+  .metric .k { font-size: .72rem; color: var(--ink-faint); margin-top: .3rem; display: block; }
+  .metric.hero .n { color: var(--accent); }
+
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; margin: 1rem 0; }
+  .scroll { overflow-x: auto; }
+  th, td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-family: "IBM Plex Mono", monospace; font-size: .69rem; letter-spacing: .07em;
+       text-transform: uppercase; color: var(--ink-faint); font-weight: 500;
+       border-bottom: 1px solid var(--rule-firm); white-space: nowrap; }
+  td.num { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pass { color: var(--ok); font-weight: 600; }
+  .miss { color: var(--warn); font-weight: 600; }
+
+  figure { margin: 1.4rem 0; }
+  figure img { width: 100%; border: 1px solid var(--rule); border-radius: 8px; display: block; box-shadow: var(--shadow); }
+  figcaption { font-size: .8rem; color: var(--ink-faint); margin-top: .5rem; }
+
+  .callout { background: var(--accent-soft); border-radius: 8px; padding: 1.1rem 1.3rem; margin: 1.5rem 0;
+             border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); }
+  .callout p { margin-bottom: 0; max-width: none; font-family: "IBM Plex Serif", Georgia, serif;
+               font-size: 1.05rem; line-height: 1.45; }
+
+  .note { border-radius: 8px; padding: 1rem 1.2rem; margin: 1.3rem 0; border: 1px solid var(--rule); }
+  .note.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 32%, transparent); }
+  .note.bad  { background: var(--bad-soft);  border-color: color-mix(in srgb, var(--bad) 32%, transparent); }
+  .note p { margin-bottom: 0; max-width: none; font-size: .93rem; }
+  .note .lbl { font-family: "IBM Plex Mono", monospace; font-size: .68rem; letter-spacing: .1em;
+               text-transform: uppercase; font-weight: 600; display: block; margin-bottom: .4rem; }
+  .note.warn .lbl { color: var(--warn); }
+  .note.bad .lbl { color: var(--bad); }
+
+  ul, ol { margin: 0 0 .9rem; padding-left: 1.15rem; max-width: var(--measure); }
+  li { margin-bottom: .4rem; }
+  li::marker { color: var(--ink-faint); }
+
+  .frame { border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; margin: 1.4rem 0;
+           background: var(--surface); box-shadow: var(--shadow); }
+  .frame iframe { width: 100%; height: 620px; border: 0; display: block; }
+  .frame .bar { font-family: "IBM Plex Mono", monospace; font-size: .72rem; color: var(--ink-faint);
+                padding: .5rem .8rem; border-bottom: 1px solid var(--rule); }
+
+  pre { font-family: "IBM Plex Mono", monospace; font-size: .78rem; line-height: 1.5;
+        background: var(--surface); border: 1px solid var(--rule); border-radius: 8px;
+        padding: .9rem 1rem; overflow-x: auto; margin: 1rem 0; }
+
+  footer { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--rule);
+           font-family: "IBM Plex Mono", monospace; font-size: .73rem; color: var(--ink-faint); }
+  footer p { max-width: none; margin-bottom: .35rem; }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Week 5 · Agentic Architect capstone</p>
+    <h1>NovaMart Support Crew</h1>
+    <p class="standfirst">
+      A six-agent customer-support crew on the Claude Agent SDK. This week: the demo ran end to
+      end, observability went to a vendor platform, an evaluation suite was adopted under AAMAD
+      0.8.0 — and between them they found four defects that 114 passing assertions had not.
+    </p>
+    <div class="meta">
+      <span>4 September 2026</span>
+      <span>32 commits since the 29 Aug submission</span>
+      <span>github.com/rmatx/multi-agent-cs-crew</span>
+      <span>aamad 0.8.0</span>
+    </div>
+  </header>
+
+  <div class="metrics">
+    <div class="metric hero"><span class="n">410</span><span class="k">turns traced</span></div>
+    <div class="metric"><span class="n">168</span><span class="k">unit tests</span></div>
+    <div class="metric"><span class="n">114</span><span class="k">eval assertions</span></div>
+    <div class="metric hero"><span class="n">26</span><span class="k">golden items</span></div>
+    <div class="metric"><span class="n">0.0%</span><span class="k">error rate</span></div>
+    <div class="metric"><span class="n">6</span><span class="k">agents · 9 tools</span></div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────── 1 -->
+  <h2><span class="num">01</span>The demo</h2>
+  <p>
+    A customer types an order number and a question. It reaches the chat endpoint as a live
+    stream and returns one of three honest outcomes: a grounded answer with citations, a
+    clarifying question, or the news that a person now owns it. The full capture is at
+    <code>week5/assets/demo-capture.pdf</code>.
+  </p>
+
+  <figure>
+    <img src="assets/demo-returns-boundary.png" alt="The chat interface answering a returns-eligibility question, with the crew strip showing Returns advisor active">
+    <figcaption>
+      The returns boundary, captured live. Order 42319 was placed 15 days ago — one day past the
+      14-day window — so the answer is a refusal plus a ticket, not a grudging yes. The strip along
+      the top shows all six agents with the two that handled this turn lit
+      (<em>Returns advisor</em> → <em>Escalation</em>), and the label beside <strong>ASSISTANT</strong>
+      names who is speaking. Two days earlier, order 42776 gets the opposite answer.
+    </figcaption>
+  </figure>
+
+  <p>
+    Three things in that capture are the demo's actual argument:
+  </p>
+  <ul>
+    <li><strong>The answer is dated, not guessed.</strong> "Placed on 2026-08-17, which puts it 15
+      days out from today — just past our standard 14-day return window." The date, the arithmetic
+      and the rule are all on screen, so a customer can check the reasoning.</li>
+    <li><strong>The handoff is visible.</strong> Expanding <em>What the human receives</em> shows the
+      actual ticket packet — reason code, entities, and every tool the crew already tried, so a
+      person does not repeat work.</li>
+    <li><strong>Nothing can move money.</strong> No refund, cancel or payment tool exists in the
+      process. That is asserted by a test that fails CI if the registered tool set changes.</li>
+  </ul>
+
+  <div class="note bad">
+    <span class="lbl">Found in this capture — DEF-13, open</span>
+    <p>
+      Asked for a human twice, the crew answered correctly from memory ("there's no need to open a
+      separate request") and then opened a second ticket labelled <code>ungrounded</code> anyway.
+      ADR-17's unaided-answer guard fired on a turn with <strong>0 hops and 0 tool calls</strong> —
+      it cannot distinguish "answered with no evidence" from "answered from what this conversation
+      already established". Recorded rather than patched mid-demo. Arize independently flagged the
+      same reply's refund boilerplate without seeing the trace.
+    </p>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────── 2 -->
+  <h2><span class="num">02</span>Observability and performance</h2>
+  <p>
+    Two layers. Every turn writes a redacted JSONL trace locally; each finished turn is then
+    replayed into OpenInference spans and exported to <strong>Arize AX</strong>. Local first, vendor
+    second — so the measurement survives the vendor being unavailable.
+  </p>
+
+  <h3>Arize AX — platform report</h3>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Metric</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Completed turns</td><td class="num">164</td></tr>
+        <tr><td>Trace-level success rate</td><td class="num pass">100%</td></tr>
+        <tr><td>Average end-to-end latency</td><td class="num">15.9 s</td></tr>
+        <tr><td>Slowest observed turn</td><td class="num">41.5 s</td></tr>
+        <tr><td>Open Signal findings</td><td class="num">3, all medium</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Arize's three findings, and what each maps to here:</p>
+  <ol>
+    <li><strong>Multi-hop escalations are slow</strong> (~24 s avg). Corroborated locally: a single
+      specialist hop runs p95 28.6 s, two hops p95 44–54 s. A second hop roughly doubles wall clock.</li>
+    <li><strong>Compound returns questions get escalated unnecessarily.</strong> This is
+      <strong>DEF-11</strong>, already open in the register — measured at 2 in 4 on the processing-calendar path.</li>
+    <li><strong>Escalation wording is payment-specific</strong> regardless of reason. Same line the
+      demo capture exposes in DEF-13.</li>
+  </ol>
+
+  <div class="callout">
+    <p>
+      All three of Arize's findings had a local counterpart already recorded. That is the useful
+      result: two independent measurement paths agreeing is evidence the instrumentation is honest,
+      not that one of them is redundant.
+    </p>
+  </div>
+
+  <h3>Local measurement — <code>npm run observability</code></h3>
+  <pre>410 turns across 393 conversation logs
+
+ERROR RATE   0.0%   (0/410 turns failed)
+LATENCY      p50 14.2s   p95 27.5s   max 44.2s
+TTFT         p50 12.6s   p95 22.5s
+COST         mean $0.1914/turn   p95 $0.2633
+CACHE        74.0% hit ratio on cacheable input</pre>
+
+  <p>
+    Two things this reports that a platform dashboard would not, because they come from the runtime's
+    own records: <strong>time to first token</strong>, which separates a turn that printed steadily
+    from one that showed nothing and then dumped an answer; and <strong>cost by agent path</strong>,
+    which is what showed a second hop doubling both latency and spend.
+  </p>
+
+  <div class="note warn">
+    <span class="lbl">Two instrumentation gaps, mine not Arize's</span>
+    <p>
+      Arize reports <em>"token totals are not currently populated"</em> and per-turn costs of
+      $0.0003–$0.0076 against the $0.19 the local traces record. Both are my exporter's doing: the
+      token attributes are written only when the usage block carries them, and cost went out as a
+      custom <code>turn.cost_usd</code> attribute rather than the field Arize derives from — so the
+      platform is computing its own figure from tokens it never received. Neither number is wrong;
+      they measure different things. Fixing the exporter is the first observability task next week.
+    </p>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────── 3 -->
+  <h2><span class="num">03</span>Evaluation under AAMAD 0.8.0</h2>
+  <p>
+    Upgrading the framework added one Build artifact this project could not already produce —
+    <code>evals.md</code> — and a validator warning when it is missing. The warning is soft by
+    design. Satisfying it was not paperwork.
+  </p>
+
+  <div class="metrics">
+    <div class="metric hero"><span class="n">2</span><span class="k">defects found</span></div>
+    <div class="metric hero"><span class="n">50%</span><span class="k">of items were new coverage</span></div>
+    <div class="metric"><span class="n">5/5</span><span class="k">categories at threshold</span></div>
+    <div class="metric"><span class="n">~$12</span><span class="k">to adopt</span></div>
+  </div>
+
+  <p>
+    The existing suite was built from behaviour already known. The golden dataset was built,
+    deliberately, from behaviour nobody had checked — <strong>13 of 26 items had never been run
+    against this build.</strong> That is why it found anything: the older harness passes 114 of 114
+    and had been passing while a real defect sat underneath it, because its returns fixture happened
+    to contain no excluded item.
+  </p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Category</th><th>Pass</th><th>Threshold</th><th>Class</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>Money boundary</td><td class="num">5/5</td><td class="num">100%</td><td>Safety</td><td class="pass">Pass</td></tr>
+        <tr><td>Grounding &amp; injection</td><td class="num">6/6</td><td class="num">100%</td><td>Safety</td><td class="pass">Pass</td></tr>
+        <tr><td>Order lookup</td><td class="num">6/6</td><td class="num">≥90%</td><td>Quality</td><td class="pass">Pass</td></tr>
+        <tr><td>Returns eligibility</td><td class="num">5/5</td><td class="num">≥90%</td><td>Quality</td><td class="pass">Pass</td></tr>
+        <tr><td>Membership</td><td class="num">4/4</td><td class="num">≥90%</td><td>Quality</td><td class="pass">Pass</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    <strong>Safety is asserted negatively, at 100%; quality at 90%.</strong> That split was forced by
+    evidence, not chosen up front. Across four runs the safety properties held every time while
+    terminal status varied on questions where declining politely and handing off are both defensible.
+    Three runs failed the same grounding item on <em>phrasing</em> while the system behaved correctly
+    — "not able to help", "outside what I can", "outside what I'm here to help with" are one refusal
+    in three wordings. Safety checks now assert only what must never happen.
+  </p>
+  <p>
+    One design decision worth stating: the money-boundary check reads the <strong>runtime tool
+    ledger, not the reply text</strong>. A model saying it did not issue a refund is not evidence that
+    no refund tool ran. An unreadable ledger scores as a failure, because an unverified safety check
+    is not a passed one.
+  </p>
+  <p>
+    <strong>DEF-10</strong> was found and fixed here — over-escalation on in-window returns, measured
+    2 in 5, introduced by a fix earlier the same day and caught within the hour. <strong>DEF-11</strong>
+    is open and accepted. The LLM-as-judge is specified (<code>claude-opus-5</code>, different from the
+    model under test) but deliberately not run: shipping it uncalibrated would put a number in the
+    report nobody could defend.
+  </p>
+
+  <!-- ─────────────────────────────────────────────────────── 4 -->
+  <h2><span class="num">04</span>Architecture</h2>
+  <p>
+    Generated with <a href="https://github.com/tt-a1i/archify">archify</a> from the real code, and
+    interactive — four guided views walk a customer turn, the dual engine, the grounding path, and
+    observability.
+  </p>
+  <div class="frame">
+    <div class="bar">week5/assets/architecture.html · open standalone for pan, zoom and guided views</div>
+    <iframe src="assets/architecture.html" title="NovaMart runtime architecture" loading="lazy"></iframe>
+  </div>
+  <p>
+    The red dashed edge is the point of the diagram. Every tool call from the crew crosses one
+    allowlist, and no path in the system reaches an action that moves money — there is no such tool
+    to reach. The dual engine below it is the second structural claim: <code>CHAT_ENGINE</code>
+    selects between a keyless engine that composes answers in code and the real crew, and both honour
+    the same wire contract and the same escalation guarantee.
+  </p>
+
+  <!-- ─────────────────────────────────────────────────────── 5 -->
+  <h2><span class="num">05</span>CI/CD</h2>
+  <p>Two workflows, split by whether they need an API key.</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Workflow</th><th>Trigger</th><th>Key</th><th>Proves</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>ci.yml</code></td><td>every push &amp; PR</td><td>No</td>
+          <td>Typecheck · 168 unit tests · zero-money-tools invariant · production build · fixture row counts · policy corpus present · secret scan · Docker image builds</td>
+        </tr>
+        <tr>
+          <td><code>eval.yml</code></td><td>manual + monthly</td><td>Yes</td>
+          <td>The <em>crew</em> still works: 9 live eval scripts, 114 assertions, under a spend cap</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <code>ci.yml</code> is keyless on purpose, so a fork or a pull request runs the whole suite
+    without a secret and without spending anyone's money. What it cannot prove is that the crew still
+    behaves — model behaviour regresses with no code change, and both DEF-03 and the slice G flake
+    were exactly that.
+  </p>
+  <p>
+    <code>eval.yml</code> covers it, and <strong>never runs on <code>pull_request</code></strong>: a
+    fork PR that could trigger it could read the API key. It enforces its budget from the run's own
+    trace logs and fails the job on overspend. Monthly rather than weekly because a run costs about
+    $1.76 and this project's code moves in bursts — the schedule is a slow smoke alarm; manual
+    dispatch is the real pre-demo gate. Neither workflow deploys anything.
+  </p>
+
+  <!-- ─────────────────────────────────────────────────────── 6 -->
+  <h2><span class="num">06</span>Release notes</h2>
+  <p>32 commits since the 29 August submission. The substance, grouped:</p>
+
+  <h3>Observability — new</h3>
+  <ul>
+    <li>OpenInference span export to Arize AX. Written by hand because no route existed: the
+      <code>claude-agent-sdk</code> integration is Python-only, and the subprocess that makes the model
+      call emits metrics and logs but <em>no trace spans</em> — proved with a local OTLP collector.</li>
+    <li><code>npm run observability</code> — run rate, error rate, latency, TTFT, cost by agent path,
+      tool latency and retries, read from traces the runtime already wrote.</li>
+    <li>Per-turn <code>turnId</code> correlation, turn and TTFT timing, tool-retry aggregation.</li>
+  </ul>
+
+  <h3>Evaluation — new</h3>
+  <ul>
+    <li>26-item golden dataset across 5 failure-mode categories, half of it new coverage.</li>
+    <li><code>npm run evals</code> with per-category thresholds and a ledger-based safety check.</li>
+    <li><code>evals.md</code> under AAMAD 0.8.0; <code>aamad validate</code> clean on all three phases.</li>
+  </ul>
+
+  <h3>Defects fixed</h3>
+  <ul>
+    <li><strong>DEF-09</strong> — returns eligibility ignored item category, so an in-window order
+      containing an excluded item was told yes outright.</li>
+    <li><strong>DEF-10</strong> — the DEF-09 fix caused over-escalation on in-window returns (2 in 5).</li>
+    <li><strong>DEF-12</strong> — the UI demanded an order number for questions that needed only a
+      customer id, blocking 6 of 23 demo scenarios. Client-side only; the server was always correct.</li>
+    <li><strong>SEC-03 mitigated</strong> — PII scrubbed from trace logs at write, retention window
+      enforced by <code>npm run prune:traces</code>.</li>
+  </ul>
+
+  <h3>Interface</h3>
+  <ul>
+    <li>A real colour system, verified at 22 foreground/background pairs against WCAG AA in both themes.</li>
+    <li>A waiting state that occupies the shape the answer will fill — the measured 10–16 s to first
+      token was previously one line of grey text.</li>
+    <li>Crew strip showing all six agents with the active one lit; the answering agent named beside
+      each reply; the handoff packet readable in a collapsible box.</li>
+    <li>A generated 23-scenario demo picker with full agent, tool, reason-code and status coverage.</li>
+  </ul>
+
+  <h3>Architecture and documentation</h3>
+  <ul>
+    <li><strong>ADR-19</strong> — the SAD specified a 60 s turn timeout while the runtime ran 120 s.
+      Measurement showed two-hop turns at 44–54 s p95, so the code was right and the document was
+      wrong; the deviation is now recorded with its evidence.</li>
+    <li>README front page rewritten to match what shipped, and the zero-added-dependency claim
+      corrected — this week the project took its first five runtime dependencies, for the Arize export.</li>
+  </ul>
+
+  <!-- ─────────────────────────────────────────────────────── 7 -->
+  <h2><span class="num">07</span>The crew plan</h2>
+  <p>
+    A coordinator plus five specialists. Each holds the smallest tool set that answers its questions,
+    and the allowlist is asserted by a test that fails if the registered set changes at all.
+  </p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Agent</th><th>Owns</th><th>Tools</th></tr></thead>
+      <tbody>
+        <tr><td><code>triage-router</code></td><td>Reads intent, delegates, never answers from data itself</td><td class="num">Agent (delegation) only</td></tr>
+        <tr><td><code>order-specialist</code></td><td>Status, dates, totals, line items, order history</td><td class="num">4</td></tr>
+        <tr><td><code>returns-advisor</code></td><td>Eligibility and processing time</td><td class="num">4</td></tr>
+        <tr><td><code>plus-specialist</code></td><td>Membership state and plan</td><td class="num">3</td></tr>
+        <tr><td><code>faq-policy</code></td><td>Written policy, troubleshooting corpus</td><td class="num">1</td></tr>
+        <tr><td><code>escalation-handoff</code></td><td>Opening a ticket and writing the handoff</td><td class="num">2</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Four decisions shape the routing, and each was made because something failed without it:</p>
+  <ul>
+    <li><strong>Only the coordinator can delegate</strong> (ADR-08). Specialists cannot call each
+      other, so a turn's path is always a shallow tree an operator can read.</li>
+    <li><strong>Delegation is forced synchronous.</strong> The SDK defaults the delegation tool to
+      background, which returned immediately and let the coordinator answer without ever seeing the
+      specialist's findings — stating order facts no tool had returned.</li>
+    <li><strong>Terminal-state guarantees are enforced by the runtime, not prompt text</strong>
+      (ADR-17). Both forced escalation and escalate-over-invent were prompt requests the model
+      declined; a guarantee the model may opt out of is not a guarantee.</li>
+    <li><strong>The returns chain exception.</strong> <code>returns-advisor</code> holds both the order
+      tools and policy search, so an eligibility question costs one hop instead of two. The eval suite
+      asserts <code>hops === 1</code> on that path, and the latency data shows why it matters.</li>
+  </ul>
+
+  <!-- ─────────────────────────────────────────────────────── open -->
+  <h2><span class="num">08</span>What is open</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Item</th><th>Status</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td>DEF-11 — processing-calendar inconsistency</td><td class="miss">Open, accepted</td>
+            <td>Fails cautiously; fixing needs re-sampling every returns path</td></tr>
+        <tr><td>DEF-13 — unaided-answer guard misfires</td><td class="miss">Open</td>
+            <td>Found in the demo capture; needs an ADR-17 change</td></tr>
+        <tr><td>Latency p95 vs PRD &lt; 30 s</td><td class="miss">Missed</td>
+            <td>27.5 s current, 30.4 s lifetime; single-user, concurrency unmeasured</td></tr>
+        <tr><td>LLM-as-judge</td><td class="miss">Specified, unrun</td>
+            <td>Deliberate — uncalibrated is worse than none</td></tr>
+        <tr><td>Production container</td><td class="miss">Blocked</td>
+            <td>Blocked on authentication (SEC-01), not on the Dockerfile</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The defect register reads <strong>"two open, both accepted"</strong> rather than none. That is the
+    honest position: this project distinguishes a cautious failure it chose to carry from a wrong
+    answer it would not.
+  </p>
+
+  <footer>
+    <p>Evidence: project-context/2.build/{qa,evals,security}.md · docs/demo-feedback.md · week5/assets/</p>
+    <p>410 turns traced · 168 unit tests · 114 eval assertions · 26 golden items · aamad 0.8.0 clean on define, build and deliver</p>
+  </footer>
+</div>

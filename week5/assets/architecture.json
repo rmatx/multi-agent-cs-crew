@@ -1,0 +1,285 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "NovaMart Support Crew \u2014 runtime architecture",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1340,
+      520
+    ],
+    "views": [
+      {
+        "id": "customer-turn",
+        "label": "A customer turn",
+        "focus": [
+          "browser",
+          "chatapi",
+          "crew",
+          "toolserver",
+          "duckdb"
+        ],
+        "note": "The path a question actually travels: browser to SSE endpoint, coordinator to specialist, specialist to data."
+      },
+      {
+        "id": "dual-engine",
+        "label": "Two engines, one contract",
+        "focus": [
+          "chatapi",
+          "deterministic",
+          "crew"
+        ],
+        "note": "CHAT_ENGINE picks the engine. Both honour one wire contract and one escalation guarantee; only sdk calls a model."
+      },
+      {
+        "id": "grounding",
+        "label": "Where answers come from",
+        "focus": [
+          "toolserver",
+          "duckdb",
+          "policy",
+          "holidays"
+        ],
+        "note": "Every customer-facing fact traces to a read here. Nothing is answered from model memory."
+      },
+      {
+        "id": "observability",
+        "label": "Observability",
+        "focus": [
+          "crew",
+          "tracelog",
+          "arize"
+        ],
+        "note": "Each finished turn is replayed from its own trace records into OpenInference spans."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "browser",
+      "type": "frontend",
+      "label": "Chat UI",
+      "sublabel": "Next.js 16 \u00b7 React 19",
+      "pos": [
+        40,
+        210
+      ],
+      "size": [
+        150,
+        66
+      ],
+      "tag": "SSE consumer"
+    },
+    {
+      "id": "chatapi",
+      "type": "backend",
+      "label": "POST /api/chat",
+      "sublabel": "App Router \u00b7 SSE",
+      "pos": [
+        280,
+        210
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "rate limited"
+    },
+    {
+      "id": "deterministic",
+      "type": "backend",
+      "label": "Deterministic engine",
+      "sublabel": "keyless \u00b7 no model call",
+      "pos": [
+        580,
+        60
+      ],
+      "size": [
+        180,
+        66
+      ]
+    },
+    {
+      "id": "crew",
+      "type": "backend",
+      "label": "Claude Agent SDK crew",
+      "sublabel": "triage-router + 5 specialists",
+      "pos": [
+        580,
+        208
+      ],
+      "size": [
+        185,
+        70
+      ],
+      "tag": "max 4 hops"
+    },
+    {
+      "id": "toolserver",
+      "type": "backend",
+      "label": "In-process MCP tools",
+      "sublabel": "9 tools \u00b7 per-agent allowlist",
+      "pos": [
+        860,
+        210
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "no money tool"
+    },
+    {
+      "id": "duckdb",
+      "type": "database",
+      "label": "NovaMart DuckDB",
+      "sublabel": "5 read-only tables",
+      "pos": [
+        1120,
+        60
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "READ_ONLY"
+    },
+    {
+      "id": "policy",
+      "type": "database",
+      "label": "Policy corpus",
+      "sublabel": "4 markdown documents",
+      "pos": [
+        1120,
+        210
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "0.55 relevance gate"
+    },
+    {
+      "id": "stores",
+      "type": "database",
+      "label": "Session + ticket stores",
+      "sublabel": "SQLite \u00b7 node:sqlite",
+      "pos": [
+        1120,
+        380
+      ],
+      "size": [
+        165,
+        66
+      ]
+    },
+    {
+      "id": "holidays",
+      "type": "external",
+      "label": "Nager.Date",
+      "sublabel": "public holidays",
+      "pos": [
+        860,
+        380
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "degrade, never throw"
+    },
+    {
+      "id": "tracelog",
+      "type": "database",
+      "label": "Trace log",
+      "sublabel": "JSONL per conversation",
+      "pos": [
+        580,
+        380
+      ],
+      "size": [
+        165,
+        66
+      ],
+      "tag": "redacted at write"
+    },
+    {
+      "id": "arize",
+      "type": "cloud",
+      "label": "Arize AX",
+      "sublabel": "OpenInference spans",
+      "pos": [
+        280,
+        380
+      ],
+      "size": [
+        165,
+        66
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "browser",
+      "to": "chatapi"
+    },
+    {
+      "from": "chatapi",
+      "to": "deterministic",
+      "label": "keyless",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "from": "chatapi",
+      "to": "crew",
+      "label": "sdk"
+    },
+    {
+      "from": "crew",
+      "to": "toolserver",
+      "label": "allowlisted",
+      "variant": "security"
+    },
+    {
+      "from": "deterministic",
+      "to": "duckdb",
+      "label": "same port"
+    },
+    {
+      "from": "toolserver",
+      "to": "duckdb",
+      "label": "read-only"
+    },
+    {
+      "from": "toolserver",
+      "to": "policy"
+    },
+    {
+      "from": "toolserver",
+      "to": "stores",
+      "label": "writes"
+    },
+    {
+      "from": "toolserver",
+      "to": "holidays",
+      "label": "on returns",
+      "labelDy": 50,
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "crew",
+      "to": "tracelog",
+      "label": "per turn",
+      "labelDy": 48,
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "tracelog",
+      "to": "arize",
+      "label": "replayed"
+    }
+  ]
+}
