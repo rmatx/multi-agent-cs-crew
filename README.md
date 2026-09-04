@@ -63,6 +63,23 @@ curl -H "X-Operator-Key: some-secret" localhost:3000/api/conversations/<id>/trac
 It returns the hop path, per-turn cost, the transcript, the CSAT record and any tickets
 opened. With `OPERATOR_KEY` unset the endpoint is disabled (503) rather than open.
 
+### CI
+
+Two workflows, split by whether they need your API key.
+
+| Workflow | Trigger | Needs a key | What it proves |
+|---|---|---|---|
+| `ci.yml` | every push and PR | No | Typecheck, 154 unit tests, the zero-money-tools invariant, production build, fixture row counts, policy corpus, secret scan, and that the Docker image builds |
+| `eval.yml` | manual + daily schedule | Yes | The **crew** still works: all 9 live eval slices, 114 assertions, with a spend cap |
+
+`ci.yml` is keyless on purpose, so a fork or a PR can run the whole suite without a secret and
+without spending anyone's money. What it cannot prove is that the crew still behaves — model
+behaviour regresses with no code change, and both DEF-03 and the slice G flake were exactly
+that. `eval.yml` covers it, and never runs on `pull_request`: a fork PR that could trigger it
+could read `ANTHROPIC_API_KEY`. It enforces its budget from the run's own trace logs
+(`scripts/ci-spend-gate.mjs`, default $6.00) and fails the job if a run overspends. Neither
+workflow deploys anything.
+
 Other useful commands:
 
 ```bash

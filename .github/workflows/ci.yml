@@ -1,11 +1,16 @@
-# CI — lint/typecheck, test, build (delivery-workflow.md: "Generate CI/CD configuration files
+# CI — typecheck, test, build (delivery-workflow.md: "Generate CI/CD configuration files
 # only; do not trigger live deploys").
+#
+# There is deliberately NO lint stage: no ESLint is installed (setup.md SG-3), and adding one
+# is a dependency decision for `@project.mgr`, not something a pipeline should smuggle in. The
+# header used to claim a lint stage this file never ran.
 #
 # This pipeline is deliberately KEYLESS. Every step here runs against the committed 3.2 MB CI
 # fixture with no ANTHROPIC_API_KEY in the environment, which means a fork or a pull request
 # can run the full suite without a secret and without spending anyone's money. The one thing
-# it therefore cannot cover — `npm run eval:sdk`, which drives eight live model turns against
-# a running server — is the operator's manual gate before a demo, and the runbook says so.
+# it therefore cannot cover — `npm run eval:sdk`, which drives nine live model turns against a
+# running server — now lives in `eval.yml`, which is manual + scheduled only (never
+# `pull_request`, so a fork cannot reach the key) and enforces a spend cap.
 
 name: CI
 

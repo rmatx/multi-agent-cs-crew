@@ -310,7 +310,7 @@ Named so nobody re-derives them as oversights:
 | DEP-OQ-1 | **The image has not been built.** Docker is unavailable on the authoring machine, so the CI `container` job is the first real test of the Dockerfile. Run it before relying on the image. | `@devops.eng` / operator |
 | DEP-OQ-2 | Is the capstone demo ever shared as a URL? Answering it decides whether SEC-01/SEC-02 stay accepted (`security.md` SEC-OQ-1). | Operator |
 | DEP-OQ-3 | What retention applies to the trace logs now that they hold customer conversations? Nothing prunes them today (`security.md` SEC-OQ-2). | Operator |
-| DEP-OQ-4 | Should `eval:sdk` run in CI behind a secret and a spend cap, or stay a manual pre-demo gate? | Operator |
+| DEP-OQ-4 | ~~Should `eval:sdk` run in CI behind a secret and a spend cap, or stay a manual pre-demo gate?~~ **Resolved 2026-09-04 — both.** `.github/workflows/eval.yml` runs the nine live slices on a daily schedule and on manual dispatch, never on `pull_request` (a fork PR that could trigger it could exfiltrate `ANTHROPIC_API_KEY`). The spend cap is enforced from the run's own traces by `scripts/ci-spend-gate.mjs`, default $6.00 and overridable per dispatch, and the job fails if the run exceeds it. It still deploys nothing. | Closed |
 
 ## Audit
 

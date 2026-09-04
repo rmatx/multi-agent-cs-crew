@@ -1,0 +1,131 @@
+# Live crew evaluation — the gate `ci.yml` deliberately cannot be.
+#
+# `ci.yml` is keyless on purpose so a fork or a pull request can run the whole suite without a
+# secret and without spending anyone's money. The cost of that choice is that CI proves the code
+# compiles, the invariants hold and the image builds — but never that the CREW still works. Model
+# behaviour regresses without a line of code changing: DEF-03 (WISMO over-escalation at ~29%) and
+# the slice G flake were both behavioural, and both were invisible to a keyless pipeline.
+#
+# This workflow closes that gap (qa.md future work 9, DEP-OQ-4). Three rules govern it:
+#
+#   1. It NEVER runs on `pull_request`. A fork PR that could trigger this could exfiltrate
+#      ANTHROPIC_API_KEY, so the trigger list is manual + scheduled only. This is the reason,
+#      and it is not a preference.
+#   2. It enforces a spend cap from the run's own traces and fails if the run costs more than
+#      the budget — a runaway loop should stop the pipeline, not the credit card.
+#   3. It never deploys. Same policy as ci.yml (delivery-workflow.md: "generate CI/CD
+#      configuration only; do not trigger live deploys without explicit authorization").
+
+name: Eval (live crew)
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "MODEL_ID to evaluate"
+        required: false
+        default: "claude-sonnet-5"
+      budget_usd:
+        description: "Fail the run if it spends more than this"
+        required: false
+        default: "6.00"
+  schedule:
+    # 07:00 UTC daily. Behavioural regressions are found by repetition, not by one run —
+    # qa.md's reliability-sampling note is the whole argument for a schedule over a hook.
+    - cron: "0 7 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  # Two live evals racing would double the spend and interleave their trace logs.
+  group: eval-live
+  cancel-in-progress: false
+
+jobs:
+  eval:
+    # Forks inherit the schedule but not the secret, so without this they fail nightly and
+    # noisily for someone who never asked to run it.
+    if: github.repository == 'rmatx/multi-agent-cs-crew'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      CHAT_ENGINE: sdk
+      # AC-EVAL-05. Every fixture's expectations are absolute dates; with asOf defaulting to
+      # today the shift grows a day per day and the suite rots silently.
+      AS_OF_DATE: "2026-09-01"
+      MODEL_ID: ${{ inputs.model || 'claude-sonnet-5' }}
+      SDK_STREAM_MODE: live
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Fail fast if the key is missing
+        # Without this the server starts, every turn returns sdk_engine_unconfigured, and the
+        # eval fails 114 times with a message that does not name the cause.
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY is not set for this repository. Add it under Settings → Secrets → Actions."
+            exit 1
+          fi
+
+      - name: Install (lockfile-exact)
+        run: npm ci
+
+      - name: Build
+        run: npx next build
+
+      - name: Start server
+        run: |
+          npm start > "$RUNNER_TEMP/server.log" 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 60); do
+            engine=$(curl -sf localhost:3000/api/health | node -pe "try{JSON.parse(require('fs').readFileSync(0,'utf8')).engine}catch(e){''}" || true)
+            if [ "$engine" = "sdk" ]; then echo "server ready on the sdk engine"; exit 0; fi
+            sleep 2
+          done
+          echo "::error::server did not report engine=sdk within 120s"
+          cat "$RUNNER_TEMP/server.log"
+          exit 1
+
+      - name: Evaluate the crew
+        id: eval
+        run: npm run eval:sdk
+
+      - name: Spend and performance report
+        # `always()` so a failed eval still reports what it cost — a run that fails halfway is
+        # exactly when you want to know whether it burned the budget doing it.
+        if: always()
+        run: |
+          # The checkout is clean, so every trace under logs/ belongs to this run alone.
+          if ! node scripts/observability.mjs --json > "$RUNNER_TEMP/obs.json" 2>/dev/null; then
+            echo "no turns recorded — nothing to report"
+            exit 0
+          fi
+          node scripts/ci-spend-gate.mjs "$RUNNER_TEMP/obs.json" "$BUDGET_USD"
+        env:
+          BUDGET_USD: ${{ inputs.budget_usd || '6.00' }}
+
+      - name: Upload traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-traces-${{ github.run_id }}
+          # Redacted at write time (`trace.ts`), so this artifact cannot carry a key. It DOES
+          # carry the fixture's customer conversations — fictional data, per security.md's
+          # calibration, and the reason SEC-03 rises a severity level against real data.
+          path: |
+            project-context/2.build/logs/
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Stop server
+        if: always()
+        run: kill "$SERVER_PID" 2>/dev/null || true
