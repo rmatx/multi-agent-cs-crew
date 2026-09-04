@@ -80,6 +80,8 @@ function readConversation(text) {
   const turns = [];
   const faults = [];
   const toolDurations = new Map();
+  const retriesByTool = new Map();
+  const timingByTurn = new Map();
   let pendingStart = null;
 
   // turnId → prompt_trace ts. Records written before turnId shipped fall back to `pendingStart`,
@@ -107,6 +109,17 @@ function readConversation(text) {
       toolDurations.set(rec.tool, list);
     }
 
+    // turn_timing closes the turn; correlate it to the turn by id.
+    if (rec.event === "turn_timing") {
+      timingByTurn.set(rec.turnId ?? "__last", rec);
+    }
+
+    if (rec.event === "tool_retry" && rec.tool) {
+      const list = retriesByTool.get(rec.tool) ?? [];
+      list.push(rec.ts);
+      retriesByTool.set(rec.tool, list);
+    }
+
     if (FAULT_EVENTS.has(rec.event)) {
       faults.push({ event: rec.event, ts: rec.ts, tool: rec.tool ?? null, reason: rec.reason ?? null });
     }
@@ -125,6 +138,8 @@ function readConversation(text) {
         costUsd: typeof rec.costUsd === "number" ? rec.costUsd : null,
         durationMs: measured ?? derived,
         durationDerived: measured === null && derived !== null,
+        ttftMs: null, // filled from turn_timing below
+        streamMode: rec.streamMode ?? null,
         hops: typeof rec.hops === "number" ? rec.hops : null,
         path: Array.isArray(rec.path) ? rec.path.join(" → ") : null,
         usage: rec.usage ?? null,
@@ -133,7 +148,14 @@ function readConversation(text) {
     }
   }
 
-  return { turns, faults, toolDurations };
+  // turn_timing is written after turn_result, so it is stitched on once the file is read.
+  for (const t of turns) {
+    const timing = timingByTurn.get(t.turnId) ?? timingByTurn.get("__last");
+    if (timing && typeof timing.ttftMs === "number") t.ttftMs = timing.ttftMs;
+    if (timing && !t.streamMode) t.streamMode = timing.streamMode ?? null;
+  }
+
+  return { turns, faults, toolDurations, retriesByTool };
 }
 
 function tokensFrom(usage) {
@@ -162,6 +184,7 @@ async function main() {
   const turns = [];
   const faults = [];
   const toolDurations = new Map();
+  const retriesByTool = new Map();
 
   for (const file of files) {
     const parsed = readConversation(await readFile(path.join(args.dir, file), "utf8"));
@@ -172,6 +195,12 @@ async function main() {
     for (const f of parsed.faults) {
       if (args.since && f.ts < args.since) continue;
       faults.push(f);
+    }
+    for (const [tool, list] of parsed.retriesByTool) {
+      const inWindow = args.since ? list.filter((ts) => ts >= args.since) : list;
+      if (inWindow.length > 0) {
+        retriesByTool.set(tool, (retriesByTool.get(tool) ?? 0) + inWindow.length);
+      }
     }
     for (const [tool, list] of parsed.toolDurations) {
       // Honour --since here too: a tool table covering all history beside a one-day turn
@@ -232,6 +261,8 @@ async function main() {
     runRate: Object.fromEntries(days.map(([d, v]) => [d, v])),
     errorRate: { failedTurns: failed.length, totalTurns: turns.length, rate: failed.length / turns.length },
     latencyMs: latency,
+    ttftMs: summarise(turns.filter((t) => t.ttftMs !== null).map((t) => t.ttftMs)),
+    retriesByTool: Object.fromEntries([...retriesByTool].sort((a, b) => b[1] - a[1])),
     costUsd: cost,
     faults: Object.fromEntries(faultCounts),
     byPath: Object.fromEntries(
@@ -284,6 +315,25 @@ async function main() {
     const cacheable = sum.cacheRead + sum.cacheWrite;
     console.log(`  tokens over ${withTokens.length} turn(s): in ${sum.input}  out ${sum.output}  cache read ${sum.cacheRead}  cache write ${sum.cacheWrite}`);
     if (cacheable > 0) console.log(`  cache hit ratio ${pct(sum.cacheRead / cacheable)} of cacheable input`);
+  }
+
+  const ttft = report.ttftMs;
+  if (ttft.n > 0) {
+    console.log(`\nTIME TO FIRST TOKEN   p50 ${secs(ttft.p50)}   p95 ${secs(ttft.p95)}   max ${secs(ttft.max)}   (${ttft.n} turn(s))`);
+    const modes = new Set(turns.filter((t) => t.streamMode).map((t) => t.streamMode));
+    if (modes.size > 0) console.log(`  stream mode: ${[...modes].join(", ")}`);
+    if (latency.p50 !== null && ttft.p50 !== null && ttft.p50 > latency.p50 * 0.8) {
+      console.log(`  TTFT is ~the whole turn: nothing reaches the customer until the reply is`);
+      console.log(`  complete. That is SDK_STREAM_MODE=final. 'live' streams deltas instead.`);
+    }
+  } else {
+    console.log(`\nTIME TO FIRST TOKEN   not recorded — no turn has run since ttftMs shipped.`);
+  }
+
+  const retries = Object.entries(report.retriesByTool);
+  if (retries.length > 0) {
+    console.log(`\nTOOL RETRIES`);
+    for (const [tool, n] of retries) console.log(`  ${tool.padEnd(40)} ${String(n).padStart(4)} retries`);
   }
 
   console.log(`\nRUN RATE`);

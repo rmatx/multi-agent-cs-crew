@@ -84,10 +84,16 @@ npm run observability -- --since 2026-09-01  # one window
 npm run observability -- --json            # machine-readable
 ```
 
-It reports run rate by day, error rate with the fault events broken out, turn latency
-(p50/p95/max) alongside per-tool `durationMs`, and cost totals split **by agent path** — a one-hop
+It reports run rate by day, error rate with the fault events broken out, turn latency and
+**time to first token** (p50/p95/max) alongside per-tool `durationMs` and retries, and cost
+totals split **by agent path** — a one-hop
 `order-specialist` turn and an `order-specialist → escalation-handoff` turn are different
 products at different prices, and the average across them describes neither.
+
+TTFT is the one to watch for how the app *feels*: turn duration cannot tell a turn that printed
+steadily for 15s from one that showed nothing for 15s and then dumped an answer. Under
+`SDK_STREAM_MODE=final` (the default) they are the same turn — measured at 14.4s to first token
+out of a 14.4s turn, against 10.3s of 12.3s under `live`.
 
 Two things it will tell you that are worth knowing up front. Effectively all latency is the
 model: every DuckDB tool answers in under 25 ms, while the `Agent` delegation hop runs seconds.

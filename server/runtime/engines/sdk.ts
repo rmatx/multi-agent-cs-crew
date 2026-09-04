@@ -123,12 +123,12 @@ function mainAgentDelta(message: unknown): string {
 export const sdkEngine: TurnEngine = {
   id: "sdk",
 
-  async runTurn(input: TurnInput, emit: TurnEmit): Promise<void> {
+  async runTurn(input: TurnInput, rawEmit: TurnEmit): Promise<void> {
     const preflight = preflightSdkEngine();
     if (!preflight.ok) {
       // Documented, non-crashing failure. This is the ONLY thing a missing key produces.
-      emit({ type: "error", code: preflight.code, message: preflight.message, retryable: false });
-      emit({ type: "done", status: "escalated" });
+      rawEmit({ type: "error", code: preflight.code, message: preflight.message, retryable: false });
+      rawEmit({ type: "done", status: "escalated" });
       return;
     }
 
@@ -141,6 +141,20 @@ export const sdkEngine: TurnEngine = {
      * `turn_result` to pair with. Recorded on both terminal paths instead.
      */
     const turnStartedAt = Date.now();
+    /*
+     * Time to first token — the metric that says what a customer actually FEELS.
+     *
+     * Turn duration alone cannot distinguish a turn that printed steadily for 16s from one
+     * that showed nothing for 16s and then dumped an answer, and those are different products.
+     * It also makes the effect of SDK_STREAM_MODE measurable rather than assumed: under `final`
+     * (the default) ttft converges on the full turn duration, because nothing reaches the wire
+     * until the whole reply is buffered.
+     */
+    let firstTokenAt: number | null = null;
+    const emit: TurnEmit = (event) => {
+      if (firstTokenAt === null && event.type === "token") firstTokenAt = Date.now();
+      rawEmit(event);
+    };
     const temporal = toAgentTemporalView(input.temporal);
     const budget = createHopBudget(budgets.maxHops);
     const toolsTried: ToolAttempt[] = [];
@@ -338,6 +352,7 @@ export const sdkEngine: TurnEngine = {
             costUsd: result.total_cost_usd,
             usage: result.usage,
             durationMs: Date.now() - turnStartedAt,
+            streamMode,
             hops: budget.hops,
             path: budget.path,
           });
@@ -544,6 +559,7 @@ export const sdkEngine: TurnEngine = {
         event: "turn_error",
         error: String(err),
         durationMs: Date.now() - turnStartedAt,
+        streamMode,
         hops: budget.hops,
         path: budget.path,
       });
@@ -555,6 +571,18 @@ export const sdkEngine: TurnEngine = {
       });
       emit({ type: "done", status: "escalated" });
     } finally {
+      /*
+       * Logged HERE, not on turn_result, because under SDK_STREAM_MODE=final the buffered reply
+       * is emitted AFTER the SDK result arrives — so a ttft read at turn_result time is always
+       * null in exactly the mode whose perceived latency is worst. By the finally block every
+       * frame this turn will ever send has been sent.
+       */
+      tracer.log({
+        event: "turn_timing",
+        streamMode,
+        ttftMs: firstTokenAt === null ? null : firstTokenAt - turnStartedAt,
+        totalMs: Date.now() - turnStartedAt,
+      });
       input.signal.removeEventListener("abort", forwardAbort);
       await tracer.flush();
     }
