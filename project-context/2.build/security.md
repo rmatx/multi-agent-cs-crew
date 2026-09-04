@@ -37,7 +37,7 @@ cannot move money — held under every probe, and is the strongest part of the b
 |---|---|---|---|
 | SEC-01 | **High** | Any caller can read any customer's order and account data | Open — accepted for localhost only |
 | SEC-02 | **High** | A conversation id is a bearer token for that conversation's history | Open |
-| SEC-03 | Medium | Trace logs persist customer conversations in plaintext, with no retention limit | Open |
+| SEC-03 | Medium | Trace logs persist customer conversations in plaintext, with no retention limit | **Mitigated 2026-09-04** |
 | SEC-04 | Medium | No security response headers | Open — `@devops.eng` |
 | SEC-05 | Low | The rate limit is a cost guard being read as a control | Open — documented, not fixed |
 | SEC-06 | Low | Operator key is a single shared static secret with no rotation path | Accepted for MVP |
@@ -138,6 +138,27 @@ Three properties make it a finding rather than a note:
 **Recommendation.** Decide a retention window and enforce it (`@devops.eng` — a scheduled
 prune is enough), and state in the runbook that the log directory holds customer content and
 must not be copied off the host. If the demo is ever run with real data, this becomes High.
+
+**Mitigated 2026-09-04.** Three changes, addressing each property above.
+
+1. **Contact details are scrubbed at write time.** `scrubPii()` in `trace.ts` runs inside
+   `redact()`, so it covers every record rather than the call sites someone remembered. Email,
+   phone and payment-card patterns become `[EMAIL]` / `[PHONE]` / `[CARD]`; cards are confirmed
+   by Luhn so an ordinary long number is not mangled. Verified on a live sdk turn: a message
+   carrying all three wrote none of them to disk.
+   **What is deliberately kept**: order ids, user ids, dates and amounts. They are pseudonymous
+   keys into a fictional dataset and they are what makes a trace reconstructable — scrubbing
+   them would close this finding by destroying the artifact's only purpose.
+2. **A retention window exists and is enforceable.** `TRACE_RETENTION_DAYS` (default 7) with
+   `npm run prune:traces` (`--dry-run`, `--days N`). Pruning is **explicit**, never a side
+   effect of writing a log — see the note in `trace.ts` for why that distinction was learned
+   the hard way.
+3. **The runbook says so** (`deploy.md`, Access control).
+
+**Residual, unchanged.** No access control at rest — ordinary file permissions on the demo
+host, and `.gitignore` still is not a security control. The severity calibration is also
+unchanged: this is a *fictional* dataset, and against real customer data the finding still
+rises to High and needs encryption at rest plus an access boundary, not a scrubber.
 
 ---
 

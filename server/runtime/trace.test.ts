@@ -10,7 +10,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTracer, redact, sanitiseId } from "./trace";
+import { createTracer, redact, resolveRetentionDays, sanitiseId } from "./trace";
 
 const asRecord = (value: unknown): Record<string, unknown> => value as Record<string, unknown>;
 
@@ -143,4 +143,76 @@ test("each turn gets its own correlation id, stable within the turn", () => {
   assert.notEqual(a.turnId, b.turnId, "two turns of one conversation must not share an id");
   assert.equal(a.turnId, a.turnId, "the id is stable for the life of the turn");
   assert.equal(a.conversationId, b.conversationId);
+});
+
+/*
+ * PII scrubbing (SEC-03). The failure mode to guard is not "a pattern was missed" but "the log
+ * became useless": these tests pull in both directions, exactly like the token/credential pair
+ * above. Contact details go; the sentence and the ids that make a turn reconstructable stay.
+ */
+
+test("contact details are scrubbed out of customer text", () => {
+  const out = String(
+    asRecord(redact({ userPrompt: "email me at raj.mani+support@example.co.uk or call (555) 123-4567" }))[
+      "userPrompt"
+    ],
+  );
+  assert.match(out, /\[EMAIL\]/);
+  assert.match(out, /\[PHONE\]/);
+  assert.doesNotMatch(out, /example\.co\.uk/);
+  assert.doesNotMatch(out, /123-4567/);
+});
+
+test("a card number is scrubbed, and a long non-card number is not", () => {
+  // 4242…4242 is the canonical Luhn-valid test card.
+  assert.match(String(asRecord(redact({ t: "my card is 4242 4242 4242 4242" }))["t"]), /\[CARD\]/);
+  // Same length, fails Luhn — an id or a reference, and mangling it would lose real debug data.
+  const notACard = String(asRecord(redact({ t: "reference 1234567812345678" }))["t"]);
+  assert.match(notACard, /1234567812345678/);
+});
+
+test("the ids a trace is read by survive — this is what makes the log still worth keeping", () => {
+  const out = String(asRecord(redact({ t: "order 46101 for user 49890 totalling $175.05, placed 2026-09-01" }))["t"]);
+  assert.match(out, /46101/);
+  assert.match(out, /49890/);
+  assert.match(out, /\$175\.05/);
+  assert.match(out, /2026-09-01/);
+});
+
+test("scrubbing composes with secret redaction rather than replacing it", () => {
+  const out = String(asRecord(redact({ t: "key sk-ant-abcdefghijklmnop and mail a@b.co" }))["t"]);
+  assert.match(out, /\[REDACTED\]/);
+  assert.match(out, /\[EMAIL\]/);
+});
+
+test("retention window: default, explicit zero, and a bad value that must not delete everything", () => {
+  const read = (value: string | undefined): number => {
+    const prev = process.env["TRACE_RETENTION_DAYS"];
+    if (value === undefined) delete process.env["TRACE_RETENTION_DAYS"];
+    else process.env["TRACE_RETENTION_DAYS"] = value;
+    try {
+      return resolveRetentionDays();
+    } finally {
+      if (prev === undefined) delete process.env["TRACE_RETENTION_DAYS"];
+      else process.env["TRACE_RETENTION_DAYS"] = prev;
+    }
+  };
+
+  assert.equal(read(undefined), 7);
+  assert.equal(read("30"), 30);
+  assert.equal(read("0"), 0, "an explicit 0 is a real operator choice (DEF-07)");
+  assert.equal(read("-5"), 7, "a negative must fall back, not delete the archive");
+  assert.equal(read("soon"), 7, "a typo must fall back, not delete the archive");
+});
+
+test("PII at the end of a sentence is still scrubbed, whole", () => {
+  // Regression: `(?![\d.])` rejected a number followed by a full stop, so a sentence-final card
+  // fell through to the phone rule and leaked its last group as "[PHONE] 4242".
+  const out = String(asRecord(redact({ t: "charge card 4242 4242 4242 4242. Thanks." }))["t"]);
+  assert.match(out, /\[CARD\]/);
+  assert.doesNotMatch(out, /4242/);
+
+  const phone = String(asRecord(redact({ t: "call 555-987-6543." }))["t"]);
+  assert.match(phone, /\[PHONE\]/);
+  assert.doesNotMatch(phone, /6543/);
 });

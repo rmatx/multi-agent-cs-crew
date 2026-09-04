@@ -186,6 +186,7 @@ Non-numeric or non-positive input silently falls back to the default shown.
 |------|------|---------|---------|
 | `MAX_HOPS` | no | `4` | Agent transfers per turn. A tool call is **not** a hop (SAD hop accounting). |
 | `MAX_MODEL_TURNS` | no | `12` | Model turns inside the SDK loop; caps tool ping-pong. |
+| `TRACE_RETENTION_DAYS` | no | `7` | Age at which `npm run prune:traces` deletes a trace log (SEC-03). `0` keeps only today's; a negative or unparseable value falls back to 7 rather than deleting the archive. |
 | `TURN_TIMEOUT_MS` | no | `120000` | Wall clock for the whole turn. 120 s, not 60 s (ADR-19): a two-hop turn measures 44–54 s p95, and the old 60 s cap aborted turns whose work was already done. |
 | `MAX_OUTPUT_TOKENS` | no | `4096` | Output ceiling per turn. Overrun ⇒ halt + Diagnostic, never silent truncation. |
 | `MODEL_EFFORT` | no | `low` | `low\|medium\|high\|xhigh\|max`. **This is the determinism and cost lever.** |

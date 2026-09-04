@@ -178,6 +178,27 @@ Names only — **no value in this file, ever** (`aamad-core` Security and Compli
 
 ### Access control
 
+**The trace-log directory holds customer content. Do not copy it off the host.**
+`project-context/2.build/logs/` is one JSONL file per conversation, and the `prompt_trace`
+record carries `conversation_so_far` — the customer's own words. Contact details (email, phone,
+card) are scrubbed at write time by `scrubPii()`, and order ids, dates and amounts are
+deliberately kept so a turn stays reconstructable, so the directory is pseudonymous rather than
+anonymous. `.gitignore` prevents commit, not disclosure; anyone with host or backup access reads
+these files.
+
+Retention is **7 days by default** (`TRACE_RETENTION_DAYS`) and is enforced by running
+`npm run prune:traces` — it does not happen on its own. On a host that stays up, put it on a
+timer:
+
+```cron
+# 03:00 daily — enforce the trace-log retention window (SEC-03)
+0 3 * * *  cd /srv/novamart && npm run prune:traces >> /var/log/novamart-prune.log 2>&1
+```
+
+The CI eval workflow uploads the same logs as a build artifact with 7-day retention, matching.
+Against real customer data this is not sufficient — `security.md` SEC-03 rises to High and needs
+encryption at rest and an access boundary.
+
 **This deployment is single-operator and loopback-bound, and that is a control rather than a
 default.** `docker-compose.yml` publishes `127.0.0.1:3000:3000`. Changing it to `3000:3000`
 exposes the app on every interface and turns two accepted risks into live ones:

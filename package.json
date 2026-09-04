@@ -14,7 +14,8 @@
     "test:invariants": "node --import ./scripts/test-resolver.mjs --test server/runtime/toolRegistry.test.ts",
     "test": "node --import ./scripts/test-resolver.mjs --test server/runtime/*.test.ts server/data/*.test.ts lib/*.test.ts lib/services/*.test.ts packages/shared/src/*.test.ts",
     "eval:sdk": "node scripts/eval-sdk.mjs",
-    "observability": "node scripts/observability.mjs"
+    "observability": "node scripts/observability.mjs",
+    "prune:traces": "node --import ./scripts/test-resolver.mjs scripts/prune-traces.mjs"
   },
   "repository": {
     "type": "git",

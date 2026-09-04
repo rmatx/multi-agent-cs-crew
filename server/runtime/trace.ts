@@ -14,7 +14,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, mkdir, readdir, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 
 const LOG_DIR = path.join(process.cwd(), "project-context", "2.build", "logs");
@@ -48,6 +48,76 @@ function isUsageCount(key: string, value: unknown): boolean {
   return TOKEN_COUNT_KEY_SNAKE.test(key) || TOKEN_COUNT_KEY_CAMEL.test(key);
 }
 
+/*
+ * ---------------------------------------------------------------------------------------------
+ * PII scrubbing (SEC-03).
+ *
+ * The secret rules above target CREDENTIALS. Customer content is not a secret by that definition
+ * and was written verbatim by design, because the file exists so an operator can reconstruct a
+ * turn — `prompt_trace.userPrompt` carries `conversation_so_far`, so the log holds the
+ * customer's own words.
+ *
+ * Wholesale redaction of customer text would close the finding by destroying the artifact's
+ * only purpose. So this scrubs the CONTACT DETAILS a person might type into a support chat and
+ * leaves the sentence around them intact: "email me at [EMAIL] about order 46101" still debugs.
+ *
+ * What is deliberately NOT scrubbed: order ids and user ids. They are pseudonymous keys into a
+ * fictional dataset, they are the join key for every trace, and removing them would make the
+ * log unreadable while protecting nobody. That trade is the finding's calibration, not an
+ * oversight — against real customer data, security.md already says SEC-03 rises to High, and
+ * this control is a floor rather than a substitute for that reassessment.
+ */
+
+const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+/**
+ * 10+ digit runs with common separators. The 10-digit floor is what keeps this off the data the
+ * log is FOR: order ids in this dataset are at most 5 digits and user ids at most 5, so neither
+ * can trip it, and a bare `$175.05` has nowhere near enough digits.
+ */
+const PHONE_PATTERN = /(?<![\d.])(?:\+?\d[\d\s().-]{8,}\d)(?!\d)/g;
+
+/**
+ * 13–19 digit runs that pass Luhn. Luhn rather than length alone so a long ordinary number — an
+ * id, a timestamp, a token count rendered into a sentence — is not silently mangled.
+ *
+ * The trailing guard is `(?!\d)` and NOT `(?![\d.])`: a card at the end of a sentence is
+ * followed by a full stop, and excluding `.` made the whole match fail there. The observed
+ * result was worse than no rule — the card fell through to the phone pattern, which matched a
+ * prefix and left the last group in the clear as `[PHONE] 4242`. The leading lookbehind still
+ * prevents starting mid-decimal, and the 13-digit floor keeps this away from money amounts.
+ */
+const CARD_CANDIDATE = /(?<![\d.])(?:\d[ -]?){13,19}(?!\d)/g;
+
+function passesLuhn(digits: string): boolean {
+  let sum = 0;
+  let double = false;
+  for (let i = digits.length - 1; i >= 0; i -= 1) {
+    let d = digits.charCodeAt(i) - 48;
+    if (double) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+    double = !double;
+  }
+  return sum % 10 === 0;
+}
+
+export function scrubPii(text: string): string {
+  return text
+    .replace(EMAIL_PATTERN, "[EMAIL]")
+    .replace(CARD_CANDIDATE, (match) => {
+      const digits = match.replace(/\D/g, "");
+      if (digits.length < 13 || digits.length > 19) return match;
+      return passesLuhn(digits) ? "[CARD]" : match;
+    })
+    .replace(PHONE_PATTERN, (match) => {
+      const digits = match.replace(/\D/g, "");
+      return digits.length >= 10 && digits.length <= 15 ? "[PHONE]" : match;
+    });
+}
+
 const REDACTED = "[REDACTED]";
 const MAX_STRING = 2_000;
 
@@ -56,7 +126,7 @@ export function redact(value: unknown, depth = 0): unknown {
   if (typeof value === "string") {
     const truncated =
       value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}…[truncated]` : value;
-    return truncated.replace(SECRET_VALUE_PATTERN, REDACTED);
+    return scrubPii(truncated.replace(SECRET_VALUE_PATTERN, REDACTED));
   }
   if (typeof value === "bigint") return value.toString();
   if (value === null || typeof value !== "object") return value;
@@ -94,7 +164,68 @@ export type Tracer = {
   flush(): Promise<void>;
 };
 
+/*
+ * ---------------------------------------------------------------------------------------------
+ * Retention (SEC-03).
+ *
+ * The finding's first property is "no retention limit — files accumulate indefinitely", and a
+ * retention window that exists only in a runbook is a plan, not a control. This enforces it.
+ *
+ * Pruning is EXPLICIT — `scripts/prune-traces.mjs`, run by hand or from cron. It is deliberately
+ * not a side effect of `createTracer`.
+ *
+ * The first version of this did prune lazily on the first tracer of a process, and that cost
+ * real data: `trace.test.ts` constructs a tracer, so `npm test` swept the developer's actual log
+ * directory and destroyed 120 files of accumulated history, including the only recorded
+ * failures in the project (the 2026-08-23 DEF-01 turns). Writing a log file is not a licence to
+ * delete other ones, and a destructive operation reachable from a unit test is a design error
+ * however carefully the window is chosen. Deletion now happens only where someone asked for it.
+ */
+const RETENTION_DAYS_DEFAULT = 7;
+
+export function resolveRetentionDays(): number {
+  const raw = process.env.TRACE_RETENTION_DAYS?.trim();
+  if (raw === undefined || raw === "") return RETENTION_DAYS_DEFAULT;
+  const parsed = Number(raw);
+  // 0 is legal and means "keep nothing older than today" (DEF-07's lesson: an explicit 0 is a
+  // real operator choice). A negative or unparseable value falls back rather than deleting
+  // everything, because the failure mode of guessing wrong here is unrecoverable.
+  if (!Number.isFinite(parsed) || parsed < 0) return RETENTION_DAYS_DEFAULT;
+  return parsed;
+}
+
+export async function pruneOldTraces(
+  maxAgeDays = resolveRetentionDays(),
+  dir = LOG_DIR,
+): Promise<{ removed: number; kept: number }> {
+  const cutoff = Date.now() - maxAgeDays * 86_400_000;
+  let removed = 0;
+  let kept = 0;
+  try {
+    const files = await readdir(dir);
+    for (const file of files) {
+      if (!file.endsWith(".jsonl")) continue;
+      const full = path.join(dir, file);
+      try {
+        const info = await stat(full);
+        if (info.mtimeMs < cutoff) {
+          await unlink(full);
+          removed += 1;
+        } else {
+          kept += 1;
+        }
+      } catch {
+        /* a file that vanished under us needs no handling */
+      }
+    }
+  } catch {
+    /* no log directory yet is the normal first-run state, not an error */
+  }
+  return { removed, kept };
+}
+
 export function createTracer(conversationId: string, engineId: string): Tracer {
+
   const file = path.join(LOG_DIR, `${sanitiseId(conversationId)}.jsonl`);
   const turnId = randomUUID();
   let queue: Promise<void> = Promise.resolve();
