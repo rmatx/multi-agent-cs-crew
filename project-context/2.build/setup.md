@@ -186,7 +186,7 @@ Non-numeric or non-positive input silently falls back to the default shown.
 |------|------|---------|---------|
 | `MAX_HOPS` | no | `4` | Agent transfers per turn. A tool call is **not** a hop (SAD hop accounting). |
 | `MAX_MODEL_TURNS` | no | `12` | Model turns inside the SDK loop; caps tool ping-pong. |
-| `TURN_TIMEOUT_MS` | no | `60000` | Wall clock for the whole turn. |
+| `TURN_TIMEOUT_MS` | no | `120000` | Wall clock for the whole turn. 120 s, not 60 s (ADR-19): a two-hop turn measures 44–54 s p95, and the old 60 s cap aborted turns whose work was already done. |
 | `MAX_OUTPUT_TOKENS` | no | `4096` | Output ceiling per turn. Overrun ⇒ halt + Diagnostic, never silent truncation. |
 | `MODEL_EFFORT` | no | `low` | `low\|medium\|high\|xhigh\|max`. **This is the determinism and cost lever.** |
 | `MAX_THINKING_TOKENS` | no | **unset (adaptive)** | Fixed thinking budget for **older models only** (e.g. `claude-haiku-4-5`). Must stay UNSET on Opus 4.6+ / Sonnet 4.6+ / Opus 5 / Sonnet 5, which use adaptive thinking. |
@@ -563,7 +563,7 @@ server on 3111 was left undisturbed rather than risking its `.next` state); no r
 | Outputs | `project-context/2.build/setup.md` (new); `.env.example` (+1 name, no value); `data/policy/.gitkeep` (new dir) |
 | Not modified | `package.json`, `package-lock.json`, `prd.md`, `sad.md`, `frontend.md`, `backend.md`, and all of `app/`, `lib/`, `server/`, `packages/` |
 | Secrets | `.env.local` confirmed to exist and to be ignored at `.gitignore:7`; **never opened**. No secret value appears in this artifact. `.env.example` remains names-only. |
-| Model / determinism controls | No model was invoked by the verification in this artifact. The documented app defaults are `MODEL_EFFORT=low`, `MAX_OUTPUT_TOKENS=4096`, `MAX_MODEL_TURNS=12`, `MAX_HOPS=4`, `TURN_TIMEOUT_MS=60000`, thinking adaptive. No `temperature` exists on current models. |
+| Model / determinism controls | No model was invoked by the verification in this artifact. The documented app defaults are `MODEL_EFFORT=low`, `MAX_OUTPUT_TOKENS=4096`, `MAX_MODEL_TURNS=12`, `MAX_HOPS=4`, `TURN_TIMEOUT_MS=120000` (ADR-19), thinking adaptive. No `temperature` exists on current models. |
 | Spend | **Zero.** No Anthropic API request was made. The `sdk` engine was never selected; the smoke test ran on the keyless deterministic engine and health was checked first to confirm it. |
 | Quality gate | PASS — `typecheck` exit 0; `test:invariants` 9/9; deterministic turn end-to-end green; repo hygiene clean; env contract reconciled with 1 drift found and fixed. |
 | Handoff | `@integration.eng` (`*integrate-api`) and `@qa.eng` (`*qa`). SG-3/SG-4/SG-6 carry to `@devops.eng`; SG-9 to `@security.eng`. SU-OQ-1 to `@backend.eng`; SU-OQ-2/SU-OQ-3 to `@system.arch`. |

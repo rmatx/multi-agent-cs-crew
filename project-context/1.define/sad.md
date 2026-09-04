@@ -75,6 +75,7 @@
 | ADR-16 | **`escalate` is part of the `TurnEngine` contract, not the sdk engine's alone** | `deterministic` is the DEFAULT engine; a money-adjacent request must reach a human on every engine (PRD F-ESC-01), amended 2026-08-27 |
 | ADR-17 | **Terminal-state guarantees are enforced by the runtime, not by coordinator prompt text** | Both ADR-08's forced escalation and "escalate over invent" were prompt requests the model could and did decline; a guarantee the model may opt out of is not a guarantee (added 2026-08-28) |
 | ADR-18 | **Cross-engine parity is scoped to terminal STATUS, not to specialist coverage** | ADR-16 obliges both engines to route a money ask to a human; it does not oblige `deterministic` to reimplement policy search or membership reads, which would mean writing a second, keyless crew to prove the first one (added 2026-08-28) |
+| ADR-19 | **`turnTimeoutMs=120000`, not 60000** | The 60 s budget was set before any turn had been measured. Delegation is forced synchronous (ADR-17's `canUseTool` rewrite of `run_in_background`), so a specialist hop is wall-clock serial: measured p95 is 28.6 s for one hop and **44–54 s for two**, with a 63.1 s maximum over 359 turns. A 60 s cap therefore aborts real turns *after* the work is done and the tokens are paid for — the customer waits a minute and receives an error for an answer the system had already produced. 120 s keeps the runaway guard the budget exists for while clearing the measured two-hop distribution (added 2026-09-04) |
 
 
 ---
@@ -328,7 +329,7 @@ type SessionState = {
 | Language            | TypeScript / Node LTS                                                                            | Pin in setup epic                                                          |
 | Streaming envelope  | See §4                                                                                           | Contract-first before FE/BE impl                                           |
 | Turn / hop budget   | `maxHops=4`                                                                                      | Then `reason_code=repeat_failure`                                          |
-| Time budget         | `turnTimeoutMs=60000`                                                                            | Cancel in-flight tools; safe user message                                  |
+| Time budget         | `turnTimeoutMs=120000` (ADR-19)                                                                  | Cancel in-flight tools; safe user message. 120 s, not 60 s: a two-hop turn measures 44–54 s p95 and 60 s aborted completed work |
 | Token / cost budget | Configurable `maxOutputTokens` per turn                                                          | Halt + Diagnostic on overrun                                               |
 | Effort              | `MODEL_EFFORT` default `low` (low / medium / high / xhigh / max)                                  | Determinism lever for evals. **Temperature is unavailable**: it was removed from the Anthropic Messages API on the target models (Opus 5, Sonnet 5, Opus 4.7/4.8 reject it with HTTP 400) and `@anthropic-ai/claude-agent-sdk` exposes no temperature option, so no value could reach the model. Reproducibility comes from `effort` + pinned `AS_OF_DATE` + the keyless deterministic engine |
 | Thinking            | `thinking` + `effort`; fixed `MAX_THINKING_TOKENS` budget applies to **older** models only (e.g. `claude-haiku-4-5`) | SDK `maxThinkingTokens` is deprecated and model-dependent — on Opus 4.6 any non-zero value behaves as an on/off switch rather than a cap |
@@ -360,7 +361,7 @@ stateDiagram-v2
   Working --> Escalating: restricted / ungrounded / human requested
   Working --> Escalating: hops exhausted (repeat_failure)
 
-  Working --> Aborted: turnTimeoutMs=60000
+  Working --> Aborted: turnTimeoutMs=120000
   Working --> Aborted: client disconnect
   Routing --> Aborted: client disconnect
 
@@ -732,7 +733,7 @@ MODEL_ID=
 MODEL_EFFORT=low
 MAX_THINKING_TOKENS=
 MAX_HOPS=4
-TURN_TIMEOUT_MS=60000
+TURN_TIMEOUT_MS=120000
 OPERATOR_KEY=
 PORT=
 ```
@@ -807,7 +808,7 @@ flowchart TB
 | Human request | Yes | F-CHAT-01 button → escalation |
 | Operator trace | Yes | SSE hop events + GET trace + TracePanel |
 | CSAT after terminal | Yes | `csat_prompt` event + SessionStore |
-| Hop/time budget | Yes | maxHops=4, turnTimeoutMs=60000 |
+| Hop/time budget | Yes | maxHops=4, turnTimeoutMs=120000 (ADR-19) |
 | Scenario D analytics | **No (by design)** | Explicitly out of MVP |
 
 
@@ -1344,3 +1345,32 @@ committed 3.2 MB fixture.
   `server/data/duckdb.ts` (closes SU-OQ-3). Recorded as SAD-OQ-7 in Open Questions.
 - **Not changed**: ADR numbering, section structure, all other artifacts and code.
 
+### Amendment — 2026-09-04
+
+- **Persona id**: `@system.arch`
+- **Action**: `*create-sad` (surgical amendment)
+- **AAMAD_TARGET_RUNTIME**: `claude-agent-sdk` (resolved from env; matches `aamad.config.yml`)
+- **Trigger**: the implementation had run `turnTimeoutMs=120000` since Sprint 2 while this
+  document specified `60000` in four places. The deviation was deliberate and its reason was
+  recorded in `server/runtime/config.ts` — but only there, so the SAD, `setup.md` and
+  `backend.md` all still published a number the runtime does not use. `backend.md` contradicted
+  itself, recording the 60 s → 120 s raise in its change log while two of its tables kept 60000.
+- **Resolution**: **ADR-19** added, and the four SAD sites corrected (§2 quality-attribute
+  budgets, the turn-lifecycle state diagram, the `.env` template, the PRD coverage table).
+  The architecture document now states what the system does.
+- **Why the code was right and this document was wrong**: the 60 s budget predates any
+  measurement. Delegation is forced synchronous under ADR-17, so specialist hops are wall-clock
+  serial. Measured over 359 turns: one-hop p95 **28.6 s**, two-hop p95 **44–54 s**, maximum
+  **63.1 s**. A 60 s cap aborts turns *after* the work is done and paid for — the failure mode
+  is a customer waiting a full minute to receive an error instead of the answer the system had
+  already produced. The evidence is `npm run observability`, reading the runtime's own traces.
+- **Not changed**: `maxHops=4` still bounds delegation, so the runaway guard the time budget
+  exists for is intact; 120 s bounds the wall clock without truncating measured legitimate work.
+- **Also corrected, outside this document**: the stale `60000` in `setup.md` (two sites),
+  `backend.md` (two sites), and the doc-comment in `config.ts` that cited the superseded SAD
+  value. Flagged for their owning personas — `@project.mgr` and `@backend.eng` — as factual
+  corrections, not re-authored artifacts.
+- **Open**: the SAD does not yet specify a `SDK_STREAM_MODE` default. The runtime defaults to
+  `final`, whose measured time-to-first-token is the entire turn (14.4 s of 14.4 s) against
+  10.3 s of 12.3 s under `live`. Every eval and QA verification runs `live`. Whether the
+  architecture should specify the streaming default is raised here, not decided.

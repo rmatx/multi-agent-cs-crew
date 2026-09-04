@@ -90,7 +90,7 @@ export type TurnBudgets = {
   maxHops: number;
   /** Model turns inside the SDK loop. Distinct from hops; caps runaway tool ping-pong. */
   maxModelTurns: number;
-  /** Wall clock for the whole turn (SAD: turnTimeoutMs=60000). */
+  /** Wall clock for the whole turn (SAD §2, ADR-19: turnTimeoutMs=120000). */
   turnTimeoutMs: number;
   /** Output token ceiling per turn. Overrun ⇒ halt + Diagnostic, never a silent truncation. */
   maxOutputTokens: number;

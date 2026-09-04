@@ -244,7 +244,7 @@ default (adapter Execution).
 |---------|---------|-----|--------|
 | `maxHops` | 4 | `MAX_HOPS` | SAD §2 / ADR-08 |
 | `maxModelTurns` | 12 | `MAX_MODEL_TURNS` | caps tool ping-pong inside one hop |
-| `turnTimeoutMs` | 60000 | `TURN_TIMEOUT_MS` | SAD §2 |
+| `turnTimeoutMs` | 120000 | `TURN_TIMEOUT_MS` | SAD §2 / ADR-19 — raised from 60000, see item below |
 | `maxOutputTokens` | 4096 | `MAX_OUTPUT_TOKENS` | via `CLAUDE_CODE_MAX_OUTPUT_TOKENS` |
 | `effort` | `low` | `MODEL_EFFORT` | SDK `effort`; replaces temperature as the determinism lever |
 | `thinkingBudgetTokens` | unset ⇒ adaptive | `MAX_THINKING_TOKENS` | SDK `thinking`; fixed budget is for OLDER models only |
@@ -755,7 +755,7 @@ drafts in `stubs.ts` preserve. The CI-fixture default matches SAD-OQ-6 as resolv
 | SDK version | `@anthropic-ai/claude-agent-sdk@0.3.241` (already installed; nothing installed, upgraded or removed) |
 | Resolved model | **none** — `MODEL_ID` is unset in this environment and is required, not defaulted, so no sdk turn can run. Recorded per-run in the Prompt Trace once set. |
 | Temperature | **n/a** — removed from the Messages API on current models; `MODEL_TEMPERATURE` deleted 2026-08-23. Determinism uses `effort` (see Known gaps 2) |
-| Token controls | `maxOutputTokens` 4096 (`CLAUDE_CODE_MAX_OUTPUT_TOKENS`), `effort` `low` (`MODEL_EFFORT`), `thinking` adaptive unless `MAX_THINKING_TOKENS` is set, `maxTurns` 12, `turnTimeoutMs` 60000, `maxHops` 4, `toolReadRetries` 1 |
+| Token controls | `maxOutputTokens` 4096 (`CLAUDE_CODE_MAX_OUTPUT_TOKENS`), `effort` `low` (`MODEL_EFFORT`), `thinking` adaptive unless `MAX_THINKING_TOKENS` is set, `maxTurns` 12, `turnTimeoutMs` 120000 (ADR-19), `maxHops` 4, `toolReadRetries` 1 |
 | Prompt Trace | Captured pre-execution in `server/runtime/trace.ts` → `project-context/2.build/logs/<conversationId>.jsonl`, redacted. No trace files were produced in this task because no sdk turn ran past preflight. |
 | Verification | `npm run typecheck` exit 0 · `npm run test:invariants` 9/9 · `npx next build` compiled · default-engine SSE smoke on `orderId 1` with no API key returned the grounded reply verbatim · sdk-engine-without-key returned one clean `sdk_engine_unconfigured` frame · port 3000 freed · `git status` clean of `.duckdb` / `.env*` |
 | Inputs | `prd.md`, `sad.md`, `frontend.md`, `frontend-functional-spec.md`, `aamad.config.yml`, adapter rule, existing backend code |
