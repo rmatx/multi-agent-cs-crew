@@ -26,7 +26,7 @@ Verified on the development host on 2026-08-23.
 
 | Tool | Verified version | How to check | Notes |
 |------|------------------|--------------|-------|
-| Node.js | **v25.9.0** | `node -v` | `@types/node@26.2.0`. Node ≥ 20 is the practical floor (Next 16 requirement); 25.x is what this repo is exercised on. |
+| Node.js | **24** (pinned) | `node -v` | The pin is `.nvmrc` = `24`, and it is load-bearing: `server/data/sqlite.ts` uses the built-in `node:sqlite` driver (ADR-10), stable from 24. `.nvmrc`, the Dockerfile and CI all read that one number. Newer runtimes work — this repo was last exercised on v25.9.0 — but 24 is the version the project documents and ships. |
 | npm | **11.12.1** | `npm -v` | Ships with the Node above. `package-lock.json` is lockfileVersion-current; use `npm ci` for reproducible installs. |
 | TypeScript | **5.9.3** | `npx tsc -v` | Local devDependency, not global. |
 | Python | 3.x + `duckdb` | — | **Optional.** Only for `scripts/build-ci-fixture.py`. A `.venv/` exists locally and is gitignored. Not needed to run the app. |
@@ -398,7 +398,7 @@ frontend.md / backend.md modified, and `.env.local` never opened.
 | **SG-2** | Two **extraneous** packages in the tree (`@emnapi/runtime@1.11.3`, `@img/sharp-wasm32@0.35.3`) — optional platform artifacts of `next`'s image pipeline left by an earlier install. | Cosmetic; `npm ls` is noisy. A fresh `npm ci` clears them. | `@project.mgr`, next install cycle. |
 | **SG-3** | **No linter installed.** `aamad.config.yml` sets `coding_standards.style_guide: eslint`, and SAD's CI sketch opens with a lint stage, but no ESLint package or config exists. `npm run lint` does not exist. | The documented CI pipeline cannot run its first stage. | `@devops.eng` at `*configure-cicd`, or `@project.mgr` if a lint install is authorised. |
 | **SG-4** | **No CI workflow file.** No `.github/workflows/`. SAD §5 specifies lint → typecheck → unit → integration → build, and the `--check` fixture guard has no runner. | CI is documented but not executable. | `@devops.eng`, Deliver phase. |
-| **SG-5** | **No `.nvmrc` / `engines` field.** Node version is verified (v25.9.0) but not pinned anywhere machine-readable, so a contributor on an older Node gets a Next 16 failure with no early signal. | Onboarding friction. | `@project.mgr` — needs a `package.json` edit, out of scope here. |
+| **SG-5** | ~~**No `.nvmrc` / `engines` field.**~~ **RESOLVED 2026-08-31.** `.nvmrc` now pins `24`, matched by the Dockerfile and the CI workflow. Recorded here because the gap was real when this artifact was written. | Was: onboarding friction. | Closed. |
 | **SG-6** | **No `.dockerignore` / container definition.** SAD §5 `demo` env assumes one container/VM. | Blocks the Deliver deploy definition. | `@devops.eng` at `*define-deploy`. |
 | **SG-7** | **The `sdk` engine has never executed a turn.** Its failure path is verified; nothing past the preflight is. Setup can install and configure it but cannot validate it without spending. | Everything below `preflightSdkEngine` is unvalidated. | `@qa.eng` / operator, when a spend budget is authorised. |
 | **SG-8** | `data/policy/`, `data/demo_overlay.json`, `data/*.sqlite` are **empty or absent**; the corresponding env names are inert placeholders. | Sprint 2 scope. Nothing in Sprint 1 depends on them. | `@backend.eng`, Sprint 2. |

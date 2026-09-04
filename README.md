@@ -1,44 +1,52 @@
 # Multi-Agent Customer Support Crew (NovaMart)
 
-Capstone project: a customer-facing multi-agent support chat crew, built with the
+A customer types an order number and a question. It goes to the chat endpoint as a live
+stream, and they get one of three honest outcomes: a grounded order answer with citations, a
+clarifying question, or the news that a person now owns it. Built with the
 [AAMAD](https://pypi.org/project/aamad/) multi-agent development framework.
 
-- **Authoring IDE**: Claude Code
-- **Target runtime**: `claude-agent-sdk` (TypeScript / Node LTS)
-- **Phase**: 1 (Define) complete — `FINAL-FOR-BUILD`. Phase 2 (Build) in progress — all six
-  agents registered and running; Sprint 2 layers 2–4 done, layer 5 (durable stores, CSAT,
-  trace panel) outstanding.
+- **Status — the product runs end to end locally.** Chat UI, streaming API, six registered
+  agents with tools, durable conversations, CSAT, and an operator trace panel. Deliver
+  artifacts (runbook, CI, Dockerfile) are written. Nothing is money-capable, by construction.
+- **The default path is keyless.** `npm run dev` needs no API key: order answers are composed
+  in code from the database read, so the demo and CI are reproducible offline. **That path is
+  not the crew, and this README never calls it one.**
+- **The crew needs a key.** `CHAT_ENGINE=sdk` runs the real `claude-agent-sdk` crew — see
+  [Two engines](#two-engines-the-app-and-the-crew). `/api/health` reports which is live, so no
+  walkthrough has to be taken on trust.
+- **Authoring IDE**: Claude Code · **Target runtime**: `claude-agent-sdk` (TypeScript / Node 24).
 
 ## Run it locally
 
-Requires Node LTS and npm. No API key: this slice composes its answer from the tool
-result rather than calling a model, so it runs offline and deterministically.
+Needs Node 24 (`.nvmrc`) and npm.
 
 ```bash
 npm install
-npm run dev          # http://localhost:3000
+AS_OF_DATE=2026-09-01 npm run dev     # http://localhost:3000
 ```
 
 The app falls back to the committed `data/fixtures/novamart_ci.duckdb` (3.2 MB, the five
 MVP-read tables with every row). Nothing else is required to start.
 
-Type an order number, ask "Where is my order?", and press **Run**.
+**Pin the clock.** The practice database is frozen in 2024–2025, so dates are shifted to land
+the newest order on "today". With `AS_OF_DATE` unset that anchor moves every day: the relative
+phrases stay true, but every absolute date on screen shifts, and any written walkthrough —
+this table included — quietly rots. Evals must pin it for the same reason.
+
+Type an order number, ask "Where is my order?", and press **Run**. Under the pin above, this
+is verbatim what comes back:
 
 | Order id | What you should see |
 | ---: | --- |
-| `46101` | Placed today — raw date in the database is `2025-01-01` |
-| `42776` | Placed 13 days ago — inside the 14-day return window |
-| `1` | Placed about a year ago — correctly outside the window |
+| `46101` | `Placed 2026-09-01 (today)` — raw date in the database is `2025-01-01` |
+| `42776` | `Placed 2026-08-19 (13 days ago)` — inside the 14-day return window |
+| `1` | `Placed 2025-09-01 (365 days ago)` — correctly outside the window |
 | `99999999` | Not found, `needs input` — no invented tracking number |
 
-Those dates move with the clock. To pin them, set the as-of date:
-
-```bash
-AS_OF_DATE=2026-08-13 npm run dev
-```
-
-Every eval must pin it too — with `asOf` defaulting to today, the date shift grows by one
-day per day and absolute expectations rot silently.
+Then ask **"I want a refund"** on any of them. You get a ticket id, an `escalated` status, and
+a sentence saying a human will pick it up — never a refund. That handoff is structural, so it
+fires on **both** engines: no money tool is registered anywhere in the process, which is a
+stronger claim than a model being instructed to decline.
 
 Conversations are durable: `data/sessions.sqlite` keeps the transcript and the identity you
 gave, so a follow-up like "can I still return it?" knows which order you mean, and
@@ -217,7 +225,15 @@ Define-phase artifacts were originally authored in Cursor targeting `cursor-sdk`
 see the *Runtime retrofit* section of `project-context/1.define/define-quality-gate.md`
 for the full before/after.
 
-## Next step
+## Where this is going
 
-Phase 2, Module 1 — `@project-mgr` scaffolds the TypeScript/Node app per
-`.claude/rules/development-workflow.md`. Run each Build module in a fresh session.
+The build is up and the Deliver artifacts are written. What is left is polish, not
+scaffolding: the container image has never been built on this machine, hosting is deliberately
+deferred, and `project-context/2.build/qa.md` carries the remaining future work — citation
+precision, per-hop latency in the trace, a pleasantry eval slice, and the load testing that
+nothing has measured against the PRD's ≥5-concurrent and p95 < 30 s targets.
+
+A public host stays out of scope until authentication exists: `project-context/2.build/security.md`
+accepts SEC-01 and SEC-02 (any caller can read any order by id; a conversation id acts as a
+bearer token) **only** for localhost, single-operator use, which is why `docker-compose.yml`
+binds to `127.0.0.1`.
