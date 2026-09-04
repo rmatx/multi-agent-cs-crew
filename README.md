@@ -70,7 +70,7 @@ Two workflows, split by whether they need your API key.
 | Workflow | Trigger | Needs a key | What it proves |
 |---|---|---|---|
 | `ci.yml` | every push and PR | No | Typecheck, 154 unit tests, the zero-money-tools invariant, production build, fixture row counts, policy corpus, secret scan, and that the Docker image builds |
-| `eval.yml` | manual + daily schedule | Yes | The **crew** still works: all 9 live eval slices, 114 assertions, with a spend cap |
+| `eval.yml` | manual + weekly schedule | Yes | The **crew** still works: all 9 live eval slices, 114 assertions, with a spend cap |
 
 `ci.yml` is keyless on purpose, so a fork or a PR can run the whole suite without a secret and
 without spending anyone's money. What it cannot prove is that the crew still behaves — model
