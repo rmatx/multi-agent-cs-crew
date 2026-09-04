@@ -11,7 +11,7 @@ type Mod = typeof import("./groundingGuard");
 
 const g = (await import(new URL("./groundingGuard.ts", import.meta.url).href)) as Mod;
 
-const NO_EVIDENCE = { hops: 0, escalated: false, needsInput: false };
+const NO_EVIDENCE = { hops: 0, escalated: false, needsInput: false, hasOpenTicket: false };
 
 test("bare pleasantries need no specialist", () => {
   for (const message of [
@@ -95,4 +95,26 @@ test("evidence of any kind clears the guard", () => {
 test("a greeting answered with no hops is fine", () => {
   assert.equal(g.isUnaidedAnswer("hi", NO_EVIDENCE), false);
   assert.equal(g.isUnaidedAnswer("thanks!", NO_EVIDENCE), false);
+});
+
+test("DEF-13: a reply is grounded when a ticket is already open on this conversation", () => {
+  // The exact turn from the demo capture: the customer asks for a human a second time, the
+  // coordinator answers from the session ("that ticket has you covered"), and no specialist runs.
+  // Before this, the guard read `0 hops` and forced an `ungrounded` escalation — opening a second
+  // ticket in the same reply that said none was needed.
+  const askAgain = "I would like to speak to a human, please.";
+
+  assert.equal(
+    g.isUnaidedAnswer(askAgain, { ...NO_EVIDENCE, hasOpenTicket: true }),
+    false,
+    "a ticket already open on this conversation is evidence the coordinator may answer from",
+  );
+
+  // And the guard still fires when there is nothing to have answered from — the asymmetry it
+  // exists for is intact.
+  assert.equal(
+    g.isUnaidedAnswer(askAgain, { ...NO_EVIDENCE, hasOpenTicket: false }),
+    true,
+    "with no ticket and no specialist, an answer is still ungrounded",
+  );
 });

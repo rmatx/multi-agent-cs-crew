@@ -105,6 +105,22 @@ export type TurnEvidence = {
   readonly escalated: boolean;
   /** The coordinator declared a clarifying question with the control marker. */
   readonly needsInput: boolean;
+  /**
+   * DEF-13. A ticket is already open on THIS conversation, so a reply that restates it is
+   * grounded — in the session store rather than in a tool call.
+   *
+   * Observed in the operator's own demo capture: asked for a human twice, the coordinator
+   * answered correctly the second time ("there's no need to open a separate request — that
+   * ticket has you covered") and this guard escalated it as `ungrounded` anyway, opening a
+   * SECOND ticket in the same reply that said none was needed. The turn read `0 hops, 0 tool
+   * calls`, which is exactly what the guard keys on, and exactly what a correct answer from
+   * conversation state also looks like.
+   *
+   * Evidence is not only a tool result. What the runtime already knows about this conversation
+   * counts, and the runtime can check it rather than guess: `listTicketStubsForConversation`
+   * has held the answer the whole time.
+   */
+  readonly hasOpenTicket: boolean;
 };
 
 /**
@@ -115,5 +131,7 @@ export function isUnaidedAnswer(message: string, evidence: TurnEvidence): boolea
   if (evidence.hops > 0) return false;
   if (evidence.escalated) return false;
   if (evidence.needsInput) return false;
+  // DEF-13. Grounded in the conversation, which is still grounded.
+  if (evidence.hasOpenTicket) return false;
   return requiresSpecialist(message);
 }

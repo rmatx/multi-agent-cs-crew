@@ -44,7 +44,11 @@ import {
   type HookContext,
   type ToolAttempt,
 } from "../hooks";
-import { createTicketStub, formatHandoffSummary } from "../escalation";
+import {
+  createTicketStub,
+  formatHandoffSummary,
+  listTicketStubsForConversation,
+} from "../escalation";
 import { categoryForIntent } from "../escalationContext";
 import { createNovamartToolServer } from "../tools";
 import {
@@ -445,6 +449,9 @@ export const sdkEngine: TurnEngine = {
         hops: budget.hops,
         escalated: false,
         needsInput,
+        // DEF-13: read, do not infer. A ticket already open on this conversation is evidence the
+        // coordinator can legitimately answer from.
+        hasOpenTicket: listTicketStubsForConversation(input.conversationId).length > 0,
       });
 
       if (budget.exhausted || unaided) {

@@ -206,6 +206,30 @@ export function listTicketStubsForConversation(conversationId: string): StoredSt
   return rows.map(toStub);
 }
 
+/*
+ * The closing sentence, per reason.
+ *
+ * DEF-13 / Arize finding 3. Every handoff used to end "I can't process refunds, cancellations,
+ * or payments myself" — true, and irrelevant on an escalation about a login failure or a
+ * customer simply asking for a person. Arize flagged it as "overly payment-specific" from the
+ * traces alone, and the demo capture shows it on a `customer_requested_human` turn.
+ *
+ * The money line is not deleted; it is confined to the money reasons, where it is the whole
+ * point. Everywhere else the sentence says what is actually true of THAT handoff.
+ */
+const CLOSING_BY_REASON: Record<string, string> = {
+  payment_or_refund:
+    "A human will pick this up — I can't process refunds, cancellations, or payments myself.",
+  restricted_action:
+    "A human will pick this up — I can't make that change to your account myself.",
+  customer_requested_human: "A human will pick this up shortly.",
+  ungrounded:
+    "A human will pick this up — I'd rather hand this over than answer from anything I can't check.",
+  repeat_failure: "A human will pick this up — I wasn't able to resolve it here.",
+};
+
+const CLOSING_FALLBACK = "A human will pick this up.";
+
 /** Customer-safe handoff text. No raw tool JSON, no PII beyond ids (SAD §8 redaction). */
 export function formatHandoffSummary(stub: StoredStub): string {
   const ids = [
@@ -217,7 +241,7 @@ export function formatHandoffSummary(stub: StoredStub): string {
     `Ticket ${stub.ticket_stub_id} is open with our support team.`,
     ids.length > 0 ? `It references ${ids.join(" and ")}.` : null,
     `Reason: ${stub.reason_code.replace(/_/g, " ")}.`,
-    "A human will pick this up — I can't process refunds, cancellations, or payments myself.",
+    CLOSING_BY_REASON[stub.reason_code] ?? CLOSING_FALLBACK,
   ]
     .filter((line): line is string => line !== null)
     .join(" ");
