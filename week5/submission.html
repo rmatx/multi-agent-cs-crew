@@ -346,9 +346,10 @@ CACHE        74.0% hit ratio on cacheable input</pre>
   <!-- ─────────────────────────────────────────────────────── 4 -->
   <h2><span class="num">04</span>Architecture</h2>
   <p>
-    Generated with <a href="https://github.com/tt-a1i/archify">archify</a> from the real code, and
-    interactive — four guided views walk a customer turn, the dual engine, the grounding path, and
-    observability.
+    Two views, both generated with <a href="https://github.com/tt-a1i/archify">archify</a> from
+    typed sources rather than drawn, so they regenerate when the system changes. This one is the
+    <strong>runtime</strong> — what happens to a customer's question. The pipeline that builds and
+    proves it is in §5.
   </p>
   <figure>
     <img src="assets/architecture.visual-check.1440x900.light.png"
@@ -370,6 +371,17 @@ CACHE        74.0% hit ratio on cacheable input</pre>
   <!-- ─────────────────────────────────────────────────────── 5 -->
   <h2><span class="num">05</span>CI/CD</h2>
   <p>Two workflows, split by whether they need an API key.</p>
+
+  <figure>
+    <img src="assets/pipeline.visual-check.1440x900.light.png"
+         alt="Swimlane pipeline: a commit runs typecheck, 168 unit tests, the money-tools invariant and a Docker build in the keyless CI lane; a keyed lane grades a 26-item golden dataset through a live crew eval behind a spend gate; an evidence lane collects trace logs which replay to Arize AX and feed the QA artifacts">
+    <figcaption>
+      The delivery and quality pipeline. The red node is the gate that matters: nine assertions
+      that fail CI if the registered tool set changes at all, so a money tool cannot arrive
+      quietly. The keyed lane is separate because it spends money and must never run on a fork's
+      pull request.
+    </figcaption>
+  </figure>
   <div class="scroll">
     <table>
       <thead><tr><th>Workflow</th><th>Trigger</th><th>Key</th><th>Proves</th></tr></thead>

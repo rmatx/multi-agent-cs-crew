@@ -5,7 +5,8 @@
 | `NovaMart-Week5-Submission.pdf` | **Hand this in.** 8 pages, all figures embedded. |
 | `submission.html` | The source. Open in a browser for links and the interactive diagram. |
 | `assets/architecture.html` | Interactive architecture map (archify). Standalone — pan, zoom, four guided views, export. |
-| `assets/architecture.json` | The diagram's typed source, validated at `showcase` quality. |
+| `assets/architecture.json` | The runtime diagram's typed source, validated at `showcase` quality. |
+| `assets/pipeline.html` / `.json` | Delivery and quality pipeline (§5) — same generator, workflow type. |
 | `assets/demo-returns-boundary.png` | Live capture of the returns boundary, referenced by §1. |
 | `assets/demo-capture.pdf` | The operator's own 3-page demo capture, referenced by §1. |
 | `assets/architecture.visual-check.*` | Browser evidence for the diagram: receipt, contact sheet, screenshots at 1440×900 and 2048×1320, light and dark. |
@@ -30,8 +31,16 @@ npm run demo               # the app the screenshots come from
 The architecture diagram is rebuilt from its source with the archify skill:
 
 ```bash
-node ~/.claude/skills/archify/bin/archify.mjs deliver architecture \
-  week5/assets/architecture.json week5/assets/architecture.html --quality showcase
+A=~/.claude/skills/archify/bin/archify.mjs
+node $A deliver architecture week5/assets/architecture.json week5/assets/architecture.html --quality showcase
+node $A deliver workflow     week5/assets/pipeline.json     week5/assets/pipeline.html     --quality showcase
+```
+
+Both are then browser-checked, which writes the PNGs the submission embeds:
+
+```bash
+node $A visual-check week5/assets/architecture.html
+node $A visual-check week5/assets/pipeline.html
 ```
 
 ## A note on the evidence

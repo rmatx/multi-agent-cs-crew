@@ -1,0 +1,220 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "From a commit to confidence",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "free",
+        "label": "What runs on every push",
+        "focus": [
+          "commit",
+          "typecheck",
+          "unit",
+          "invariant",
+          "image"
+        ],
+        "note": "Keyless by design, so a fork or a pull request runs the whole suite without a secret and without spending anything."
+      },
+      {
+        "id": "paid",
+        "label": "What needs a key",
+        "focus": [
+          "evalsdk",
+          "goldens",
+          "spendgate"
+        ],
+        "note": "Model behaviour regresses with no code change, so it needs its own gate \u2014 manual and monthly, never on pull_request."
+      },
+      {
+        "id": "evidence",
+        "label": "What it produces",
+        "focus": [
+          "traces",
+          "arize",
+          "qa"
+        ],
+        "note": "Every claim in the QA and eval artifacts traces to a run rather than to an assertion in prose."
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "keyless",
+      "label": "CI \u2014 keyless, every push"
+    },
+    {
+      "id": "keyed",
+      "label": "Eval \u2014 keyed, manual + monthly"
+    },
+    {
+      "id": "evidence",
+      "label": "Evidence"
+    }
+  ],
+  "phases": [
+    {
+      "id": "p1",
+      "label": "Prove it compiles and is safe",
+      "fromCol": 0,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "p2",
+      "label": "Prove the crew still behaves",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "commit",
+    "typecheck",
+    "unit",
+    "invariant",
+    "image"
+  ],
+  "nodes": [
+    {
+      "id": "commit",
+      "lane": "keyless",
+      "col": 0,
+      "type": "frontend",
+      "label": "Commit",
+      "sublabel": "push or PR"
+    },
+    {
+      "id": "typecheck",
+      "lane": "keyless",
+      "col": 1,
+      "type": "backend",
+      "label": "Typecheck",
+      "sublabel": "tsc strict"
+    },
+    {
+      "id": "unit",
+      "lane": "keyless",
+      "col": 2,
+      "type": "backend",
+      "label": "Unit",
+      "sublabel": "168 tests"
+    },
+    {
+      "id": "invariant",
+      "lane": "keyless",
+      "col": 3,
+      "type": "security",
+      "label": "Money tools",
+      "sublabel": "9 assertions",
+      "tag": "fails CI on drift",
+      "width": 120
+    },
+    {
+      "id": "image",
+      "lane": "keyless",
+      "col": 4,
+      "type": "cloud",
+      "label": "Docker build",
+      "sublabel": "never pushed"
+    },
+    {
+      "id": "evalsdk",
+      "lane": "keyed",
+      "col": 4,
+      "type": "backend",
+      "label": "Live crew eval",
+      "sublabel": "9 scripts \u00b7 114 checks"
+    },
+    {
+      "id": "goldens",
+      "lane": "keyed",
+      "col": 3,
+      "type": "backend",
+      "label": "Golden dataset",
+      "sublabel": "26 items \u00b7 5 categories",
+      "tag": "half never run before"
+    },
+    {
+      "id": "spendgate",
+      "lane": "keyed",
+      "col": 5,
+      "type": "security",
+      "label": "Spend gate",
+      "sublabel": "fails over budget"
+    },
+    {
+      "id": "traces",
+      "lane": "evidence",
+      "col": 2,
+      "type": "database",
+      "label": "Trace log",
+      "sublabel": "JSONL per turn"
+    },
+    {
+      "id": "arize",
+      "lane": "evidence",
+      "col": 4,
+      "type": "cloud",
+      "label": "Arize AX",
+      "sublabel": "OpenInference"
+    },
+    {
+      "id": "qa",
+      "lane": "evidence",
+      "col": 5,
+      "type": "database",
+      "label": "QA artifacts",
+      "sublabel": "defects + thresholds",
+      "width": 110
+    }
+  ],
+  "edges": [
+    {
+      "from": "commit",
+      "to": "typecheck"
+    },
+    {
+      "from": "typecheck",
+      "to": "unit"
+    },
+    {
+      "from": "unit",
+      "to": "invariant"
+    },
+    {
+      "from": "invariant",
+      "to": "image"
+    },
+    {
+      "from": "goldens",
+      "to": "evalsdk",
+      "label": "graded per category"
+    },
+    {
+      "from": "evalsdk",
+      "to": "spendgate"
+    },
+    {
+      "from": "evalsdk",
+      "to": "traces",
+      "label": "writes"
+    },
+    {
+      "from": "traces",
+      "to": "arize",
+      "label": "replayed"
+    },
+    {
+      "from": "traces",
+      "to": "qa",
+      "label": "measured"
+    },
+    {
+      "from": "arize",
+      "to": "qa",
+      "label": "corroborates"
+    }
+  ]
+}
