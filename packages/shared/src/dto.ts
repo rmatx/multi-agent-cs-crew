@@ -69,6 +69,14 @@ export type OrderLineItem = {
   productName: string;
   quantity: number;
   lineTotal: number;
+  /**
+   * Product category. Present so a returns answer can be QUALIFIED, not just dated: the corpus
+   * excludes opened personal-care items from returns, and without a category the advisor could
+   * only ever check the 14-day window — telling a customer with a beauty order "yes, you can
+   * return it" when the policy says otherwise. Deliberately NOT `price` or `cost`: the crew has
+   * no business seeing margin.
+   */
+  category: string;
 };
 
 export type OrderSummary = {

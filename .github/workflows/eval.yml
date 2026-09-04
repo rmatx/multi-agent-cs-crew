@@ -30,13 +30,15 @@ on:
         required: false
         default: "6.00"
   schedule:
-    # 07:00 UTC on Mondays. Behavioural regressions are found by repetition, not by one run —
-    # qa.md's reliability-sampling note is the whole argument for a schedule over a hook.
+    # 07:00 UTC on the 1st of each month. Behavioural regressions are found by repetition, not
+    # by one run — qa.md's reliability-sampling note is the whole argument for a schedule over
+    # a hook — but repetition has to be paid for.
     #
-    # Weekly rather than daily because a full run measures ~$1.76 and this is a capstone, not a
-    # product: daily is ~$53/month to re-prove a crew nobody changed that day. Raise the cadence
-    # when the code changes daily, not before. Manual dispatch covers pre-demo checks.
-    - cron: "0 7 * * 1"
+    # Monthly, not weekly or daily: a full run measures ~$1.76, so daily is ~$53/month and
+    # weekly ~$7/month to re-prove a crew nobody changed that day. This is a capstone whose code
+    # moves in bursts, so a scheduled run is a slow smoke alarm rather than a tight loop. Manual
+    # dispatch is the real gate before a demo; raise the cadence when the commit rate justifies it.
+    - cron: "0 7 1 * *"
 
 permissions:
   contents: read

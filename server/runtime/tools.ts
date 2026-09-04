@@ -161,7 +161,10 @@ export function createNovamartToolServer(ctx: ToolContext) {
 
   const getOrderItemsTool = tool(
     "get_order_items",
-    "List the line items on one NovaMart order. Read-only.",
+    "List the line items on one NovaMart order, each with its product CATEGORY. Read-only. " +
+      "The category matters for returns: the policy excludes some kinds of item regardless of " +
+      "how recent the order is, so check it against the policy before telling anyone an order " +
+      "can be returned. Never quote a category as a price — it is not one.",
     { order_id: z.number().int().positive() },
     async (args) => {
       const items = await withReadRetry(ctx, "get_order_items", () =>

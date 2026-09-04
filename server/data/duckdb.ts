@@ -113,6 +113,7 @@ export async function getUserCountry(userId: number): Promise<string | null> {
 export async function getOrderItems(orderId: number): Promise<OrderLineItem[]> {
   const rows = await queryRows(
     `SELECT p.product_name AS product_name,
+            p.category     AS category,
             CAST(oi.quantity AS INTEGER) AS quantity,
             oi.line_total  AS line_total
        FROM order_items oi
@@ -123,6 +124,7 @@ export async function getOrderItems(orderId: number): Promise<OrderLineItem[]> {
   );
   return rows.map((row) => ({
     productName: asString(row["product_name"]),
+    category: asString(row["category"]),
     quantity: asNumber(row["quantity"]),
     lineTotal: asNumber(row["line_total"]),
   }));
