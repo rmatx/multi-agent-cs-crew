@@ -1,0 +1,84 @@
+/* Crew strip. An operator/demo surface, so it is visually distinct from the customer chat:
+   a thin instrument panel rather than another card in the conversation. */
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.label {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 0.15rem;
+  flex: 0 0 auto;
+}
+
+.agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem 0.2rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: var(--bg);
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+/* The LED. Dim by default, lit for the agent holding the turn — and colour alone never carries
+   the state: the active chip also changes text colour and weight, and carries aria-current. */
+.led {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: var(--line-strong);
+  flex: 0 0 auto;
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+
+.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.active .led {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+/* An agent that has already run this turn — lit, but not currently holding it. */
+.visited {
+  color: var(--fg);
+  border-color: var(--line-strong);
+}
+
+.visited .led { background: var(--accent); opacity: 0.55; }
+
+@keyframes pulse {
+  50% { box-shadow: 0 0 0 5px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .active .led { animation: none; }
+}
+
+/* The honest empty state. The deterministic engine emits no agent_hop frames at all, so a row
+   of dead LEDs would read as "the crew is broken" when the truth is "no crew is running". */
+.note {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-left: auto;
+  flex: 0 0 auto;
+}

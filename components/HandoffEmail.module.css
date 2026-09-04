@@ -1,0 +1,55 @@
+/* The simulated handoff email, collapsed under an escalation. Operator/demo context, so it sits
+   quieter than the answer above it and never competes with the reply for attention. */
+
+.wrap {
+  margin-top: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.45rem 0.7rem;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: left;
+}
+
+.toggle:hover { color: var(--accent); }
+
+.caret { font-size: 0.65rem; flex: 0 0 auto; }
+
+.tag {
+  margin-left: auto;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.08rem 0.4rem;
+  border-radius: 999px;
+  background: var(--human-soft);
+  color: var(--human);
+  font-weight: 600;
+}
+
+.body {
+  border-top: 1px solid var(--line);
+  padding: 0.7rem 0.85rem;
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  color: var(--fg);
+  max-height: 22rem;
+  overflow: auto;
+}
+
+.note { padding: 0.7rem 0.85rem; margin: 0; font-size: 0.75rem; color: var(--muted); }

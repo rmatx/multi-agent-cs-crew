@@ -10,6 +10,8 @@
  */
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import CrewBar from "@/components/CrewBar";
+import HandoffEmail from "@/components/HandoffEmail";
 import DemoBar, { type DemoScenario } from "@/components/DemoBar";
 import demoData from "@/data/demo-scenarios.json";
 import type { ChatRequest } from "@shared/dto";
@@ -26,7 +28,7 @@ import {
   transition,
   type TurnAction,
 } from "@/lib/fsm";
-import { crewStatus, formatUpdated, reasonLabel, runLabel, type EngineId } from "@/lib/status";
+import { agentName, crewStatus, formatUpdated, reasonLabel, runLabel, type EngineId } from "@/lib/status";
 import { plainText } from "@/lib/text";
 import styles from "./page.module.css";
 
@@ -38,7 +40,8 @@ const NO_META: TurnMeta = {
   overlayHit: null,
 };
 
-type Turn = { id: number; role: "you" | "assistant"; text: string };
+/** `agentId` is set only when the trace was on — see CrewBar for why identity is gated. */
+type Turn = { id: number; role: "you" | "assistant"; text: string; agentId?: string };
 
 export default function ChatPage() {
   const [state, dispatch] = useReducer(transition, initialTurnState);
@@ -72,11 +75,24 @@ export default function ChatPage() {
    * the customer surface renders first and the operator tool arrives after.
    */
   const [demoMode, setDemoMode] = useState(false);
+  /*
+   * Agents that have held the CURRENT turn, in order. Reset per turn rather than accumulated,
+   * so the strip answers "who handled this question" and not "who has ever run".
+   */
+  const [turnAgents, setTurnAgents] = useState<string[]>([]);
 
   useEffect(() => {
     const fromEnv = process.env["NEXT_PUBLIC_DEMO_MODE"] === "1";
     const fromUrl = new URLSearchParams(window.location.search).get("demo") === "1";
-    setDemoMode(fromEnv || fromUrl);
+    const on = fromEnv || fromUrl;
+    setDemoMode(on);
+    /*
+     * Demo mode turns the trace on. Agent identity only reaches the browser on trace frames, so
+     * without this the crew strip and the per-answer agent label would sit empty in exactly the
+     * mode built to show them. Demo mode is already an operator surface — it lists real order
+     * ids — so it is not granting a customer anything new.
+     */
+    if (on) setTrace(true);
   }, []);
 
   /*
@@ -137,13 +153,13 @@ export default function ChatPage() {
     setUpdatedAt(new Date());
   }, [state]);
 
-  const append = useCallback((role: Turn["role"], text: string) => {
+  const append = useCallback((role: Turn["role"], text: string, agentId?: string) => {
     nextId.current += 1;
     // Capture the id here: the updater below runs after this handler finishes, so
     // reading nextId.current inside it would hand every append of the same tick
     // the final value — duplicate keys, and React may drop or duplicate messages.
     const id = nextId.current;
-    setTranscript((prev) => [...prev, { id, role, text }]);
+    setTranscript((prev) => [...prev, agentId === undefined ? { id, role, text } : { id, role, text, agentId }]);
   }, []);
 
   // Sends a request that has already been validated. Shared by Run and Retry so
@@ -151,10 +167,15 @@ export default function ChatPage() {
   const send = useCallback(
     async (request: ChatRequest) => {
       setCitations([]);
+      setTurnAgents([]);
       setLastRequest(request);
 
       const observingDispatch = (action: TurnAction): void => {
         if (action.kind === "event") {
+          if (action.event.type === "agent_hop") {
+            const hopped = action.event.agentId;
+            setTurnAgents((prev) => (prev.includes(hopped) ? prev : [...prev, hopped]));
+          }
           if (action.event.type === "citation") setCitations(action.event.ids);
           // The server asks; the page renders the question. It never decides the moment
           // itself — a `needs_input` turn never carries this frame.
@@ -189,13 +210,14 @@ export default function ChatPage() {
     // `sessions.sqlite` and feeds it back to the crew, so a reload loses the display and not
     // the conversation.
     if (state.phase === "done" && state.text.length > 0) {
-      append("assistant", state.text);
+      // The LAST agent to hold the turn is the one whose words these are.
+      append("assistant", state.text, turnAgents.at(-1));
     }
     append("you", built.request.message);
     setMessage("");
 
     await send(built.request);
-  }, [append, message, orderId, running, send, state, trace, userId]);
+  }, [append, message, orderId, running, send, state, trace, turnAgents, userId]);
 
   /**
    * F-CHAT-01's "Talk to a human" control. It sends a message like any other rather than
@@ -218,10 +240,10 @@ export default function ChatPage() {
     }
     setNotice(null);
     setCsatSignal(false);
-    if (state.phase === "done" && state.text.length > 0) append("assistant", state.text);
+    if (state.phase === "done" && state.text.length > 0) append("assistant", state.text, turnAgents.at(-1));
     append("you", built.request.message);
     await send(built.request);
-  }, [append, orderId, running, send, state, trace, userId]);
+  }, [append, orderId, running, send, state, trace, turnAgents, userId]);
 
   // Replays the last request verbatim — same order id, same question.
   const handleRetry = useCallback(async () => {
@@ -290,6 +312,14 @@ export default function ChatPage() {
       </header>
 
       {demoMode && (
+        <CrewBar
+          activeAgentId={running ? (turnAgents.at(-1) ?? null) : null}
+          visitedAgentIds={turnAgents}
+          crewAvailable={engine === "sdk"}
+        />
+      )}
+
+      {demoMode && (
         <DemoBar
           scenarios={demoData.scenarios as DemoScenario[]}
           onPick={applyScenario}
@@ -300,7 +330,7 @@ export default function ChatPage() {
       <section className={styles.identityBar} aria-label="Your details">
         <div className={styles.field}>
           <label className={styles.label} htmlFor="orderId">
-            Order number (required)
+            Order number
           </label>
           <input
             id="orderId"
@@ -313,7 +343,7 @@ export default function ChatPage() {
         </div>
         <div className={styles.field}>
           <label className={styles.label} htmlFor="userId">
-            Customer id (optional)
+            Customer id
           </label>
           <input
             id="userId"
@@ -344,13 +374,28 @@ export default function ChatPage() {
             key={turn.id}
             className={`${styles.message} ${turn.role === "you" ? styles.you : ""}`}
           >
-            <span className={styles.role}>{turn.role}</span>
+            <span className={styles.role}>
+              {turn.role}
+              {/* ENH-03: which specialist produced this answer, so a scrolled-back transcript
+                  still says who spoke. Present only when the trace was on — see CrewBar. */}
+              {turn.agentId !== undefined && (
+                <span className={styles.agentTag}>{agentName(turn.agentId)}</span>
+              )}
+            </span>
             <p className={styles.body}>{plainText(turn.text)}</p>
           </article>
         ))}
         {live.length > 0 && (
           <article className={styles.message}>
-            <span className={styles.role}>assistant</span>
+            <span className={styles.role}>
+              assistant
+              {/* ENH-03 on the LIVE message too. The first cut only labelled transcript entries,
+                  which are written on the NEXT turn — so the answer actually on screen, the one
+                  a demo audience is looking at, was the only one with no agent name. */}
+              {turnAgents.at(-1) !== undefined && (
+                <span className={styles.agentTag}>{agentName(turnAgents.at(-1) as string)}</span>
+              )}
+            </span>
             {/* Stripped at render, not stored stripped: the transcript keeps what the server
                 actually sent, so a trace and the screen never disagree. */}
             <p className={`${styles.body} ${running ? styles.streaming : ""}`}>{plainText(live)}</p>
@@ -408,10 +453,16 @@ export default function ChatPage() {
           ) : (
             /* The ticket id is the only thing a customer can quote back to a person, so it
                is shown verbatim rather than summarised away. */
-            <p>
-              Handed to a human. Ticket <strong>{escalation.ticketStubId}</strong> —{" "}
-              {reasonLabel(escalation.reasonCode)}.
-            </p>
+            <>
+              <p>
+                Handed to a human. Ticket <strong>{escalation.ticketStubId}</strong> —{" "}
+                {reasonLabel(escalation.reasonCode)}.
+              </p>
+              {/* ENH-01. Demo surface: the endpoint behind it is gated on a server-side
+                  DEMO_MODE and 404s otherwise, so this collapses to an honest note in a normal
+                  deployment rather than leaking a customer's packet. */}
+              {demoMode && <HandoffEmail ticketStubId={escalation.ticketStubId} />}
+            </>
           )
         )}
         {doneStatus === "resolved" && citations.length > 0 && (

@@ -30,19 +30,35 @@ export function buildChatRequest(input: {
   if (message.length > 2000) return { ok: false, reason: "Message is too long (2000 characters max)." };
 
   const orderId = input.orderId.trim();
-  if (orderId.length === 0) {
-    return { ok: false, reason: "Add your order number so we can look it up." };
-  }
-  if (!ORDER_ID_PATTERN.test(orderId)) {
+  const userId = input.userId.trim();
+
+  if (orderId.length > 0 && !ORDER_ID_PATTERN.test(orderId)) {
     return { ok: false, reason: "Order number must be digits only." };
   }
-
-  const userId = input.userId.trim();
   if (userId.length > 0 && !ORDER_ID_PATTERN.test(userId)) {
     return { ok: false, reason: "Customer id must be digits only." };
   }
 
-  const identity: { orderId: number; userId?: number } = { orderId: Number(orderId) };
+  /*
+   * DEF-12. This used to require an ORDER NUMBER specifically, and rejected the turn in the
+   * browser — so a membership or order-history question with only a customer id never reached
+   * the server at all. `ChatRequest.identity` has both fields optional and the server answers
+   * those turns correctly; this function's own contract is to mirror the server's 400 rules,
+   * and requiring more than the server does is not mirroring it.
+   *
+   * Six of the twenty-three demo scenarios were unreachable through the UI because of it,
+   * including `list_orders_for_user` — the one tool whose entire purpose is answering without
+   * an order id.
+   *
+   * What is still required is SOME identity. A bare question with neither id is a turn the
+   * server can only answer with a clarifying question, and asking here costs no round trip.
+   */
+  if (orderId.length === 0 && userId.length === 0) {
+    return { ok: false, reason: "Add an order number or a customer id so we can look it up." };
+  }
+
+  const identity: { orderId?: number; userId?: number } = {};
+  if (orderId.length > 0) identity.orderId = Number(orderId);
   if (userId.length > 0) identity.userId = Number(userId);
 
   return {

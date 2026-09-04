@@ -1,5 +1,8 @@
 # Demo feedback log — 2026-09-04
 
+> **All four items below were FIXED on 2026-09-04** and verified in the browser against the
+> real crew. Kept as a record of what was found and why it was missed, not as an open list.
+
 Raised by the operator while running the live demo. **Nothing here was fixed during the demo**,
 deliberately: changing agent prompts or client validation mid-session is how a working demo stops
 working. Each item is recorded with enough evidence to act on cold.
@@ -12,7 +15,7 @@ these are actioned.
 
 ## DEF-12 — The UI demands an order number for questions that do not need one
 
-**Severity: medium. Open.** Found by the operator asking *"What Plus plan am I on?"* with
+**Severity: medium. FIXED 2026-09-04.** Found by the operator asking *"What Plus plan am I on?"* with
 customer id 38 and being told to add an order number.
 
 **Root cause is client-side only.** `lib/chatClient.ts` → `buildChatRequest()`:
@@ -62,7 +65,7 @@ the API.
 
 ## ENH-01 — Show the handoff email in the answer
 
-**Enhancement. Open.** On an escalation the customer currently sees:
+**Enhancement. BUILT 2026-09-04.** On an escalation the customer currently sees:
 
 > Handed to a human. Ticket STUB-46C0DE6B — a change this assistant cannot make.
 
@@ -95,7 +98,7 @@ same entry it appends to `data/outbox.md`, and the full packet is at
 
 ## ENH-02 — Crew status bar: show every agent, light the one answering
 
-**Enhancement. Open.** Requested during the demo.
+**Enhancement. BUILT 2026-09-04.** Requested during the demo.
 
 The banner currently says only what the *turn* is doing:
 
@@ -107,7 +110,7 @@ crew exists at all rather than one model in a trench coat.
 
 ## ENH-03 — Name the answering agent next to `ASSISTANT`
 
-**Enhancement. Open.** Same idea at message level: the transcript label reads `ASSISTANT`, and it
+**Enhancement. BUILT 2026-09-04.** Same idea at message level: the transcript label reads `ASSISTANT`, and it
 should read `ASSISTANT · returns-advisor` (or similar) so a scrolled-back transcript still shows
 which specialist produced each answer.
 
@@ -147,3 +150,28 @@ to be customer-facing, which is a PRD question.
 **Also worth noting for ENH-02:** the deterministic engine emits no `agent_hop` frames at all, so
 a crew strip would sit empty during a free rehearsal. It should show an honest "keyless engine —
 no crew running" state rather than a row of dead LEDs, or the rehearsal will look broken.
+
+---
+
+## Resolution — 2026-09-04
+
+**DEF-12.** `buildChatRequest` now requires *an* identity rather than an order number
+specifically. `lib/chatClient.test.ts` did not exist before this; it does now, with 8 cases
+including the exact failing input (customer 38, no order). Field labels dropped
+"(required)"/"(optional)" — neither is individually required.
+
+**ENH-01.** `GET /api/tickets/<id>/email` serves the STORED packet from `data/tickets/`, never a
+re-rendering, so the screen and the artifact cannot disagree and the response inherits the
+write-time PII scrub. Gated on a **server-side** `DEMO_MODE=1` set by `scripts/demo.sh` —
+deliberately not the `NEXT_PUBLIC_` flag, which ships in the browser bundle and is not a control.
+Verified: 404 with the gate off, 404 on a traversal attempt.
+
+**ENH-02 / ENH-03.** Route 1 as recommended — both render from the `agent_hop` frames the FSM
+already collected, so no frame, DTO or contract changed. Demo mode now switches the trace on,
+because agent identity only reaches the browser on trace frames and the features would otherwise
+be empty in the mode built to show them. The crew strip shows an honest "keyless engine — no crew
+running" note on the deterministic engine rather than six dead LEDs.
+
+**One bug found while verifying.** The first cut labelled only *transcript* entries, which are
+written on the following turn — so the answer actually on screen, the one an audience looks at,
+was the only one without an agent name. The live message carries the tag too now.

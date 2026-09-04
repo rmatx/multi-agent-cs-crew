@@ -78,6 +78,22 @@ export function agentName(agentId: string): string {
   return AGENT_NAMES[agentId] ?? agentId;
 }
 
+/**
+ * The crew, in the order a turn travels through it: triage first, the four specialists it can
+ * choose between, and the escalation path out to a person.
+ *
+ * Ordered rather than alphabetical because the strip that renders it is read as a flow — a
+ * viewer should see WHERE in the crew a question landed, not just which name lit up.
+ */
+export const CREW_ORDER: readonly string[] = [
+  "triage-router",
+  "order-specialist",
+  "faq-policy",
+  "plus-specialist",
+  "returns-advisor",
+  "escalation-handoff",
+];
+
 /** Bare tool name, MCP prefix stripped — what an operator reads in a trace. */
 export function toolName(tool: string): string {
   return tool.replace(/^mcp__[^_]+__/, "");

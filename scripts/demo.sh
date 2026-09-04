@@ -15,6 +15,9 @@ export AS_OF_DATE="${AS_OF_DATE:-2026-09-01}"   # pin, or the run-sheet day coun
 export SDK_STREAM_MODE=live                      # default is `final`: 15s of silence, then a lump
 export OPERATOR_KEY="${OPERATOR_KEY:-demo-secret}"
 export NEXT_PUBLIC_DEMO_MODE=1
+# Server-side gate for the handoff-email endpoint (ENH-01). Separate from the NEXT_PUBLIC_ flag
+# above, which is inlined into the browser bundle and is therefore not a control.
+export DEMO_MODE=1
 
 cat <<BANNER
 

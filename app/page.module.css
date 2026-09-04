@@ -548,3 +548,16 @@
   font-size: 0.75rem;
   color: var(--muted);
 }
+
+/* ENH-03: the specialist that produced an answer, beside the ASSISTANT label. Set quieter than
+   the role itself — it is provenance, not a second speaker. */
+.agentTag {
+  margin-left: 0.45rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
