@@ -131,8 +131,13 @@ Other useful commands:
 
 ```bash
 npm run typecheck                        # strict TypeScript
-npm test                                 # 153 unit tests
+npm test                                 # 160 unit tests
+npm run demo                             # full demo: crew + Arize + picker (spends API usage)
+npm run demo:build                       # regenerate the scenario set from the database
+npm run demo:runsheet                    # regenerate docs/novamart-demo-runsheet.xlsx
+npm run query -- --scenarios             # find test cases with shifted dates
 npm run observability                    # error rate, latency and cost from the trace logs
+npm run prune:traces                     # enforce the trace/artifact retention window
 npm run build && npm start               # production build
 NOVAMART_DUCKDB_PATH=/path/to/full.duckdb npm run dev   # use the 151 MB practice DB
 ```

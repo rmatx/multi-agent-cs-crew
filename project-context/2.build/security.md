@@ -155,6 +155,22 @@ must not be copied off the host. If the demo is ever run with real data, this be
    the hard way.
 3. **The runbook says so** (`deploy.md`, Access control).
 
+**Scope widened 2026-09-04 — two more surfaces carry the same content.**
+
+1. **Handoff artifacts.** `data/tickets/<STUB-ID>.md` and `data/outbox.md` are written on every
+   escalation and carry the transcript summary, the entities and the tool ledger. They run
+   through the same `scrubPii` at write, are gitignored, and are swept by the same
+   `npm run prune:traces` window — but they are a second copy of customer content on disk, and
+   an operator copying "just the tickets" off a host is copying customer data.
+   `data/outbox.md` states at the top that nothing was sent, so it cannot be mistaken for
+   evidence that mail left the building.
+2. **Arize export.** With `ARIZE_API_KEY`/`ARIZE_SPACE_ID` set, `server/runtime/openinference.ts`
+   sends spans to a THIRD PARTY. The spans are built from the already-redacted trace records, so
+   nothing reaches Arize that the local log would not hold — but redacted is not anonymous:
+   `input.value` carries the customer's message and `session.id` carries the conversation id.
+   **Export is off unless both variables are set**, and turning it on is a data-sharing decision,
+   not a configuration one. Against real customer data it needs a DPA, not just a scrubber.
+
 **Residual, unchanged.** No access control at rest — ordinary file permissions on the demo
 host, and `.gitignore` still is not a security control. The severity calibration is also
 unchanged: this is a *fictional* dataset, and against real customer data the finding still

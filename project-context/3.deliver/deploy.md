@@ -27,7 +27,7 @@ trace, CSAT, and the UI for all of it.
 | Evidence | Result |
 |---|---|
 | `npm run typecheck` | exit 0 |
-| `npm test` | **143 / 143** |
+| `npm test` | **160 / 160** |
 | `npm run test:invariants` | **9 / 9** — zero money tools registered |
 | `npm run eval:sdk` | **114 / 114** across 9 scripts, green on consecutive runs |
 | `npx next build` | compiles; 4 API routes + the chat page |
