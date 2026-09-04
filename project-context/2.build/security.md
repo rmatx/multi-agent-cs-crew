@@ -38,7 +38,7 @@ cannot move money — held under every probe, and is the strongest part of the b
 | SEC-01 | **High** | Any caller can read any customer's order and account data | Open — accepted for localhost only |
 | SEC-02 | **High** | A conversation id is a bearer token for that conversation's history | Open |
 | SEC-03 | Medium | Trace logs persist customer conversations in plaintext, with no retention limit | **Mitigated 2026-09-04** |
-| SEC-04 | Medium | No security response headers | Open — `@devops.eng` |
+| SEC-04 | Medium | No security response headers | **Fixed 2026-09-04** — CSP deliberately deferred |
 | SEC-05 | Low | The rate limit is a cost guard being read as a control | Open — documented, not fixed |
 | SEC-06 | Low | Operator key is a single shared static secret with no rotation path | Accepted for MVP |
 | SEC-07 | Info | `.env.local` present and correctly ignored; no secret in any tracked file | Pass |
@@ -178,22 +178,57 @@ rises to High and needs encryption at rest plus an access boundary, not a scrubb
 
 ---
 
-### SEC-04 — No security response headers. **Medium.**
+### SEC-04 — No security response headers. **Medium. Fixed 2026-09-04.**
 
-**Observed.** `curl -I localhost:3000/` returns none of `Content-Security-Policy`,
-`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, or `Strict-Transport-Security`.
-`next.config.ts` sets no `headers()`.
+**Observed (2026-09-04, before the fix).** `curl -I localhost:3000/` returned none of
+`Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, or
+`Strict-Transport-Security`. `next.config.ts` set no `headers()`.
 
-Consequences that matter for this app specifically: the chat page can be framed (clickjacking a
-"Talk to a human" click is low value; framing a page that shows order details is not), and there
-is no CSP to limit where a future XSS could exfiltrate to. React escapes by default and no
-`dangerouslySetInnerHTML` exists anywhere in the tree (checked), so there is no *current* XSS —
+Consequences that mattered for this app specifically: the chat page could be framed (clickjacking
+a "Talk to a human" click is low value; framing a page that shows order details is not), and there
+was no CSP to limit where a future XSS could exfiltrate to. React escapes by default and no
+`dangerouslySetInnerHTML` exists anywhere in the tree (checked), so there was no *current* XSS —
 this is defence in depth for the demo host.
 
-**Recommendation (`@devops.eng`).** Add a `headers()` block in `next.config.ts` alongside the
-deploy work: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
-`Referrer-Policy: no-referrer`, and HSTS once TLS terminates in front of it. A CSP needs care
-with Next's inline bootstrap and is worth doing deliberately rather than as a one-liner.
+**Fixed.** `next.config.ts` now carries a `headers()` block applying to `/:path*`, so the API
+routes are covered as well as the page:
+
+| Header | Value | Why this value |
+|---|---|---|
+| `X-Frame-Options` | `DENY` | Not `SAMEORIGIN` — nothing in this build frames itself |
+| `X-Content-Type-Options` | `nosniff` | Standard |
+| `Referrer-Policy` | `no-referrer` | The trace endpoint takes a conversation id **in the path**, and a conversation id is a bearer token for that transcript (SEC-02). A `Referer` on any outbound link would hand it to a stranger |
+| `X-DNS-Prefetch-Control` | `off` | Standard |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=(), usb=()` | Named explicitly rather than left to a default, so a later request for one of them is visible in review |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains`, **only when `ENABLE_HSTS=1`** | Sent over plain HTTP it is ignored; sent from a localhost demo it would pin a developer's browser to HTTPS for a host that does not serve it. It ships only where TLS actually terminates in front |
+
+**Verified** against the production build (`npm run build && npm start`), not the dev server, and
+on an API route as well as the page — a `headers()` block that covered only `/` would look
+identical in a browser and leave `/api/conversations/<id>/trace` bare:
+
+```
+$ curl -sI http://localhost:3000/ | grep -iE 'x-frame|x-content|referrer|permissions'
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Referrer-Policy: no-referrer
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+
+$ curl -sI http://localhost:3000/api/health | grep -iE 'x-frame|x-content|referrer'
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Referrer-Policy: no-referrer
+```
+
+**No CSP, and that is a decision rather than an omission.** Next's inline bootstrap needs either a
+per-request nonce or `unsafe-inline`. A policy shipping `unsafe-inline` would satisfy a header
+scanner while permitting exactly the injection a CSP exists to stop, which is worse than no policy
+because it reads as protection that is not there. Doing it properly means a nonce threaded through
+the document response, and that is a change to how the app renders — not a config line. Recorded
+here as **open, deliberate, `@devops.eng` + `@frontend.eng`**, not as done.
+
+**Still not done by this finding:** HSTS is inert until something terminates TLS in front of the
+app, which nothing does today (`docker-compose.yml` binds loopback). The flag exists so that
+whoever puts a proxy there has one variable to set rather than a config edit to remember.
 
 ---
 
@@ -360,3 +395,20 @@ not something to bolt on during Deliver.
 | Files written | `project-context/2.build/security.md` (this file) only — no source file modified |
 | Prompt Trace | Not captured. This assessment produced no model-generated artifact content: findings come from executed probes and code reads, both reproducible from the Sources above. Per `aamad-core`, the omission is stated with its reason. |
 | Self-check | Required sections present: Sources, Assumptions, Open Questions, Audit. No Diagnostic raised. |
+
+### Re-verification — 2026-09-04
+
+The assessment above stands as written on 2026-08-28. Two findings have moved since, and both
+were verified by execution rather than by reading the diff:
+
+| Field | Value |
+| ----- | ----- |
+| Persona | `@security.eng` (verification only) |
+| Timestamp | 2026-09-04 |
+| Verified against | Production build (`npm run build && npm start`), `CHAT_ENGINE=sdk`, not the dev server |
+| SEC-03 | **Mitigated.** Scrubber and retention window shipped; covered by unit tests in the 169-test suite |
+| SEC-04 | **Fixed.** Headers confirmed present on both a page route and an API route — see the finding for the captured output. CSP remains open and deliberate |
+| Findings now | 2 High, 0 Medium open (2 Medium closed), 2 Low, 5 Info-pass |
+| Blocking Deliver? | **Unchanged.** SEC-01 and SEC-02 still block any shared deployment; nothing about response headers changes that. Closing them is a PRD/SAD change (authentication), not a config one |
+| Files written | this file only |
+

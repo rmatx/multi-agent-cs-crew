@@ -11,8 +11,8 @@ Epic reference: `.claude/rules/delivery-workflow.md` · SAD §5 Physical / Deplo
 
 | Prerequisite | Status |
 |---|---|
-| `qa.md` documents MVP verification | **Met** — full QA pass 2026-08-29: 55/55 acceptance criteria mapped (46 pass, 5 partial, 1 not covered), **no defect open** |
-| `security.md` from `@security.eng` | **Met** — 2 High, 2 Medium, 2 Low, 5 Info-pass, **no Critical** |
+| `qa.md` documents MVP verification | **Met** — full QA pass 2026-08-29, re-verified 2026-09-04: 55/55 acceptance criteria mapped (46 pass, 5 partial, 1 not covered). **One defect open and accepted (DEF-14)**, a cautious retrieval failure, not a wrong answer |
+| `security.md` from `@security.eng` | **Met** — 2 High, 2 Low, 5 Info-pass, **no Critical**; both Medium findings (SEC-03, SEC-04) closed 2026-09-04 |
 | `backend.md`, `frontend.md`, `integration.md` | **Met** |
 | PRD + SAD including DevOps/Deployment Architecture | **Met** |
 
@@ -27,17 +27,27 @@ trace, CSAT, and the UI for all of it.
 | Evidence | Result |
 |---|---|
 | `npm run typecheck` | exit 0 |
-| `npm test` | **160 / 160** |
+| `npm test` | **169 / 169** |
 | `npm run test:invariants` | **9 / 9** — zero money tools registered |
-| `npm run eval:sdk` | **114 / 114** across 9 scripts, green on consecutive runs |
+| `npm run eval:sdk` | **114 / 114** across 9 scripts, green on consecutive runs — re-run 2026-09-04 against the release build |
 | `npx next build` | compiles; 4 API routes + the chat page |
 | Integration re-verification | **18 executed cases**, both engines |
+| `npm run evals` (golden dataset) | **26 / 26**, every category at or above threshold; both SAFETY categories **100%** |
+| Security headers | Verified live on the production build, page **and** API routes (SEC-04) |
 
 ### Known gaps shipping with this release
 
-**No defect is open against this release.** DEF-07, DEF-08 and INT-03 were all closed on
-2026-08-29, along with the device / app-version coverage gap that had three acceptance criteria
-failing for one reason. What ships knowingly incomplete is scope, not defects:
+**One defect is open against this release, and it is accepted.** DEF-07, DEF-08 and INT-03 closed
+2026-08-29; DEF-09, DEF-10, DEF-11, DEF-12 and DEF-13 all closed 2026-09-04. What remains:
+
+- **DEF-14 (Low, accepted)** — a correct top-1 policy retrieval is rejected by the 0.55 grounding
+  gate when the agent's query mixes in a term from an adjacent section. Measured at **1 turn in 5**
+  on the return-processing path. It fails *cautiously*: the customer reaches a human and nothing
+  wrong is said. Not fixed here because every candidate fix touches ADR-11's normative threshold,
+  which is an architecture decision rather than a deploy one. `qa.md` carries a repro that needs no
+  model to reproduce.
+
+What else ships knowingly incomplete is scope, not defects:
 
 - **SEC-01 / SEC-02** (`security.md`) — no authentication, and a conversation id is a bearer
   token for that conversation's history. Accepted risks, **and they decide the deployment
@@ -48,8 +58,11 @@ failing for one reason. What ships knowingly incomplete is scope, not defects:
   none changes an answer a customer receives.
 - **Layer 5 leftovers**: no pause/cancel controls, and no operator console around the trace
   endpoint — the route exists and is authenticated, but nothing renders it.
-- **Never measured**: the PRD's ≥5-concurrent-chats and turn p95 < 30 s targets. Nothing has
-  run more than one turn at a time. Recorded so nobody reads the green suites as evidence of
+- **Half measured**: the PRD's turn p95 < 30 s target is **met at single-user load — p95 28.2 s
+  over 514 turns**, error rate 0.0%. The **≥5-concurrent half has still never been run**. Nothing
+  in this project has ever had two turns in flight at once, and since latency is dominated by the
+  model hop rather than the data layer (tool p95 ≤ 12 ms), concurrency is more likely to erode
+  that 28.2 s than to reveal headroom. Recorded so nobody reads the green suites as evidence of
   something they never tested.
 
 ---

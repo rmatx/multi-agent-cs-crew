@@ -180,7 +180,7 @@ was the only one without an agent name. The live message carries the tag too now
 
 ## DEF-13 — A correct coordinator answer is force-escalated as `ungrounded`
 
-**Severity: medium. Open.** Found in the operator's own demo capture
+**Severity: medium. FIXED 2026-09-04.** Found in the operator's own demo capture
 (`week5/assets/demo-capture.pdf`, page 2), which is why it matters: it is visible in a document
 going to a reviewer.
 
@@ -225,3 +225,39 @@ another issue type."*
 `(conversation_id, reason_code)`, so the second ticket was created only because its reason code
 differed — `ungrounded` vs `customer_requested_human`. Fixing 2 above closes this as a side
 effect.
+
+### Fix and verification — 2026-09-04
+
+All three faults were addressed, and the fix is in `escalation.ts`, `groundingGuard.ts` and
+`sdk.ts` (commit `d765978`):
+
+1. **The guard now has a notion of grounded-in-the-conversation.** A reply that restates a ticket
+   already open on this conversation is grounded — the session store holds that ticket, so the
+   runtime checks rather than guesses. This is the recommendation above, taken as written, and it
+   is the part that touches ADR-17.
+2. **A forced escalation carries the customer's intent** into the reason code instead of
+   defaulting to `ungrounded`.
+3. **The closing sentence is reason-aware**, so a non-money escalation no longer ends on refund
+   boilerplate (Arize finding 3).
+
+**Verified by replaying the capture's exact shape** — ask for a human, then ask again in the same
+conversation — twice, because a single green run on model-dependent behaviour proves nothing:
+
+| Check | Run 1 | Run 2 |
+|---|---|---|
+| Second turn's reason is not `ungrounded` | PASS | PASS |
+| No second ticket opened | PASS | PASS |
+| No refund boilerplate in the reply | PASS | PASS |
+
+The second turn now comes back `resolved` rather than escalated, and says so plainly:
+
+> I understand you'd like to speak with a person, and that's already been arranged — support
+> ticket STUB-52D1BCFA is open and a member of our human support team will follow up with you
+> shortly on this. **There's no need to open another ticket for the same request**; they'll reach
+> out directly.
+
+Which is the sentence the captured demo said and then contradicted by opening one.
+
+**The duplicate ticket closed as predicted.** `createTicketStub` is idempotent per
+`(conversation_id, reason_code)`, so fixing the reason code was sufficient — no idempotency change
+was needed, and the note above called that correctly.

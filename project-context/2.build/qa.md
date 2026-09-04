@@ -747,10 +747,76 @@ are carried here so one table answers "what is open".
 | INT-03 | Clarifying question reported `resolved`, with a CSAT card | Medium | **Fixed 2026-08-29** | — |
 | DEF-09 | Returns eligibility ignored item category — an in-window order with an excluded item was told yes | Medium | **Fixed 2026-09-04** | — |
 | DEF-10 | Over-escalation on in-window returns — DEF-09's fix made the specialist hand off when it could not settle the category half; measured 2 in 5 | Medium | **Fixed 2026-09-04**, re-measured 5/5 | — |
-| DEF-11 | Processing-calendar answer inconsistent on returned orders — escalated 2 in 4, quoted the 3–5 day policy 1 in 4 | Low | **OPEN — accepted**, see evals.md EV-OQ-2 | `@backend.eng` |
+| DEF-11 | Processing-calendar answer inconsistent on returned orders — escalated 2 in 4, quoted the 3–5 day policy 1 in 4 | Low | **Fixed 2026-09-04**, re-measured 4 in 5 quoting the window, 1 in 5 escalating — residual split out as DEF-14 | — |
+| DEF-12 | Client `buildChatRequest()` hard-required `orderId`, so a membership or order-history question never left the browser | Medium | **Fixed 2026-09-04** | — |
+| DEF-13 | A coordinator answer grounded in conversation memory was force-escalated as `ungrounded`, opening a duplicate ticket with refund boilerplate | Medium | **Fixed 2026-09-04**, verified 2/2 on all three faults | — |
+| DEF-14 | A correct policy retrieval is rejected by the 0.55 grounding gate when the agent's query mixes in a term from an adjacent section | Low | **OPEN — accepted**, deterministic repro below | `@backend.eng` + `@system.arch` (ADR-11) |
 
-**DEF-07, DEF-08 and INT-03 were all fixed the same day by `@backend.eng`.** DEF-11 is the first defect this project has knowingly carried forward: it is a *cautious* failure (the customer reaches a human) rather than a wrong answer, and it was found late enough that fixing it would have meant changing an agent prompt without time to re-sample the paths DEF-10 showed such a change can break. No defect in any pass
-has been a safety defect — the zero-money-tools boundary held under every check.
+**DEF-07, DEF-08 and INT-03 were all fixed the same day by `@backend.eng`.** No defect in any
+pass has been a safety defect — the zero-money-tools boundary held under every check.
+
+**DEF-11 is closed, and closing it produced DEF-14.** The prompt had been telling the returns
+specialist that the holiday calendar was "the honest part of an answer you otherwise cannot put a
+date on" — but the corpus *does* answer processing time, in `data/policy/returns.md` under "Return
+processing times". The specialist was obeying an instruction to withhold something written down.
+That is DEF-10's mistake in a second place: an answerable half withheld because an adjacent half is
+uncertain. The fix splits the question in the prompt — the processing *window* is written policy
+and must be quoted with its citation; when the *money* lands is a human's, always. The calendar
+became context that qualifies the window rather than a substitute for it.
+
+Re-sampled 2026-09-04 against the **production build**, five turns on the DEF-11 path and ten more
+across every other returns path DEF-10 showed a prompt change here can break:
+
+| Path | Turns | Result |
+|---|---|---|
+| 45538 "how long until it is processed" (DEF-11) | 5 | **4 resolved / 1 escalated**; window quoted **4 in 5**; `search_policy` 5/5; calendar 4/5 |
+| 42776 "can I still return this" (DEF-10) | 4 | **4/4 resolved**, eligibility answered 4/4 — no regression |
+| 44279 "can I still return this" (DEF-09) | 3 | **3/3 resolved** with the excluded-item caveat intact 3/3 — no regression |
+| 44279 "return just the shampoo" (ret-05) | 3 | **3/3 resolved**, `get_order_items` 3/3 |
+
+**No invented timeline and no money tool in any of the 15 turns.** Was 2-in-4 escalating and 1-in-4
+quoting the policy; is now 1-in-5 escalating and 4-in-5 quoting it.
+
+**A note on how this was graded, because it nearly went the other way.** The first grader read the
+tool ledger with bare names (`get_processing_calendar`) while the trace writes them namespaced
+(`mcp__novamart__get_processing_calendar`), and so reported **0 in 5** tool calls on every path —
+a clean, plausible, entirely false "the agent stopped calling its tools". Re-graded from the trace
+files. This is the third time in this project that a check has failed for a reason belonging to
+the check rather than the product (DEF-06, the two wording-assertion eval slices, now this), and
+the pattern is the same each time: an assertion on a *representation* rather than on a contract.
+
+### DEF-14 — a correct retrieval rejected by the grounding gate. Low, open.
+
+The one escalation in five is not the specialist disobeying. Its reply says *"I don't have a
+verified processing-time window to give you from our policy data"* — which was **true**, and the
+trace says why. All five turns called `search_policy`; the four that answered used a short query,
+and the one that escalated searched:
+
+| Query the agent wrote | Top-1 chunk | Score | Gate |
+|---|---|---|---|
+| `return processing time window` | `policy:returns#return-processing-times` | **0.7156** | grounded |
+| `return processing time timeline` | `policy:returns#return-processing-times` | **1.0000** | grounded |
+| `return processing time refund window after receiving returned item` | `policy:returns#return-processing-times` | **0.4697** | **rejected** |
+
+**The ranking was right every time.** The same correct section ranks first in all three, including
+the rejected one — only the score moves. `policyScore.ts` already caps scoring at the four
+highest-idf query terms precisely because sentence-shaped queries dilute coverage, but that cap
+cuts both ways: with only four terms carrying the judgement, one high-idf term from an adjacent
+section (`refund`, which belongs to `policy:returns#refunds`) costs roughly a quarter of the
+denominator and drops a correct retrieval under the 0.55 gate.
+
+Reproducible with no model in the loop — `searchPolicy()` alone, same three queries, same scores.
+That makes it a **retrieval defect, not a prompt defect**, and it is why DEF-11 was closed rather
+than left open against the specialist: no further prompt wording fixes this.
+
+**Accepted for this release.** It fails cautiously — the customer reaches a human, and nothing
+wrong is said. **Not fixed here** because the candidate fixes all touch ADR-11's normative
+threshold or the scoring function under it, which is `@system.arch` territory and needs the
+grounding tests re-run against the whole corpus, not a returns path. Recorded with the repro so
+whoever takes it starts from evidence rather than from a rate. The obvious candidates, none
+chosen: retry once with the top-idf terms only; or let rank rather than absolute score carry the
+decision when top-1 is unambiguous. **Tuning 0.55 is not a candidate** — that number is normative
+and the file says so.
 
 The prediction that DEF-08 and INT-03 shared a root was **half right**, and the half that was
 wrong is the more interesting one. Both are the runtime deciding terminal status on incomplete
@@ -786,12 +852,14 @@ Non-MVP tests and coverage, for the backlog.
    `TracePanel` and `CsatPrompt` are verified only by browser driving. A component harness
    would need a test renderer — the first genuine test dependency this project would take on,
    so it needs a deliberate decision rather than a default yes.
-7. **Load**: PRD targets ≥ 5 concurrent chats and turn p95 < 30 s. **Half-measured
-   2026-09-04 — and the measured half misses.** Turn p95 is **30.4 s over 353 turns** against a
-   < 30 s target, at single-user load with no concurrency applied. The ≥ 5-concurrent half is
-   still unexercised; nothing here has run more than one turn at a time. Since latency is
-   dominated by the model hop (p95 14.8 s) and not the data layer (< 25 ms), concurrency is
-   likely to make this worse rather than reveal headroom.
+7. **Load**: PRD targets ≥ 5 concurrent chats and turn p95 < 30 s. **Half-measured, and the
+   measured half now passes.** Turn p95 is **28.2 s over 514 turns** against a < 30 s target, at
+   single-user load with no concurrency applied — it was 30.4 s over 353 turns, so the number
+   moved as the sample grew rather than because anything was optimised, and it sits close enough
+   to the line that a slower model or a longer prompt puts it back over. The ≥ 5-concurrent half
+   is still unexercised; nothing here has run more than one turn at a time. Since latency is
+   dominated by the model hop and not the data layer (tool p95 ≤ 12 ms), concurrency is likely to
+   erode this rather than reveal headroom.
 8. **Reliability sampling as a routine**, not an ad-hoc reaction. DEF-03 and the slice G
    flake were both found by sampling a behaviour repeatedly; nothing does that on a schedule.
 9. **`npm run eval:sdk` in CI** behind a secret and a spend cap (DEP-OQ-4), so model-behaviour
@@ -830,18 +898,18 @@ Non-MVP tests and coverage, for the backlog.
 | ----- | ----- |
 | Persona | `@qa.eng` |
 | Actions | `*test-unit`, `*test-integration`, `*qa`, `*verify-flow`, `*log-defects`, `*future-work` |
-| Timestamp | 2026-08-25 (Sprint 1); 2026-08-28 (Sprint 2 re-test); 2026-08-29 (full pass); 2026-09-04 (re-test + first latency measurement); **2026-09-04 (demo-readiness pass)** |
-| Commit under test | `09e8184` (2026-08-29); `f0bbcc2` (2026-09-04); **`62e7970` (2026-09-04, demo-readiness)** |
+| Timestamp | 2026-08-25 (Sprint 1); 2026-08-28 (Sprint 2 re-test); 2026-08-29 (full pass); 2026-09-04 (re-test + first latency measurement); 2026-09-04 (demo-readiness pass); **2026-09-04 (release pass — DEF-11/DEF-13 verification)** |
+| Commit under test | `09e8184` (2026-08-29); `f0bbcc2` (2026-09-04); `62e7970` (2026-09-04, demo-readiness); **`d765978` + the DEF-11 prompt change (2026-09-04, release pass)** |
 | Resolved runtime | `AAMAD_TARGET_RUNTIME=claude-agent-sdk` (env, matches `aamad.config.yml`) |
 | Model at verification | `claude-sonnet-5`, `effort: low`, `SDK_STREAM_MODE=live` |
-| Unit | **160 / 160**, Node built-in runner, still no test-framework dependency (143 → 153 → 160) |
-| Eval | **114 / 114** across 9 scripts, `AS_OF_DATE=2026-09-01` — re-run twice on 2026-09-04, including after the DEF-09 prompt change; slice G's `hops === 1` held |
+| Unit | **169 / 169**, Node built-in runner, still no test-framework dependency (143 → 153 → 160 → 169) |
+| Eval | **114 / 114** across 9 scripts plus **26 / 26** on the golden dataset (`npm run evals`, both SAFETY categories 100%), `AS_OF_DATE=2026-09-01` — both re-run 2026-09-04 after the DEF-11 prompt change; slice G's `hops === 1` held |
 | Smoke | **8 / 8** on the keyless engine — S8 added for the handoff artifacts |
 | Flow | Verified in a browser end to end, both engines, plus mock mode |
 | AC coverage | 55 criteria mapped: **46 pass, 5 partial, 1 not covered**, 3 by-absence/out-of-scope |
 | Dependencies | **Changed 2026-09-04.** The project took its first added runtime dependencies (4 × OpenTelemetry + OpenInference conventions) for Arize export. Recorded in NOTICES with licences. Still no test-framework dependency |
-| Performance | Turn p95 **30.4 s** vs PRD < 30 s (missed, single-user); error rate 0.6%. Concurrency still unmeasured. Cost figures are the SDK's computed `total_cost_usd` (tokens × list price) — a usage estimate, **not** a statement of what was billed |
-| Defects open | **One, accepted.** DEF-07/08/INT-03 closed 2026-08-29; DEF-09 and DEF-10 found and fixed 2026-09-04; **DEF-11 open and accepted** (cautious failure, not a wrong answer) |
-| Files written by `@qa.eng` | 2026-08-29: `dateShift.test.ts`, `hooks.test.ts`, `eval-sdk.mjs`, `test-resolver.mjs`, `package.json`. 2026-09-04 (both passes): **this file only**. **`@qa.eng` has modified no application logic in any pass** — DEF-09's fix was `@backend.eng`'s |
+| Performance | Turn p95 **28.2 s over 514 turns** vs PRD < 30 s — **now met at single-user load** (was 30.4 s over 353); error rate **0.0%**. Concurrency still unmeasured, and that half of NFR-PERF-02 is what the target was really about. Cost figures are the SDK's computed `total_cost_usd` (tokens × list price) — a usage estimate, **not** a statement of what was billed |
+| Defects open | **One, accepted — DEF-14**, a retrieval defect found by fixing DEF-11 and split out from it. DEF-07/08/INT-03 closed 2026-08-29; DEF-09, DEF-10, **DEF-11, DEF-12 and DEF-13 all fixed 2026-09-04**. DEF-14 fails cautiously (customer reaches a human, nothing wrong is said) and its fix touches ADR-11's normative threshold, so it is `@system.arch`'s call, not a QA one |
+| Files written by `@qa.eng` | 2026-08-29: `dateShift.test.ts`, `hooks.test.ts`, `eval-sdk.mjs`, `test-resolver.mjs`, `package.json`. 2026-09-04 (all three passes): **this file only**. **`@qa.eng` has modified no application logic in any pass** — DEF-09's, DEF-11's and DEF-13's fixes were all `@backend.eng`'s |
 | Security handoff | `security.md` exists with no Critical findings; `@security.eng` ran before Deliver as `aamad.config.yml` requires |
 | Self-check | Required sections present: Sources, Assumptions, Open Questions, Audit. No Diagnostic raised |

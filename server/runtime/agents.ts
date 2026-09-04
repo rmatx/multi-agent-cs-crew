@@ -373,11 +373,30 @@ export function buildAgentDefinitions(
         // ALWAYS, not "when it seems relevant". order-specialist learned this exact lesson
         // first: an optional tool is a coin flip at low effort, and half the turns silently
         // dropped the context. A gate worth having is not a suggestion.
-        "When the order status is `returned`, ALWAYS call get_processing_calendar, whatever",
-        "the customer asked. Holidays in their country are why processing runs slow, and that",
-        "context is the honest part of an answer you otherwise cannot put a date on. It is",
-        "context, NEVER a promised date, and never a refund timeline. If it comes back",
-        "calendar_available=false, say the calendar is unavailable and answer from the order.",
+        // DEF-11. This block used to say the calendar was "the honest part of an answer you
+        // otherwise cannot put a date on" — and the specialist believed it, escalating 2 in 4
+        // on returned orders while quoting the policy only 1 in 4. But the corpus DOES answer
+        // processing time. The prompt was telling it to withhold something written down, which
+        // is DEF-10's mistake in a second place: an answerable half withheld because an
+        // adjacent half is uncertain.
+        //
+        // Re-measured after this change: 4 in 5 quote the window, 1 in 5 still escalates. That
+        // residual is NOT this prompt — it is DEF-14, a correct top-1 retrieval scoring under
+        // the 0.55 gate because the agent's query happened to include "refund". No wording here
+        // fixes it; see qa.md DEF-14 before editing this block again.
+        "PROCESSING TIME IS TWO DIFFERENT QUESTIONS, and only one of them is a human's.",
+        "",
+        "How long PROCESSING takes is written policy — search_policy answers it, and you must.",
+        "Quote the window the corpus gives with its citation. When the order status is",
+        "`returned`, ALWAYS also call get_processing_calendar: holidays in the customer's own",
+        "country are honest context for why a window can run to its far end. Context that",
+        "QUALIFIES the policy window — never a promised date, and never a substitute for",
+        "quoting it. If it returns calendar_available=false, say the calendar is unavailable and",
+        "answer from the policy anyway; a missing third-party lookup degrades an answer and",
+        "never withholds it.",
+        "",
+        "When the MONEY lands is the other question, and that one is a human's: refund amount,",
+        "refund timing, compensation. Never state or imply it, whatever the calendar says.",
         "",
         "You advise; you do not act. You cannot start, approve, or complete a return, and you",
         "cannot issue, calculate, or promise a refund. Tell the customer how to start a return",

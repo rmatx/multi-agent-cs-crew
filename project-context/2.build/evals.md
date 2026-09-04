@@ -147,12 +147,29 @@ red:
   order *was* in window and escalating anyway — DEF-03's exact shape. Fixed by making the item
   check a qualifier that never withholds the date answer. Re-measured **5/5 resolved**, and
   DEF-09 still holds (2/2 with the caveat intact).
-- **DEF-11 — inconsistent use of the processing calendar. OPEN, not fixed.** On a returned
+- **DEF-11 — inconsistent use of the processing calendar. FIXED 2026-09-04.** On a returned
   order, the specialist escalated **2 in 4** and quoted the 3–5 day policy only **1 in 4**,
-  despite calling `get_processing_calendar`. Deliberately recorded rather than fixed: it is a
-  *cautious* failure (a human gets the question) rather than a wrong answer, and DEF-10 had just
-  demonstrated that a prompt change on this agent needs re-sampling of every other returns path
-  to prove no regression. That is not work to start hours before a demo.
+  despite calling `get_processing_calendar`. Root cause was in the prompt, and it was DEF-10's
+  mistake in a second place: the block told the specialist the calendar was "the honest part of
+  an answer you otherwise cannot put a date on", when `data/policy/returns.md` answers processing
+  time outright. The agent was obeying an instruction to withhold something written down. The fix
+  splits the question — the processing *window* is written policy and must be quoted with its
+  citation, the calendar qualifies it, and when the *money* lands is always a human's.
+  Re-measured over 15 turns against the production build: **1 in 5 escalating, 4 in 5 quoting the
+  window**, and no regression on the DEF-09, DEF-10 or partial-return paths (10/10 resolved).
+  Full table in `qa.md`.
+- **DEF-14 — a correct retrieval rejected by the grounding gate. OPEN, accepted.** Split out of
+  DEF-11's residual, and it is not a prompt defect. The one turn in five that still escalated had
+  searched `"return processing time refund window after receiving returned item"`, which ranks
+  `policy:returns#return-processing-times` **first** — the right section — at **0.4697**, under
+  the 0.55 gate; the shorter queries the other four turns wrote rank the *same* section first at
+  0.7156 and 1.0. `policyScore.ts` already caps scoring at the four highest-idf terms because
+  sentence-shaped queries dilute coverage, and that cap is what makes this sharp: with four terms
+  carrying the judgement, one high-idf term belonging to an adjacent section (`refund`) costs
+  about a quarter of the denominator. Reproducible against `searchPolicy()` with no model in the
+  loop. **Not fixed here** — every candidate touches ADR-11's normative threshold or the scoring
+  function under it, which needs `@system.arch` and a corpus-wide re-run of the grounding tests,
+  not a returns-path patch.
 
 **Blocking Deliver:** nothing. **Accepted gaps:** EC-007 (latency p95) and EC-009 (judge) below.
 
@@ -197,7 +214,11 @@ grounding failures → trust and complaint volume · cost per turn → cost to s
 
 1. **Calibrate and run the LLM judge** (EC-009). Model chosen (`claude-opus-5`); needs a
    hand-labelled sample and a reported agreement rate before any verdict is trusted.
-2. **Fix DEF-11**, with re-sampling across every returns path to prove no regression.
+2. **Fix DEF-14** — a correct top-1 retrieval rejected by the 0.55 gate. `@system.arch` owns it
+   (ADR-11). Candidates, none chosen: retry once with the top-idf terms only, or let rank carry
+   the decision when top-1 is unambiguous. Tuning 0.55 is not a candidate. *(DEF-11, previously
+   this entry, was fixed 2026-09-04 and re-sampled across every returns path — that is what
+   surfaced DEF-14.)*
 3. **Multi-turn evals.** Every item here is single-turn; the product is a conversation, and
    session-carried identity is only covered by integration case I1.
 4. **Load.** EC-007 is measured single-user only; ≥5 concurrent is still unexercised.
@@ -238,7 +259,7 @@ Supplied by the **operator** during the Step 2 gap check, 2026-09-04:
 | ID | Question | Owner |
 |---|---|---|
 | EV-OQ-1 | The judge is specified but uncalibrated, so EC-009 has no result. Is a quality dimension graded only by string matching acceptable for the capstone, or should calibration run before submission? | Operator |
-| EV-OQ-2 | DEF-11 is open by choice. Fix before the demo and re-sample every returns path, or present with it recorded? | Operator |
+| EV-OQ-2 | *Resolved 2026-09-04.* DEF-11 was fixed and every returns path re-sampled (15 turns). The residual is DEF-14, a retrieval defect with a deterministic repro, accepted for this release. | Closed |
 | EV-OQ-3 | Terminal status varies run to run where declining politely and escalating are both defensible (`ground-01` did both across four runs). Is that acceptable variance, or should ADR-17 extend to pin a status for out-of-scope questions? | `@system.arch` |
 | EV-OQ-4 | The suite trips `RATE_LIMIT_PER_MIN` and must be run with it disabled. Should the limit exempt a local eval run, or should the runner stay paced? | `@backend.eng` |
 
@@ -254,7 +275,7 @@ Supplied by the **operator** during the Step 2 gap check, 2026-09-04:
 | Judge model | `claude-opus-5` — specified, **not run** (uncalibrated; see EV-OQ-1) |
 | Dataset | 26 items · 5 categories · **13 never previously exercised** |
 | Result | 5/5 categories at or above threshold; 26/26 items pass |
-| Defects | **DEF-10** found and fixed · **DEF-11** found, recorded, open |
+| Defects | **DEF-10** found and fixed · **DEF-11** found, recorded, then **fixed and re-sampled 2026-09-04** · **DEF-14** split out of DEF-11's residual, open and accepted |
 | Runs | 4 full suite executions plus 3 sampling rounds; ~$12 of computed usage |
 | Files written | `evals/**`, this file. `@qa.eng` authored no application logic — DEF-10's fix was `@backend.eng`'s |
 | aamad | 0.8.0 |
