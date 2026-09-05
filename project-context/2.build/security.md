@@ -35,8 +35,8 @@ cannot move money — held under every probe, and is the strongest part of the b
 
 | ID | Severity | Finding | Status |
 |---|---|---|---|
-| SEC-01 | **High** | Any caller can read any customer's order and account data | Open — accepted for localhost only |
-| SEC-02 | **High** | A conversation id is a bearer token for that conversation's history | Open |
+| SEC-01 | **High** | Any caller can read any customer's order and account data | Open — **operator-accepted 2026-09-04 for public deployment on the fictional fixture** |
+| SEC-02 | **High** | A conversation id is a bearer token for that conversation's history | Open — **operator-accepted 2026-09-04**, same scope as SEC-01 |
 | SEC-03 | Medium | Trace logs persist customer conversations in plaintext, with no retention limit | **Mitigated 2026-09-04** |
 | SEC-04 | Medium | No security response headers | **Fixed 2026-09-04** — CSP deliberately deferred |
 | SEC-05 | Low | The rate limit is a cost guard being read as a control | Open — documented, not fixed |
@@ -395,6 +395,39 @@ not something to bolt on during Deliver.
 | Files written | `project-context/2.build/security.md` (this file) only — no source file modified |
 | Prompt Trace | Not captured. This assessment produced no model-generated artifact content: findings come from executed probes and code reads, both reproducible from the Sources above. Per `aamad-core`, the omission is stated with its reason. |
 | Self-check | Required sections present: Sources, Assumptions, Open Questions, Audit. No Diagnostic raised. |
+
+### Operator acceptance of SEC-01 and SEC-02 — 2026-09-04
+
+The assessment above concluded that SEC-01 and SEC-02 **block a shared deployment**. The operator
+has accepted them for one, and the acceptance is recorded here rather than argued with.
+
+| Field | Value |
+| ----- | ----- |
+| Accepted by | Operator (repository owner) |
+| Date | 2026-09-04 |
+| Scope | Public deployment (`docker-compose.prod.yml` / Railway) of **this build against the committed fictional fixture**, for academic coursework |
+| Stated grounds | The dataset is 50,000 generated users and contains no real person's data; the deployment is coursework, not a service with customers |
+| Assessment position | **Unchanged.** The findings are correct and remain open; what changed is that someone with the authority to carry the risk has chosen to |
+
+**What the acceptance covers.** Enumeration of order and account records by sequential integer
+id, and replay of a conversation id to read that transcript — against generated data, where the
+worst outcome is disclosure of records that describe nobody.
+
+**What it does not cover, and this is the part worth keeping.** The boundary is the *dataset*,
+not the code, and **no code change separates the accepted case from the unacceptable one** — only
+which database is mounted. Point this same image at real customer data and SEC-01 is a breach:
+the ids are guessable, the contents are order history and account identity, and the application
+keeps no record that would let anyone say afterwards what was read. Any future work that swaps
+the fixture for real data re-opens both findings at their original severity **and** invalidates
+this acceptance, without a line of source changing to signal it.
+
+**Unchanged by the acceptance.** The rate limit is still a cost guard and not access control
+(SEC-05), and on a public endpoint it is the only thing between a stranger and the operator's
+Anthropic bill. `OPERATOR_KEY` still fails closed, which is the right default on a public host.
+The recommendation for any non-academic use is unchanged: authentication first, and it is a
+PRD/SAD change owned by `@system.arch`.
+
+---
 
 ### Re-verification — 2026-09-04
 

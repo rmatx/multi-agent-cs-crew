@@ -10,7 +10,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTracer, redact, resolveRetentionDays, sanitiseId } from "./trace";
+import path from "node:path";
+import { createTracer, redact, resolveLogDir, resolveRetentionDays, sanitiseId } from "./trace";
 
 const asRecord = (value: unknown): Record<string, unknown> => value as Record<string, unknown>;
 
@@ -215,4 +216,29 @@ test("PII at the end of a sentence is still scrubbed, whole", () => {
   const phone = String(asRecord(redact({ t: "call 555-987-6543." }))["t"]);
   assert.match(phone, /\[PHONE\]/);
   assert.doesNotMatch(phone, /6543/);
+});
+
+test("TRACE_LOG_DIR redirects the trace directory, and only when it says something", () => {
+  const read = (value: string | undefined): string => {
+    const prev = process.env["TRACE_LOG_DIR"];
+    if (value === undefined) delete process.env["TRACE_LOG_DIR"];
+    else process.env["TRACE_LOG_DIR"] = value;
+    try {
+      return resolveLogDir();
+    } finally {
+      if (prev === undefined) delete process.env["TRACE_LOG_DIR"];
+      else process.env["TRACE_LOG_DIR"] = prev;
+    }
+  };
+
+  const repoDefault = path.join(process.cwd(), "project-context", "2.build", "logs");
+  assert.equal(read(undefined), repoDefault, "unset keeps the repo-relative default");
+  assert.equal(read(""), repoDefault, "an empty value is not a path");
+  assert.equal(read("   "), repoDefault, "nor is whitespace");
+  // The container case this exists for: traces must land inside the mounted volume, or they
+  // are lost on the next redeploy.
+  assert.equal(read("/app/data/logs"), "/app/data/logs");
+  // Relative values resolve against cwd rather than being used raw, so a stray "logs" cannot
+  // write to a path that depends on which directory the process happened to start in.
+  assert.equal(read("logs"), path.join(process.cwd(), "logs"));
 });

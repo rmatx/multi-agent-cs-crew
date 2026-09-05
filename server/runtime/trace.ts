@@ -11,6 +11,15 @@
  * NOTE for @devops.eng: `.gitignore:19` ignores `project-context/2.build/logs/`, so the
  * directory does not survive a fresh clone. This module creates it on demand (recursive
  * mkdir), which is why no `.gitkeep` un-ignore is needed. Flagged rather than fixed.
+ *
+ * The directory is OVERRIDABLE via `TRACE_LOG_DIR`, and on a container platform it must be.
+ * The repo-relative default is right for local work and wrong everywhere else: a platform that
+ * gives you one mounted volume (Railway, Fly, a plain `docker run -v`) mounts it at a path of
+ * its choosing, and anything written outside that mount lives on the container's ephemeral
+ * layer. Traces would then look fine right up to the first redeploy and then be gone — the
+ * failure mode of a diagnostic you only reach for after something has gone wrong. The Dockerfile
+ * sets this to `/app/data/logs`, inside the volume, alongside the two SQLite stores which have
+ * had `SESSION_DB_PATH` / `TICKET_STUB_DB_PATH` for the same reason since Sprint 2.
  */
 
 import { randomUUID } from "node:crypto";
@@ -22,7 +31,13 @@ import {
 import { appendFile, mkdir, readdir, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 
-const LOG_DIR = path.join(process.cwd(), "project-context", "2.build", "logs");
+export function resolveLogDir(): string {
+  const fromEnv = process.env["TRACE_LOG_DIR"]?.trim();
+  if (fromEnv !== undefined && fromEnv !== "") return path.resolve(fromEnv);
+  return path.join(process.cwd(), "project-context", "2.build", "logs");
+}
+
+const LOG_DIR = resolveLogDir();
 
 /** Keys whose values are replaced wholesale, regardless of shape. */
 const SECRET_KEY_PATTERN = /(api[-_]?key|secret|token|password|authorization|credential)/i;

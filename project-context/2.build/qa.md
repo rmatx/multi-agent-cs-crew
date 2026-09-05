@@ -751,6 +751,8 @@ are carried here so one table answers "what is open".
 | DEF-12 | Client `buildChatRequest()` hard-required `orderId`, so a membership or order-history question never left the browser | Medium | **Fixed 2026-09-04** | — |
 | DEF-13 | A coordinator answer grounded in conversation memory was force-escalated as `ungrounded`, opening a duplicate ticket with refund boilerplate | Medium | **Fixed 2026-09-04**, verified 2/2 on all three faults | — |
 | DEF-14 | A correct policy retrieval is rejected by the 0.55 grounding gate when the agent's query mixes in a term from an adjacent section | Low | **OPEN — accepted**, deterministic repro below | `@backend.eng` + `@system.arch` (ADR-11) |
+| DEF-15 | Compose `${VAR:-}` passthrough lines resolved to an empty string and overrode `env_file`, wiping `MODEL_ID` — so `CHAT_ENGINE=sdk` could not start the crew through compose at all | Medium | **Fixed 2026-09-04** in both compose files | — |
+| DEF-16 | Container writable state (handoff artifacts, trace logs) was written outside the mounted volume, and the volume masked the read-only fixture and corpus | Medium | **Fixed 2026-09-04** — state moved to `/app/var`, verified on a non-seeding mount | — |
 
 **DEF-07, DEF-08 and INT-03 were all fixed the same day by `@backend.eng`.** No defect in any
 pass has been a safety defect — the zero-money-tools boundary held under every check.
@@ -784,6 +786,50 @@ a clean, plausible, entirely false "the agent stopped calling its tools". Re-gra
 files. This is the third time in this project that a check has failed for a reason belonging to
 the check rather than the product (DEF-06, the two wording-assertion eval slices, now this), and
 the pattern is the same each time: an assertion on a *representation* rather than on a contract.
+
+### DEF-15 and DEF-16 — found by actually running the container
+
+Both were found on 2026-09-04, the first time this image was ever built and run anywhere but CI.
+CI builds the image and never starts it, which is why a green `container` job had been sitting on
+top of both of them.
+
+**DEF-15 — a compose line that erased the value it appeared to forward.** Both compose files
+carried `MODEL_ID: ${MODEL_ID:-}`. Compose resolves that to an empty string, and an empty value in
+`environment:` overrides `env_file:`, so `MODEL_ID` from `.env.local` was wiped. `config.ts`
+requires `MODEL_ID` with no default on purpose — a silently-chosen model makes the Audit line a
+lie — so the crew refused to start and `/api/health` reported `sdkEngineConfigured: false` **with
+a valid key present**. The health field was accurate and the conclusion it invited was wrong,
+which is what made it worth recording.
+
+**DEF-16 — the volume was mounted over the data the app needs.** Verified three ways on the same
+image, because the first result was misleading:
+
+| Volume at | Seeding | `/api/health` |
+|---|---|---|
+| `/app/data`, Docker named volume | seeded from image | `200` — **the bug is invisible** |
+| `/app/data`, non-seeding mount | empty | `503`, `duckdb: error`, `database does not exist` |
+| `/app/var`, non-seeding mount | empty | `200`, `duckdb: ok`, `stores: ok` |
+
+A Docker named volume seeds itself from the image, so the mistake cannot be reproduced with the
+default local setup — it only appears on a platform volume, which starts empty. Two writable
+paths were also outside any volume entirely: handoff artifacts (hardcoded to `data/`) and trace
+logs (hardcoded to `project-context/2.build/logs`), both lost on every redeploy.
+
+A third fault surfaced fixing it: a platform volume is attached **root-owned**, and with
+`USER node` the app could not create its SQLite stores — `503`, `stores: error`, which reads as an
+application fault and is a mount permission. Fixed with an entrypoint that chowns only the state
+directory as root and drops to `node` via `setpriv`; verified afterwards that `npm`, `sh` and
+`next-server` all run as uid 1000.
+
+**Related, and fixed at the same time:** the demo stack bind-mounted the host trace directory into
+the container. A host bind mount appears root-owned inside the container, uid 1000 gets
+`Permission denied` (verified directly with `touch`), and `trace.ts` swallows write errors by
+design so a turn never fails. Traces would simply never appear, with nothing reporting why.
+Replaced with an explicit `docker compose cp` out of the volume.
+
+**What these three have in common** is the project's own doctrine, arrived at again from a new
+direction: verify by executing, not by reading. Each of them survived a green build, a green test
+suite and a green CI container job, and each took one `curl` against a running container to find.
 
 ### DEF-14 — a correct retrieval rejected by the grounding gate. Low, open.
 
@@ -902,14 +948,14 @@ Non-MVP tests and coverage, for the backlog.
 | Commit under test | `09e8184` (2026-08-29); `f0bbcc2` (2026-09-04); `62e7970` (2026-09-04, demo-readiness); **`d765978` + the DEF-11 prompt change (2026-09-04, release pass)** |
 | Resolved runtime | `AAMAD_TARGET_RUNTIME=claude-agent-sdk` (env, matches `aamad.config.yml`) |
 | Model at verification | `claude-sonnet-5`, `effort: low`, `SDK_STREAM_MODE=live` |
-| Unit | **169 / 169**, Node built-in runner, still no test-framework dependency (143 → 153 → 160 → 169) |
+| Unit | **170 / 170**, Node built-in runner, still no test-framework dependency (143 → 153 → 160 → 169) |
 | Eval | **114 / 114** across 9 scripts plus **26 / 26** on the golden dataset (`npm run evals`, both SAFETY categories 100%), `AS_OF_DATE=2026-09-01` — both re-run 2026-09-04 after the DEF-11 prompt change; slice G's `hops === 1` held |
 | Smoke | **8 / 8** on the keyless engine — S8 added for the handoff artifacts |
 | Flow | Verified in a browser end to end, both engines, plus mock mode |
 | AC coverage | 55 criteria mapped: **46 pass, 5 partial, 1 not covered**, 3 by-absence/out-of-scope |
 | Dependencies | **Changed 2026-09-04.** The project took its first added runtime dependencies (4 × OpenTelemetry + OpenInference conventions) for Arize export. Recorded in NOTICES with licences. Still no test-framework dependency |
 | Performance | Turn p95 **28.2 s over 514 turns** vs PRD < 30 s — **now met at single-user load** (was 30.4 s over 353); error rate **0.0%**. Concurrency still unmeasured, and that half of NFR-PERF-02 is what the target was really about. Cost figures are the SDK's computed `total_cost_usd` (tokens × list price) — a usage estimate, **not** a statement of what was billed |
-| Defects open | **One, accepted — DEF-14**, a retrieval defect found by fixing DEF-11 and split out from it. DEF-07/08/INT-03 closed 2026-08-29; DEF-09, DEF-10, **DEF-11, DEF-12 and DEF-13 all fixed 2026-09-04**. DEF-14 fails cautiously (customer reaches a human, nothing wrong is said) and its fix touches ADR-11's normative threshold, so it is `@system.arch`'s call, not a QA one |
+| Defects open | **One, accepted — DEF-14**, a retrieval defect found by fixing DEF-11 and split out from it. DEF-07/08/INT-03 closed 2026-08-29; DEF-09, DEF-10, **DEF-11, DEF-12 and DEF-13 fixed 2026-09-04**; **DEF-15 and DEF-16 found and fixed 2026-09-04** by running the container image for the first time. DEF-14 fails cautiously (customer reaches a human, nothing wrong is said) and its fix touches ADR-11's normative threshold, so it is `@system.arch`'s call, not a QA one |
 | Files written by `@qa.eng` | 2026-08-29: `dateShift.test.ts`, `hooks.test.ts`, `eval-sdk.mjs`, `test-resolver.mjs`, `package.json`. 2026-09-04 (all three passes): **this file only**. **`@qa.eng` has modified no application logic in any pass** — DEF-09's, DEF-11's and DEF-13's fixes were all `@backend.eng`'s |
 | Security handoff | `security.md` exists with no Critical findings; `@security.eng` ran before Deliver as `aamad.config.yml` requires |
 | Self-check | Required sections present: Sources, Assumptions, Open Questions, Audit. No Diagnostic raised |

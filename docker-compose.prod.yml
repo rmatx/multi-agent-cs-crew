@@ -1,0 +1,69 @@
+# Production stack — the full crew, reachable off-host.
+#
+# This file is the DELIBERATE counterpart to docker-compose.yml, which binds loopback because
+# this build has no authentication. Here the port is published on every interface and the sdk
+# engine is on by default, which is what "production" was asked for. What that means is not
+# softened by putting it in a different file:
+#
+#   SEC-01 — any caller who can reach the port can read ANY customer's order and account data,
+#            and order ids are sequential integers, so enumeration is trivial.
+#   SEC-02 — a conversation id is a bearer token for that conversation's transcript.
+#
+# Both are recorded in security.md and were ACCEPTED BY THE OPERATOR on 2026-09-04 for this
+# academic deployment, on the stated grounds that the dataset is fictional. That acceptance is
+# what this file rests on. It does not survive contact with real customer data: against real
+# people SEC-01 is a breach, not a finding, and the fix is authentication, not a port change.
+
+services:
+  novamart:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: novamart-support-crew:1.0.0
+    # Published on every interface. See the header before changing anything about this line.
+    ports:
+      - "${BIND_ADDR:-0.0.0.0}:${PORT:-3000}:3000"
+    environment:
+      # NOTE: every variable below has a REAL default. Passthrough entries of the form
+      # `FOO: ${FOO:-}` are deliberately absent: Compose resolves them to an EMPTY STRING and an
+      # empty string from `environment:` OVERRIDES `env_file`, so such a line silently erases
+      # the value it looks like it is forwarding. That is DEF-15 — it made `CHAT_ENGINE=sdk`
+      # unstartable through compose, because MODEL_ID is required with no default by design
+      # (config.ts: a silently-chosen model makes the Audit line a lie). Anything not listed
+      # here reaches the container from .env.local or the platform's own variables.
+      # The real crew, not the keyless engine. This is the difference between the demo stack
+      # and this one, and it is what spends the API key on every turn.
+      CHAT_ENGINE: ${CHAT_ENGINE:-sdk}
+      MODEL_EFFORT: ${MODEL_EFFORT:-low}
+      # Turns per minute per client. On a PUBLIC endpoint this is the only thing between a
+      # stranger and the operator's Anthropic bill — and it is still a cost guard, not access
+      # control (SEC-05): it is per-process and keyed on a client address the caller can choose.
+      RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-20}
+      TRACE_RETENTION_DAYS: ${TRACE_RETENTION_DAYS:-7}
+      # NEVER 1 on a customer-facing deployment: the picker lists real order ids belonging to
+      # other customers.
+      NEXT_PUBLIC_DEMO_MODE: ""
+    # Secrets by NAME only. ANTHROPIC_API_KEY is required for CHAT_ENGINE=sdk; OPERATOR_KEY
+    # gates the trace endpoint and FAILS CLOSED (503) when unset, which is the safe default on
+    # a public host — set it only if you want the operator trace reachable.
+    env_file:
+      - path: .env.local
+        required: false
+    volumes:
+      # /app/var, NOT /app/data. Everything writable is under it — both SQLite stores, the
+      # trace logs and the handoff artifacts (NOVAMART_STATE_DIR, SESSION_DB_PATH,
+      # TICKET_STUB_DB_PATH and TRACE_LOG_DIR all point inside it in the Dockerfile). The
+      # read-only fixture and policy corpus stay in /app/data where a volume cannot mask them.
+      - novamart-data:/app/var
+    restart: unless-stopped
+    healthcheck:
+      # The image's own HEALTHCHECK already does this; restating it here means `docker compose
+      # ps` reports health for a container started from a pulled image too.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  novamart-data:

@@ -16,7 +16,7 @@
  * a new capability cannot arrive quietly, and the honest way to add one is to argue for it, not
  * to slip it in behind a demo.
  *
- * NOTHING HERE SENDS ANYTHING. `data/outbox.md` is a file. There is no SMTP client, no API
+ * NOTHING HERE SENDS ANYTHING. The outbox is a file. There is no SMTP client, no API
  * call, no network egress of any kind in this module — and the file says so at the top, in case
  * it is ever read out of context.
  *
@@ -29,8 +29,27 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { scrubPii } from "./trace";
 
-const TICKET_DIR = path.join(process.cwd(), "data", "tickets");
-const OUTBOX = path.join(process.cwd(), "data", "outbox.md");
+/**
+ * Where WRITABLE state lives. `NOVAMART_STATE_DIR` exists for containers and is the same
+ * knob `SESSION_DB_PATH`, `TICKET_STUB_DB_PATH` and `TRACE_LOG_DIR` answer to.
+ *
+ * The default is `data/`, which is right locally and wrong in an image, because `data/` there
+ * also holds READ-ONLY things the app cannot start without — the DuckDB fixture, the policy
+ * corpus, the demo overlay. Mounting a volume over `data/` to persist the writable half would
+ * mask the read-only half. A Docker named volume hides that by seeding itself from the image
+ * on first use; a Railway/Fly volume starts EMPTY and does not, so the app would come up with
+ * no fixture and no corpus and fail on the first question. Writable state therefore gets its
+ * own directory in the image (`/app/var`) and the volume mounts there.
+ */
+function stateDir(): string {
+  const fromEnv = process.env["NOVAMART_STATE_DIR"]?.trim();
+  return fromEnv !== undefined && fromEnv !== ""
+    ? path.resolve(fromEnv)
+    : path.join(process.cwd(), "data");
+}
+
+const TICKET_DIR = path.join(stateDir(), "tickets");
+const OUTBOX = path.join(stateDir(), "outbox.md");
 
 /** Shape written by `createTicketStub`, narrowed to what an artifact needs. */
 export type HandoffStub = {

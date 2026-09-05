@@ -29,7 +29,13 @@ if (!Number.isFinite(days) || days < 0) {
   process.exit(1);
 }
 
-const dir = path.join(process.cwd(), "project-context", "2.build", "logs");
+// Must resolve the SAME directory as server/runtime/trace.ts, or the cron job in the runbook
+// prunes an empty directory on a container while the real traces grow unbounded on the volume.
+const fromEnv = process.env.TRACE_LOG_DIR?.trim();
+const dir =
+  fromEnv !== undefined && fromEnv !== ""
+    ? path.resolve(fromEnv)
+    : path.join(process.cwd(), "project-context", "2.build", "logs");
 
 if (dryRun) {
   const cutoff = Date.now() - days * 86_400_000;

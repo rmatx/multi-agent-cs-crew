@@ -17,14 +17,19 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     environment:
+      # NOTE: every variable below has a REAL default. Passthrough entries of the form
+      # `FOO: ${FOO:-}` are deliberately absent: Compose resolves them to an EMPTY STRING and an
+      # empty string from `environment:` OVERRIDES `env_file`, so such a line silently erases
+      # the value it looks like it is forwarding. That is DEF-15 — it made `CHAT_ENGINE=sdk`
+      # unstartable through compose, because MODEL_ID is required with no default by design
+      # (config.ts: a silently-chosen model makes the Audit line a lie). Anything not listed
+      # here reaches the container from .env.local or the platform's own variables.
       # Engine. `deterministic` is the keyless default and costs nothing; `sdk` is the crew
-      # and spends the API key on every turn.
+      # and spends the API key on every turn. Running the crew here needs MODEL_ID and
+      # ANTHROPIC_API_KEY to reach the container from .env.local — which is exactly what the
+      # removed passthrough lines used to prevent.
       CHAT_ENGINE: ${CHAT_ENGINE:-deterministic}
-      # Pin the demo clock so the dates in a walkthrough are reproducible. Unset = today.
-      AS_OF_DATE: ${AS_OF_DATE:-}
-      MODEL_ID: ${MODEL_ID:-}
       MODEL_EFFORT: ${MODEL_EFFORT:-low}
-      SDK_STREAM_MODE: ${SDK_STREAM_MODE:-final}
       # Turns per minute per client. A cost guard on an unauthenticated endpoint, not access
       # control (security.md SEC-05).
       RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-20}
@@ -34,13 +39,24 @@ services:
       - path: .env.local
         required: false
     volumes:
-      # Durable state (ADR-10). Named volume rather than a bind mount so the container's
-      # unprivileged `node` user owns it without host-side chown.
-      - novamart-data:/app/data
-      # Operator traces. Bound to the host on purpose: they are what an operator reads after
-      # a turn — and they contain customer conversations (security.md SEC-03), so treat this
-      # directory as customer data and prune it on the schedule the runbook names.
-      - ./project-context/2.build/logs:/app/project-context/2.build/logs
+      # Durable state (ADR-10), at /app/var — NOT /app/data, which holds the read-only fixture
+      # and policy corpus a volume would mask. Named volume rather than a bind mount so the
+      # container's unprivileged `node` user owns it without host-side chown.
+      - novamart-data:/app/var
+      # Operator traces live in the volume too, NOT in a host bind mount.
+      #
+      # This used to bind `./project-context/2.build/logs` into the container so an operator
+      # could read traces on the host. It does not work: the host directory appears root-owned
+      # inside the container, the app runs as uid 1000, and trace writes are best-effort and
+      # swallowed by design — so turns succeed, the operator sees no new trace, and nothing
+      # anywhere reports an error. A diagnostic channel that fails silently is worse than one
+      # that is absent.
+      #
+      # Read them out explicitly instead — deterministic, and no uid mapping to get right:
+      #   docker compose cp novamart:/app/var/logs ./project-context/2.build/logs
+      #
+      # They contain customer conversations (security.md SEC-03): treat whatever you copy out
+      # as customer data, and prune on the schedule the runbook names.
     restart: unless-stopped
 
 volumes:

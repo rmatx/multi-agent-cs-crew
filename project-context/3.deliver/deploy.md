@@ -27,7 +27,7 @@ trace, CSAT, and the UI for all of it.
 | Evidence | Result |
 |---|---|
 | `npm run typecheck` | exit 0 |
-| `npm test` | **169 / 169** |
+| `npm test` | **170 / 170** |
 | `npm run test:invariants` | **9 / 9** — zero money tools registered |
 | `npm run eval:sdk` | **114 / 114** across 9 scripts, green on consecutive runs — re-run 2026-09-04 against the release build |
 | `npx next build` | compiles; 4 API routes + the chat page |
@@ -58,6 +58,10 @@ What else ships knowingly incomplete is scope, not defects:
   none changes an answer a customer receives.
 - **Layer 5 leftovers**: no pause/cancel controls, and no operator console around the trace
   endpoint — the route exists and is authenticated, but nothing renders it.
+- **The image is now built and run**, on 2026-09-04, for the first time outside CI — six agent
+  paths exercised through the container, and state verified to survive a container destroy/recreate
+  (6 sessions, 6 traces, 1 ticket, all intact). Finding it required a real Docker host; CI builds
+  the image and never starts it, which is how DEF-15 and DEF-16 stayed hidden behind a green job.
 - **Half measured**: the PRD's turn p95 < 30 s target is **met at single-user load — p95 28.2 s
   over 514 turns**, error rate 0.0%. The **≥5-concurrent half has still never been run**. Nothing
   in this project has ever had two turns in flight at once, and since latency is dominated by the
@@ -75,6 +79,9 @@ What else ships knowingly incomplete is scope, not defects:
 |---|---|
 | `Dockerfile` | Three-stage build; runtime layer carries no build toolchain and no dev deps |
 | `docker-compose.yml` | The demo stack: one service, one named volume, loopback port binding |
+| `docker-compose.prod.yml` | The production stack: sdk engine, published on every interface, volume on `/app/var` |
+| `docker-entrypoint.sh` | Makes a root-owned platform volume writable, then drops to `node` |
+| `railway.json` | Dockerfile builder + `/api/health` healthcheck; `numReplicas` pinned to 1 |
 | `.dockerignore` | Keeps secrets, customer data and traces out of the image layers |
 | `.nvmrc` | `24` — pinned, and load-bearing (below) |
 
@@ -104,19 +111,117 @@ demo-overlay persona — and **no** SQLite file and **no** trace log. Those are 
 run in a volume. An image containing one demo's conversations would ship customer content to
 whoever pulls it (`security.md` SEC-03).
 
+### Read-only vs writable, and why they are different directories
+
+**`/app/data` is read-only. `/app/var` is writable, and the volume mounts there.**
+
+This is the single most important thing in this section, because getting it wrong produces a
+container that builds, starts, passes a casual look, and is broken. `/app/data` holds the DuckDB
+fixture, the policy corpus and the demo overlay — baked into the image, never written. If a
+volume is mounted over `/app/data` to persist state, it **masks** them.
+
+A Docker *named* volume hides the mistake: Docker seeds an empty named volume from the image on
+first use, so the fixture appears and everything works. A platform volume — Railway, Fly, or a
+plain bind mount — **starts empty and does not seed**. Verified, same image, both ways:
+
+| Volume mounted at | Seeding | `/api/health` |
+|---|---|---|
+| `/app/data`, Docker named volume | seeded from image | `200` — *the mistake is invisible* |
+| `/app/data`, non-seeding mount | empty | **`503`**, `duckdb: error`, `database does not exist` |
+| `/app/var`, non-seeding mount | empty | `200`, `duckdb: ok`, `stores: ok` |
+
+Everything writable therefore agrees on `/app/var`, via four variables the image sets:
+`NOVAMART_STATE_DIR`, `SESSION_DB_PATH`, `TICKET_STUB_DB_PATH` and `TRACE_LOG_DIR`. Two of those
+are new: handoff artifacts (`tickets/`, `outbox.md`) had their path hardcoded to `data/`, and
+trace logs to `project-context/2.build/logs`, so on any platform volume both were written to the
+container's ephemeral layer and lost on the next redeploy — the failure mode of a diagnostic you
+only reach for after something has gone wrong.
+
+### The entrypoint, and why the image no longer says `USER node`
+
+A platform volume is attached **root-owned**, and it does not inherit the image's ownership. An
+app running as uid 1000 then cannot create `sessions.sqlite`. Verified on this image: with a
+non-seeding mount at `/app/var` and `USER node`, health returned **`503` with `stores: error`** —
+which reads like an application fault and is a mount permission.
+
+`docker-entrypoint.sh` starts as root, creates and `chown`s **only** the state directory, then
+drops to `node` with `setpriv` (util-linux, already in the base image — no `gosu` to vendor).
+Verified after the change: health `200`, `/app/var` owned by `node`, and every application
+process running as uid 1000 — `npm`, `sh` and `next-server` all `Uid: 1000` in `/proc`. The app
+is as unprivileged as it was; what changed is that a root-owned mount is repaired instead of
+being an unexplainable 503. If a platform forces a non-root uid, the entrypoint skips the chown
+and **fails loudly** with the reason rather than starting into a degraded health check.
+
 ### Running it
 
 ```bash
-# Keyless demo — deterministic engine, no API key, no spend.
+# Keyless demo — deterministic engine, no API key, no spend. Loopback only.
 docker compose up --build
 
-# The crew. Secrets come from .env.local, which is never copied into the image.
+# The crew, still loopback. Secrets come from .env.local, never copied into the image.
 CHAT_ENGINE=sdk AS_OF_DATE=2026-09-01 docker compose up --build
+
+# PRODUCTION — the crew, published on every interface. Read docker-compose.prod.yml's
+# header first: this is the configuration SEC-01 and SEC-02 were accepted against.
+docker compose -f docker-compose.prod.yml up --build -d
 ```
+
+**Reading operator traces out of a running container:**
+
+```bash
+docker compose cp novamart:/app/var/logs ./project-context/2.build/logs
+```
+
+The demo stack used to bind-mount the host's log directory into the container instead. That does
+not work and fails *silently*: the host directory appears root-owned inside the container, the
+app runs as uid 1000, and `trace.ts` swallows write errors by design (a diagnostic must never
+fail a customer's turn). Verified directly — `touch` as uid 1000 into a bind mount returns
+`Permission denied`. Turns would succeed, and traces would simply never appear. Removed.
+
+**Compose passthrough entries erase what they look like they forward — DEF-15.** Both compose
+files carried lines of the form `MODEL_ID: ${MODEL_ID:-}`. Compose resolves that to an **empty
+string**, and an empty value in `environment:` **overrides `env_file:`** — so `MODEL_ID` from
+`.env.local` was wiped. `MODEL_ID` is required with no default by design (`config.ts`: a
+silently-chosen model makes the Audit line a lie), so the effect was that **`CHAT_ENGINE=sdk`
+could not start the crew through compose at all**: `/api/health` reported
+`sdkEngineConfigured: false` with the key present and valid. Observed while bringing the
+production stack up, then fixed in both files by deleting every empty-default passthrough.
+Anything not given a real default now reaches the container from `.env.local` or the platform.
 
 `docker-compose.yml` uses the `env_file: [{ path, required }]` form, which needs Compose
 v2.24 or newer. On older Compose, replace it with a bare `env_file: [.env.local]` and create
 the file first — the bare form fails when it is missing.
+
+### Railway
+
+`railway.json` selects the Dockerfile builder and points the healthcheck at `/api/health`.
+Railway injects `PORT`; `next start` reads it, and the Dockerfile's `PORT=3000` is only a
+fallback for when nobody says.
+
+**Attach a volume with mount path `/app/var`.** Without it the service runs, and every
+conversation, ticket and trace is discarded on each redeploy. With it mounted anywhere else —
+`/app/data` above all — see the table above.
+
+Variables to set in the Railway service:
+
+| Variable | Value | Why |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | the key | Required by the sdk engine |
+| `MODEL_ID` | e.g. `claude-sonnet-5` | **Required, never defaulted** — see DEF-15 above |
+| `CHAT_ENGINE` | `sdk` | Otherwise the keyless engine answers and no specialist exists |
+| `ENABLE_HSTS` | `1` | Railway terminates TLS, so HSTS is finally appropriate |
+| `OPERATOR_KEY` | a secret, or unset | Gates the trace endpoint; **fails closed** (503) when unset |
+| `RATE_LIMIT_PER_MIN` | `20` or lower | On a public endpoint this is all that stands between a stranger and the Anthropic bill |
+| `AS_OF_DATE` | leave unset | Pinning a clock in a long-lived deployment silently ages out of the fixture |
+
+**`numReplicas` must stay 1.** SQLite on a single volume, a per-process rate limiter and
+per-process session state all assume one instance. A second replica would not share the volume
+and would answer from its own store — the kind of fault that shows up as "the customer says they
+already have a ticket and the bot disagrees".
+
+**Rotate `ANTHROPIC_API_KEY` for a public deployment.** The key currently in `.env.local` is the
+same one in GitHub Actions secrets; a public endpoint spending it means local dev, CI and the
+internet share one blast radius.
 
 ---
 
@@ -129,12 +234,12 @@ configuration only, and promotion is manual (below).
 |---|---|
 | Typecheck | strict TS across app, server and lib |
 | **Zero-money-tools invariant** | NFR-SAFE-01, named as its own step so a failure reads as a safety regression rather than a test blip |
-| Unit tests | 92 tests, server + client |
+| Unit tests | 170 tests, server + client |
 | Production build | catches what typecheck alone does not |
 | Fixture sanity | asserts the five MVP tables' exact row counts — a truncated fixture would make everything else pass against data the demo does not use |
 | Policy corpus present | AC-FAQ-04; an empty corpus turns every policy question into an escalation, which reads as a routing bug rather than missing content |
 | Secret scan | cheap backstop for the one mistake that cannot be undone once pushed |
-| Container build | proves the image builds; **nothing is pushed** |
+| Container build | proves the image builds; **nothing is pushed**, and nothing is *started* — DEF-15 and DEF-16 both survived this job green |
 
 **The pipeline is keyless by design.** Every step runs against the committed fixture with no
 `ANTHROPIC_API_KEY` in the environment, so a fork or a pull request can run the full suite
@@ -212,9 +317,11 @@ The CI eval workflow uploads the same logs as a build artifact with 7-day retent
 Against real customer data this is not sufficient — `security.md` SEC-03 rises to High and needs
 encryption at rest and an access boundary.
 
-**This deployment is single-operator and loopback-bound, and that is a control rather than a
-default.** `docker-compose.yml` publishes `127.0.0.1:3000:3000`. Changing it to `3000:3000`
-exposes the app on every interface and turns two accepted risks into live ones:
+**There are now two deployment shapes, and they carry different risk.**
+
+`docker-compose.yml` publishes `127.0.0.1:3000:3000` — loopback, single-operator, and that
+binding is a control rather than a default. `docker-compose.prod.yml` and Railway publish on
+every interface, which turns two accepted risks into live ones:
 
 - **SEC-01** — no authentication. Any caller can read any customer's order by id, and ids are
   sequential integers.
@@ -222,7 +329,18 @@ exposes the app on every interface and turns two accepted risks into live ones:
   identity.
 
 Neither has a configuration fix. The fix is authentication, which is a PRD/SAD change.
-**If this demo is ever to be shared as a URL, stop and revisit `security.md` first.**
+
+**Operator decision, 2026-09-04: the public shape is accepted for this deployment.** The stated
+grounds are that the dataset is fictional — 50,000 generated users, no real person's data — and
+that this is coursework rather than a service with customers. Recorded in `security.md` under
+SEC-01/SEC-02 as an operator acceptance with a named scope, because an accepted risk that does
+not say what it was accepted *for* is indistinguishable later from one nobody noticed.
+
+**What that acceptance does not extend to.** It is scoped to this fixture. Point the same build
+at real customer data and SEC-01 stops being a finding and becomes a breach: the enumeration is
+trivial, the data is order history and account identity, and nothing in the app would record that
+it happened. There is no code change between those two situations — only which database is
+mounted — which is precisely why the boundary is written down here rather than assumed.
 
 What is protected today:
 
@@ -300,7 +418,22 @@ and the next start recreates empty stores. That destroys every ticket stub and t
 
 Named so nobody re-derives them as oversights:
 
-- **Authentication** — the prerequisite for any shared deployment (SEC-01, SEC-02)
+- **Authentication** — still the honest prerequisite for a deployment with real users. The
+  operator has accepted its absence for this academic deployment on the fictional fixture
+  (see Access control); that acceptance does not survive real customer data
+- **Shrink the image: 1.53 GB.** It builds, deploys and runs at that size, so this is cost and
+  deploy time rather than a fault. The runtime layer carries the full `node_modules` and the
+  unpruned `.next`; Next's `output: "standalone"` bundles only what the server actually imports
+  and typically takes an image of this shape well under 300 MB. Not done here because it changes
+  what the runtime stage copies and what the start command is, and that deserves its own verified
+  change rather than riding along with a security and state-path fix
+- **`ANTHROPIC_API_KEY` rotation for the public deployment.** The key in `.env.local` is the same
+  one in GitHub Actions secrets. A public endpoint spending it means local dev, CI and the open
+  internet share one blast radius; a deployment-scoped key would separate them
+- **A CI job that STARTS the container**, not just builds it. DEF-15 and DEF-16 both passed the
+  existing `container` job green, because building an image proves nothing about whether it runs.
+  One `docker run` plus a `curl` on `/api/health` against a non-seeding volume would have caught
+  both
 - Monitoring, metrics and alerting beyond `/api/health`; no APM, no dashboards
 - Autoscaling, multi-node, multi-region — SAD §7 scales vertically only
 - Managed Postgres for sessions and stubs; log shipping and retention automation
