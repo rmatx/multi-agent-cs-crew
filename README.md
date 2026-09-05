@@ -82,8 +82,11 @@ workflow deploys anything.
 
 ### Demo mode
 
-For a live demo, `?demo=1` (or `NEXT_PUBLIC_DEMO_MODE=1`) shows a picker of 23 pre-built
-scenarios above the form:
+For a live demo, `?demo=1` shows a picker of 23 pre-built scenarios above the form, together
+with the crew strip and the handoff packet. On a **deployed** build use `DEMO_MODE=1` — a server
+variable read at run time, so a restart is enough. `NEXT_PUBLIC_DEMO_MODE=1` also works, but
+only for `npm run dev`: `next build` inlines it, so it is frozen into an image and cannot be
+changed by a platform's variable table (DEF-17).
 
 ```bash
 CHAT_ENGINE=sdk AS_OF_DATE=2026-09-01 SDK_STREAM_MODE=live npm run dev

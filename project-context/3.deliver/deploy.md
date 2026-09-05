@@ -213,6 +213,26 @@ Variables to set in the Railway service:
 | `OPERATOR_KEY` | a secret, or unset | Gates the trace endpoint; **fails closed** (503) when unset |
 | `RATE_LIMIT_PER_MIN` | `20` or lower | On a public endpoint this is all that stands between a stranger and the Anthropic bill |
 | `AS_OF_DATE` | leave unset | Pinning a clock in a long-lived deployment silently ages out of the fixture |
+| `DEMO_MODE` | `1` | Serves the demo surface — crew strip, 23-scenario picker, handoff packet. See below |
+
+**`DEMO_MODE=1`, and it has to be this variable.** The demo surface was previously switched by
+`NEXT_PUBLIC_DEMO_MODE`, and that cannot work on a platform: `NEXT_PUBLIC_*` is inlined by
+`next build`, so the value is frozen into the image on the build machine and a platform variable
+table never reaches it. Setting it in `docker-compose.prod.yml` did nothing at all — the line
+read as a control and was decoration, the same shape of fault as DEF-15. Logged as **DEF-17**,
+fixed by resolving `DEMO_MODE` on the server and reporting it through `/api/health`, which the
+page already fetches. Verified on a build made with **no** demo flag: `DEMO_MODE=1` at run time
+alone produced the full surface on a bare `/`.
+
+`?demo=1` on the URL still works and is unchanged — and note that it always did, which is why
+the surface was never actually absent from any build, only off by default.
+
+**What `DEMO_MODE=1` publishes.** The picker lists real order ids belonging to other customers.
+On this fixture those customers are fictional, which is the identical ground the operator
+accepted SEC-01 and SEC-02 on for this deployment. Against real data it must be `0`, and that is
+a stronger statement than it looks: `?demo=1` means the surface is reachable by anyone who types
+it regardless of this variable, so `DEMO_MODE=0` is a default, not a control. Authentication is
+the control, and it is still the open item.
 
 **`numReplicas` must stay 1.** SQLite on a single volume, a per-process rate limiter and
 per-process session state all assume one instance. A second replica would not share the volume
@@ -264,11 +284,11 @@ the turn is I/O-bound on the model API.
 | Setting | Value |
 |---|---|
 | Port | 3000 (`PORT`) |
-| Health | `GET /api/health` → `{ status, duckdb, stores, engine, sdkEngineConfigured, operatorTrace }` |
+| Health | `GET /api/health` → `{ status, duckdb, stores, engine, sdkEngineConfigured, operatorTrace, demoMode }` |
 | Healthy | HTTP 200 and `status: "ok"` |
 | Degraded | HTTP 503 when the DuckDB read **or** either SQLite store fails |
-| State | named volume at `/app/data` |
-| Logs | `project-context/2.build/logs/<conversationId>.jsonl`, bind-mounted |
+| State | volume at **`/app/var`** — never `/app/data`, which is the read-only fixture (DEF-16) |
+| Logs | `$TRACE_LOG_DIR/<conversationId>.jsonl` — `/app/var/logs` in the image, inside the volume |
 
 The health check covers the writable stores as well as the read-only catalog, deliberately: a
 deployment whose data volume mounted read-only would look healthy right up to the moment a
@@ -288,11 +308,13 @@ Names only — **no value in this file, ever** (`aamad-core` Security and Compli
 | `AS_OF_DATE` | pin for demos | pin for demos | Unset = today; every eval must pin it |
 | `OPERATOR_KEY` | optional | optional | **Unset = trace endpoint disabled (503), not open** |
 | `RATE_LIMIT_PER_MIN` | unset (20) | 20 | `0` disables. A cost guard, not access control |
-| `SESSION_DB_PATH` | `data/sessions.sqlite` | `/app/data/sessions.sqlite` | Set in the image |
-| `TICKET_STUB_DB_PATH` | `data/ticket_stubs.sqlite` | `/app/data/ticket_stubs.sqlite` | Set in the image |
+| `SESSION_DB_PATH` | `data/sessions.sqlite` | `/app/var/sessions.sqlite` | Set in the image |
+| `TICKET_STUB_DB_PATH` | `data/ticket_stubs.sqlite` | `/app/var/ticket_stubs.sqlite` | Set in the image |
+| `NOVAMART_STATE_DIR` / `TRACE_LOG_DIR` | `data/` / `project-context/2.build/logs` | `/app/var` / `/app/var/logs` | Set in the image; both inside the volume |
 | `NOVAMART_DUCKDB_PATH` | optional | unset | Points at the 151 MB practice DB locally |
 | `HOLIDAY_API_BASE_URL` / `HOLIDAY_TIMEOUT_MS` | unset | unset | Defaults to `date.nager.at`, 3 s |
-| `NEXT_PUBLIC_USE_MOCK_STREAM` | unset | **unset** | Client-inlined at build time — never put a secret in a `NEXT_PUBLIC_*` var |
+| `DEMO_MODE` | unset | `1` to demo the crew | **The demo surface**, read at run time from `/api/health`. Off unless exactly `1` |
+| `NEXT_PUBLIC_USE_MOCK_STREAM` / `NEXT_PUBLIC_DEMO_MODE` | unset | **unset — inert** | `NEXT_PUBLIC_*` is inlined at `next build`; setting either on a deployment does nothing (DEF-17). Never put a secret in one |
 
 ### Access control
 

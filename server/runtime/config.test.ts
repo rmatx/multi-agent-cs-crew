@@ -99,3 +99,36 @@ test("the error names the variable, the value, and what to do", () => {
     assert.match(message, /unset it/, "and be told the way out");
   }
 });
+
+/*
+ * DEF-17. The demo surface used to be switched by `NEXT_PUBLIC_DEMO_MODE`, which `next build`
+ * inlines — so in a built image the switch was frozen and the compose line that appeared to set
+ * it was decoration. `DEMO_MODE` is a server variable read per request, and these pin the one
+ * property that matters: it is strictly `"1"`, because the failure direction is publishing an
+ * operator surface (a picker of real order ids) by accident.
+ */
+function withDemoMode<T>(value: string | undefined, run: () => T): T {
+  const saved = process.env.DEMO_MODE;
+  if (value === undefined) delete process.env.DEMO_MODE;
+  else process.env.DEMO_MODE = value;
+  try {
+    return run();
+  } finally {
+    if (saved === undefined) delete process.env.DEMO_MODE;
+    else process.env.DEMO_MODE = saved;
+  }
+}
+
+test("DEMO_MODE is off unless it is exactly 1", () => {
+  assert.equal(withDemoMode(undefined, () => config.demoModeEnabled()), false, "unset is off");
+  assert.equal(withDemoMode("1", () => config.demoModeEnabled()), true);
+  assert.equal(withDemoMode(" 1 ", () => config.demoModeEnabled()), true, "a copied value is trimmed");
+
+  for (const value of ["", "0", "true", "yes", "on", "false", "no", "2"]) {
+    assert.equal(
+      withDemoMode(value, () => config.demoModeEnabled()),
+      false,
+      `DEMO_MODE=${JSON.stringify(value)} must not read as on — "true" and "yes" above all, since an operator who writes one of those and gets the customer surface is safe, and the reverse is not`,
+    );
+  }
+});

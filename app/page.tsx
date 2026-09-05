@@ -66,8 +66,18 @@ export default function ChatPage() {
   const [engine, setEngine] = useState<EngineId>(null);
 
   /*
-   * Demo mode. OFF unless asked for: `NEXT_PUBLIC_DEMO_MODE=1` at build time, or `?demo=1` on
-   * the URL for a session that was not built with it.
+   * Demo mode. Three ways in, and only two of them work in a built image:
+   *
+   *   `DEMO_MODE=1`               server env, read back from /api/health — RUN TIME, no rebuild
+   *   `?demo=1`                   on the URL — run time, per session
+   *   `NEXT_PUBLIC_DEMO_MODE=1`   at `next build` — BAKED, and inert once the image exists
+   *
+   * The third is kept for local `npm run dev` and is deliberately no longer the deployment
+   * story. `NEXT_PUBLIC_*` is inlined by the compiler, so a deployment that sets it in a
+   * compose file or a platform variable table gets nothing: the built bundle never looks. That
+   * is how the crew strip and the scenario picker came to be "missing from production" while
+   * being present in every build — same class of fault as DEF-15, a passthrough that does not
+   * pass anything through.
    *
    * Read in an effect rather than during render because `window` does not exist on the server —
    * reading it inline would make the server and client markup disagree and React would discard
@@ -81,19 +91,26 @@ export default function ChatPage() {
    */
   const [turnAgents, setTurnAgents] = useState<string[]>([]);
 
+  /*
+   * Switching demo mode on also turns the trace on. Agent identity only reaches the browser on
+   * trace frames, so without this the crew strip and the per-answer agent label would sit empty
+   * in exactly the mode built to show them. Demo mode is already an operator surface — it lists
+   * real order ids — so it is not granting a customer anything new.
+   *
+   * One function because two sources can switch it on (the URL now, the health response a
+   * moment later) and they must not disagree about what "on" entails. Never switches it back
+   * off: a `?demo=1` session on a deployment that has `DEMO_MODE` unset keeps its picker.
+   */
+  const enableDemo = useCallback(() => {
+    setDemoMode(true);
+    setTrace(true);
+  }, []);
+
   useEffect(() => {
     const fromEnv = process.env["NEXT_PUBLIC_DEMO_MODE"] === "1";
     const fromUrl = new URLSearchParams(window.location.search).get("demo") === "1";
-    const on = fromEnv || fromUrl;
-    setDemoMode(on);
-    /*
-     * Demo mode turns the trace on. Agent identity only reaches the browser on trace frames, so
-     * without this the crew strip and the per-answer agent label would sit empty in exactly the
-     * mode built to show them. Demo mode is already an operator surface — it lists real order
-     * ids — so it is not granting a customer anything new.
-     */
-    if (on) setTrace(true);
-  }, []);
+    if (fromEnv || fromUrl) enableDemo();
+  }, [enableDemo]);
 
   /*
    * Fills the form and stops. It deliberately does NOT send: the presenter presses Run, so the
@@ -135,8 +152,16 @@ export default function ChatPage() {
     fetch("/api/health")
       .then((r) => (r.ok ? r.json() : null))
       .then((body) => {
+        if (cancelled) return;
+        /*
+         * The deployment's own answer about which surface it serves (`DEMO_MODE` on the
+         * server). Read before the engine guard, not after, so an unrecognised engine value
+         * cannot also cost the operator their demo surface — the two are unrelated questions
+         * and one returning early should not silently answer the other.
+         */
+        if (body?.demoMode === true) enableDemo();
         const next = body?.engine;
-        if (cancelled || (next !== "sdk" && next !== "deterministic")) return;
+        if (next !== "sdk" && next !== "deterministic") return;
         setEngine(next);
       })
       .catch(() => {
@@ -145,7 +170,7 @@ export default function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enableDemo]);
 
   // "Last updated" tracks every state change, which is what tells the user the
   // UI is live rather than wedged.

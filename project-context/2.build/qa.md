@@ -753,6 +753,7 @@ are carried here so one table answers "what is open".
 | DEF-14 | A correct policy retrieval is rejected by the 0.55 grounding gate when the agent's query mixes in a term from an adjacent section | Low | **OPEN — accepted**, deterministic repro below | `@backend.eng` + `@system.arch` (ADR-11) |
 | DEF-15 | Compose `${VAR:-}` passthrough lines resolved to an empty string and overrode `env_file`, wiping `MODEL_ID` — so `CHAT_ENGINE=sdk` could not start the crew through compose at all | Medium | **Fixed 2026-09-04** in both compose files | — |
 | DEF-16 | Container writable state (handoff artifacts, trace logs) was written outside the mounted volume, and the volume masked the read-only fixture and corpus | Medium | **Fixed 2026-09-04** — state moved to `/app/var`, verified on a non-seeding mount | — |
+| DEF-17 | The demo surface (crew strip, scenario picker, handoff packet) could not be switched on in a built image — `NEXT_PUBLIC_DEMO_MODE` is inlined by `next build`, so the compose line setting it was inert | Medium | **Fixed 2026-09-05** — resolved server-side as `DEMO_MODE`, reported via `/api/health`, verified at run time on a build made without the flag | — |
 
 **DEF-07, DEF-08 and INT-03 were all fixed the same day by `@backend.eng`.** No defect in any
 pass has been a safety defect — the zero-money-tools boundary held under every check.
@@ -830,6 +831,45 @@ Replaced with an explicit `docker compose cp` out of the volume.
 **What these three have in common** is the project's own doctrine, arrived at again from a new
 direction: verify by executing, not by reading. Each of them survived a green build, a green test
 suite and a green CI container job, and each took one `curl` against a running container to find.
+
+### DEF-17 — a feature switch that a built image cannot hear. Medium, fixed 2026-09-05.
+
+**Reported as "the demo features are missing from production".** They were not missing. Every
+one of them — the crew strip (ENH-02), the 23-scenario picker, the per-answer agent label, the
+handoff packet (ENH-01) — was present in `main` and rendering correctly in a production build
+the whole time. What was broken was the only switch a *deployment* could reach.
+
+`app/page.tsx` read `process.env["NEXT_PUBLIC_DEMO_MODE"]`. `NEXT_PUBLIC_*` values are resolved
+by the compiler, not at run time, so the switch is frozen at whatever the build machine had.
+Confirmed by building the same source twice and reading the emitted client chunk:
+
+| Built with | Emitted client code | Effect |
+|---|---|---|
+| flag unset | `"1"===t.default.env.NEXT_PUBLIC_DEMO_MODE` | a lookup into a shim holding only build-time vars — permanently `undefined`, so permanently off |
+| `NEXT_PUBLIC_DEMO_MODE=1` | the comparison and the `?demo=1` check are constant-folded away | permanently **on**, unswitchable |
+
+Neither is a run-time switch, so `docker-compose.prod.yml`'s `NEXT_PUBLIC_DEMO_MODE: ""` had no
+effect in either direction — and neither would `"1"`. **This is DEF-15's shape exactly**: a
+configuration line that looks like it forwards a value and forwards nothing. DEF-15 was found
+because the failure was loud (the crew would not start). This one was quiet — the app came up,
+served the customer surface, and looked like a build with features stripped out of it.
+
+**Fix.** `demoModeEnabled()` in `server/runtime/config.ts` reads `DEMO_MODE` per request, and
+`/api/health` reports it. The page already fetched `/api/health` for the engine banner, so the
+demo state arrives on a request that was being made anyway — no new endpoint, no new contract.
+`?demo=1` is untouched and still works per session.
+
+**Verified by execution, not by reading.** One production build made with **no** demo flag set,
+then started twice from that same build: `DEMO_MODE` unset served the plain customer surface;
+`DEMO_MODE=1` served the crew strip, the 23 chips and the trace, on a bare `/` with no query
+string. Full suite green after: typecheck clean, **171/171** unit including a new case pinning
+that `DEMO_MODE` is strictly `"1"` — `"true"` and `"yes"` must read as off, because the failure
+direction is publishing an operator surface by accident.
+
+**What this does not fix.** `?demo=1` was always reachable by anyone who typed it, so the demo
+surface has never been gated by any variable — the picker of order ids is exposed to any caller
+on a public deployment regardless. That is not new and not separable: it is SEC-01 restated at
+the UI, and authentication remains the only control. `DEMO_MODE` is a default, not a boundary.
 
 ### DEF-14 — a correct retrieval rejected by the grounding gate. Low, open.
 
@@ -955,7 +995,7 @@ Non-MVP tests and coverage, for the backlog.
 | AC coverage | 55 criteria mapped: **46 pass, 5 partial, 1 not covered**, 3 by-absence/out-of-scope |
 | Dependencies | **Changed 2026-09-04.** The project took its first added runtime dependencies (4 × OpenTelemetry + OpenInference conventions) for Arize export. Recorded in NOTICES with licences. Still no test-framework dependency |
 | Performance | Turn p95 **28.2 s over 514 turns** vs PRD < 30 s — **now met at single-user load** (was 30.4 s over 353); error rate **0.0%**. Concurrency still unmeasured, and that half of NFR-PERF-02 is what the target was really about. Cost figures are the SDK's computed `total_cost_usd` (tokens × list price) — a usage estimate, **not** a statement of what was billed |
-| Defects open | **One, accepted — DEF-14**, a retrieval defect found by fixing DEF-11 and split out from it. DEF-07/08/INT-03 closed 2026-08-29; DEF-09, DEF-10, **DEF-11, DEF-12 and DEF-13 fixed 2026-09-04**; **DEF-15 and DEF-16 found and fixed 2026-09-04** by running the container image for the first time. DEF-14 fails cautiously (customer reaches a human, nothing wrong is said) and its fix touches ADR-11's normative threshold, so it is `@system.arch`'s call, not a QA one |
+| Defects open | **One, accepted — DEF-14**, a retrieval defect found by fixing DEF-11 and split out from it. DEF-07/08/INT-03 closed 2026-08-29; DEF-09, DEF-10, **DEF-11, DEF-12 and DEF-13 fixed 2026-09-04**; **DEF-15 and DEF-16 found and fixed 2026-09-04** by running the container image for the first time; **DEF-17 fixed 2026-09-05**, a demo-surface switch a built image could not hear. DEF-14 fails cautiously (customer reaches a human, nothing wrong is said) and its fix touches ADR-11's normative threshold, so it is `@system.arch`'s call, not a QA one |
 | Files written by `@qa.eng` | 2026-08-29: `dateShift.test.ts`, `hooks.test.ts`, `eval-sdk.mjs`, `test-resolver.mjs`, `package.json`. 2026-09-04 (all three passes): **this file only**. **`@qa.eng` has modified no application logic in any pass** — DEF-09's, DEF-11's and DEF-13's fixes were all `@backend.eng`'s |
 | Security handoff | `security.md` exists with no Critical findings; `@security.eng` ran before Deliver as `aamad.config.yml` requires |
 | Self-check | Required sections present: Sources, Assumptions, Open Questions, Audit. No Diagnostic raised |

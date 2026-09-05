@@ -40,9 +40,17 @@ services:
       # control (SEC-05): it is per-process and keyed on a client address the caller can choose.
       RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-20}
       TRACE_RETENTION_DAYS: ${TRACE_RETENTION_DAYS:-7}
-      # NEVER 1 on a customer-facing deployment: the picker lists real order ids belonging to
-      # other customers.
-      NEXT_PUBLIC_DEMO_MODE: ""
+      # The demo surface: crew strip, 23-scenario picker, handoff packet. Read at RUN time via
+      # /api/health, so changing it here and restarting is enough — no rebuild.
+      #
+      # This replaces `NEXT_PUBLIC_DEMO_MODE`, which was set here and did nothing whatsoever:
+      # `NEXT_PUBLIC_*` is inlined by `next build`, so a value in this file never reaches a
+      # built image. The line looked like a control and was decoration — DEF-17.
+      #
+      # The picker lists real order ids belonging to other customers. On this fixture they are
+      # fictional, which is the same ground SEC-01 and SEC-02 were accepted on; against real
+      # data this must be 0.
+      DEMO_MODE: ${DEMO_MODE:-1}
     # Secrets by NAME only. ANTHROPIC_API_KEY is required for CHAT_ENGINE=sdk; OPERATOR_KEY
     # gates the trace endpoint and FAILS CLOSED (503) when unset, which is the safe default on
     # a public host — set it only if you want the operator trace reachable.

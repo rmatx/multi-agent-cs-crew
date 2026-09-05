@@ -159,6 +159,20 @@ export function resolveSdkStreamMode(): SdkStreamMode {
 }
 
 /**
+ * Whether this deployment serves the demo surface — crew strip, 23-scenario picker, handoff
+ * packet. Resolved HERE, on the server, and reported through `/api/health`, because the browser
+ * cannot answer it: `NEXT_PUBLIC_DEMO_MODE` is inlined by `next build`, so in a built image it
+ * is frozen at whatever the build machine had and no compose file or platform variable can move
+ * it (DEF-17). `DEMO_MODE` is an ordinary server variable, so a restart is enough.
+ *
+ * Strictly `"1"`, like every other switch here: a variable set to `false` or `no` must not read
+ * as truthy, because the failure direction is publishing an operator surface by accident.
+ */
+export function demoModeEnabled(): boolean {
+  return process.env.DEMO_MODE?.trim() === "1";
+}
+
+/**
  * Holiday-calendar integration settings (`server/data/holidays.ts`). The base URL is an
  * OPERATOR setting, never model- or customer-supplied — that is what keeps the one outbound
  * host in this system out of reach of a prompt injection.

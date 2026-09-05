@@ -9,7 +9,7 @@
 
 import { getMaxOrderDate } from "@/server/data/duckdb";
 import { sessionDb, ticketStubDb } from "@/server/data/sqlite";
-import { preflightSdkEngine, resolveEngineId } from "@/server/runtime/config";
+import { demoModeEnabled, preflightSdkEngine, resolveEngineId } from "@/server/runtime/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,6 +49,17 @@ export async function GET(): Promise<Response> {
       sdkEngineConfigured: preflight.ok,
       // Whether the operator trace is reachable at all — never the key itself.
       operatorTrace: (process.env.OPERATOR_KEY?.trim().length ?? 0) > 0 ? "enabled" : "disabled",
+      /*
+       * Whether this deployment serves the demo surface (crew strip, scenario picker, handoff
+       * packet). Reported from HERE, and not read from `NEXT_PUBLIC_DEMO_MODE` in the browser,
+       * because that variable is baked by `next build` and is inert at run time — setting it in
+       * a compose file or a platform's variable table changes nothing in a built image. This is
+       * an ordinary server env var, so an operator flips the demo surface on a running
+       * deployment by setting `DEMO_MODE=1` and restarting, with no rebuild.
+       *
+       * Safe to report unauthenticated: it says which surface is served, not who may use it.
+       */
+      demoMode: demoModeEnabled(),
       version: process.env.npm_package_version ?? "1.0.0",
     },
     { status: healthy ? 200 : 503 },
