@@ -100,6 +100,24 @@
   .caveat { border-left: 2px solid var(--escalate); background: var(--wash); padding: .9rem 1.1rem; border-radius: 0 3px 3px 0; font-size: .93rem; }
   .caveat b { color: var(--escalate); }
 
+  .live {
+    display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .6rem 1.4rem;
+    align-items: center; background: var(--surface); border: 1px solid var(--line);
+    border-left: 2px solid var(--grounded); border-radius: 0 3px 3px 0;
+    padding: 1.05rem 1.25rem; box-shadow: var(--shadow);
+  }
+  .live .url { font-family: var(--mono); font-size: .95rem; word-break: break-all; }
+  .live .why { grid-column: 1 / -1; font-size: .88rem; color: var(--muted); max-width: 74ch; }
+  .pill {
+    font-family: var(--mono); font-size: .64rem; letter-spacing: .1em; text-transform: uppercase;
+    border: 1px solid currentColor; border-radius: 999px; padding: .2rem .6rem; white-space: nowrap;
+  }
+  .pill.on { color: var(--grounded); }
+  @media (max-width: 34rem) { .live { grid-template-columns: 1fr; } }
+
+  td a, .live a { color: var(--grounded); text-underline-offset: .18em; }
+  th.w { width: 34%; }
+
   footer { color: var(--faint); font-size: .82rem; font-family: var(--mono); border-top: 1px solid var(--line); padding-top: 1rem; }
   a { color: var(--grounded); }
   :focus-visible { outline: 2px solid var(--grounded); outline-offset: 2px; }
@@ -112,17 +130,27 @@
     <div class="eyebrow">
       <span>Capstone submission</span><span>·</span>
       <span>Multi-agent customer support</span><span>·</span>
-      <span>29 Aug 2026</span>
+      <span>5 Sep 2026</span>
     </div>
     <h1>NovaMart Support Crew</h1>
     <p class="standfirst">Six agents that answer a customer from NovaMart's own data and written policy — and hand the conversation to a person the moment they cannot. The interesting part is not that it answers. It is what it refuses to do, and how that refusal is enforced.</p>
   </header>
 
+  <div class="live">
+    <a class="url" href="https://multi-agent-cs-crew-production.up.railway.app/">multi-agent-cs-crew-production.up.railway.app</a>
+    <span class="pill on">Live · Railway</span>
+    <p class="why">Running now, publicly reachable, with the demo surface on — the crew strip, the 23-scenario
+      picker and the operator trace. It is parked on the <b>keyless engine</b>, which answers from the fixture
+      and calls no model, so it costs nothing to leave up and nothing to click through. Flipping
+      <code>CHAT_ENGINE=sdk</code> arms the crew; <a href="https://multi-agent-cs-crew-production.up.railway.app/api/health"><code>/api/health</code></a>
+      always reports which engine is actually serving, so no claim here has to be taken on trust.</p>
+  </div>
+
   <dl class="state">
     <div><dt>Runtime</dt><dd>claude-agent-sdk</dd></div>
     <div><dt>Agents</dt><dd class="ok">6 registered</dd></div>
     <div><dt>Tools</dt><dd class="ok">9, all read-only</dd></div>
-    <div><dt>Unit tests</dt><dd class="ok">143 / 143</dd></div>
+    <div><dt>Unit tests</dt><dd class="ok">171 / 171</dd></div>
     <div><dt>Eval scripts</dt><dd class="ok">114 / 114</dd></div>
     <div><dt>Money tools</dt><dd class="ok">0 of 0</dd></div>
   </dl>
@@ -347,7 +375,7 @@
         <thead><tr><th scope="col">Check</th><th scope="col">Method</th><th scope="col">Result</th></tr></thead>
         <tbody>
           <tr><td>Type safety</td><td><code>tsc --noEmit</code>, strict</td><td class="ok num">exit 0</td></tr>
-          <tr><td>Unit suite</td><td>Node built-in runner, no test framework dependency</td><td class="ok num">143 / 143</td></tr>
+          <tr><td>Unit suite</td><td>Node built-in runner, no test framework dependency</td><td class="ok num">171 / 171</td></tr>
           <tr><td>Money-tool invariant</td><td>Exact-set test, plus an injected refund tool</td><td class="ok num">9 / 9</td></tr>
           <tr><td>Crew behaviour</td><td>9 eval scripts against a live server, both wire and trace</td><td class="ok num">114 / 114</td></tr>
           <tr><td>Integration round trip</td><td>18 executed cases, both engines</td><td class="ok num">18 / 18</td></tr>
@@ -357,9 +385,97 @@
         </tbody>
       </table>
     </div>
-    <p class="caveat"><b>Stated limits.</b> There is no authentication: any caller can read any order by id, and a conversation id functions as a bearer token for that conversation's history. Both are accepted <em>only</em> for a localhost, single-operator demo, and the compose file binds to <code>127.0.0.1</code> to enforce it. The PRD's concurrency and latency targets have never been measured. The container image has not yet been built. These are recorded in <code>security.md</code> and <code>deploy.md</code> rather than left for a reader to discover.</p>
+    <p class="caveat"><b>Stated limits, as they actually stand.</b> <b>There is no authentication.</b> Any caller
+      can read any order by id — ids are sequential integers — and a conversation id functions as a bearer token
+      for that conversation's history (SEC-01, SEC-02, both High). These were once accepted on the grounds that
+      the compose file bound to <code>127.0.0.1</code>. <em>That is no longer the control</em>: the app is
+      deployed publicly. They are now accepted on a different and narrower ground — the dataset is 50,000
+      generated users and no real person's data — and that acceptance rests on <em>which database is mounted</em>,
+      not on anything in the code. Against real customers, authentication is the gate and nothing here substitutes
+      for it. <b>Concurrency has never been measured</b> against the PRD's ≥ 5-chat target; turn p95 is 28.2 s over
+      514 turns, so the single-user half of that target passes and the half it was really about is untested.
+      <b>One defect is open and accepted</b> — DEF-14, a correct policy retrieval rejected by the 0.55 grounding
+      gate on roughly 1 turn in 5; it fails cautiously, sending the customer to a human rather than saying
+      anything wrong. All of this is recorded in
+      <a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/security.md">security.md</a> and
+      <a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/qa.md">qa.md</a> rather than left for a reader to discover.</p>
   </section>
 
-  <footer>NovaMart Support Crew · 6 agents · 9 tools · 143 unit tests · 114 eval assertions · AAMAD_TARGET_RUNTIME=claude-agent-sdk</footer>
+  <section>
+    <h2>Deployment, and what building the container actually found</h2>
+    <p>The image had been green in CI on every push for weeks. CI builds the image and never
+      <em>starts</em> it, and running it for the first time found three faults sitting underneath that
+      green check — which is the most useful thing this phase produced.</p>
+    <div class="scroller">
+      <table>
+        <caption>Each was found by execution, not by review, and each had passed a green pipeline.</caption>
+        <thead><tr><th scope="col">Defect</th><th scope="col">What was wrong</th><th scope="col">Why it survived review</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">DEF-15</td><td>Compose lines of the form <code>MODEL_ID: ${MODEL_ID:-}</code> resolve to an empty string, and an empty value overrides <code>env_file</code> — so the crew could not start through compose at all</td><td>The line looks exactly like a variable being forwarded</td></tr>
+          <tr><td class="mono">DEF-16</td><td>The volume was mounted at <code>/app/data</code>, over the read-only fixture and policy corpus the app needs to boot</td><td>A Docker <em>named</em> volume seeds itself from the image and hides this completely; a Railway volume starts empty and does not</td></tr>
+          <tr><td class="mono">DEF-17</td><td>The demo surface could not be switched on in a built image: <code>NEXT_PUBLIC_*</code> is inlined by <code>next build</code>, so the compose line setting it was inert</td><td>Reported as "the features are missing from production" — they were present in every build, and only the switch was unreachable</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">All three share one shape: <b>a configuration line that looks like it forwards a value and
+      forwards nothing.</b> DEF-15 was loud, because the crew refused to start. DEF-17 was quiet — the app came
+      up, served customers correctly, and simply looked like a build with its features stripped out. A green
+      pipeline that never starts what it builds cannot see any of them.</p>
+  </section>
+
+  <section>
+    <h2>Where everything lives</h2>
+    <p>Every artifact below is in the repository at
+      <a href="https://github.com/rmatx/multi-agent-cs-crew">github.com/rmatx/multi-agent-cs-crew</a> — public, on <code>main</code>. The three phases
+      map to three directories, and each document is the output of exactly one persona.</p>
+
+    <div class="scroller">
+      <table>
+        <caption>Phase 1 — Define. Requirements and architecture; everything downstream traces to ids in these.</caption>
+        <thead><tr><th scope="col" class="w">Document</th><th scope="col">Persona</th><th scope="col">What it holds</th></tr></thead>
+        <tbody>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/1.define/mrd.md">mrd.md</a></td><td class="mono">@product.mgr</td><td>Market research and the problem framing</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/1.define/prd.md">prd.md</a></td><td class="mono">@product.mgr</td><td>Requirements, features, and the 55 acceptance criteria</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/1.define/sad.md">sad.md</a></td><td class="mono">@system.arch</td><td>Architecture, 18 ADRs, and the frozen wire contract</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="scroller">
+      <table>
+        <caption>Phase 2 — Build. One artifact per epic; a persona records defects outside its scope rather than fixing them.</caption>
+        <thead><tr><th scope="col" class="w">Document</th><th scope="col">Persona</th><th scope="col">What it holds</th></tr></thead>
+        <tbody>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/setup.md">setup.md</a></td><td class="mono">@project.mgr</td><td>Scaffold, toolchain, environment names, the CI fixture</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/backend.md">backend.md</a></td><td class="mono">@backend.eng</td><td>Agents, tools, engines, hooks, stores, and every defect fix</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/frontend.md">frontend.md</a></td><td class="mono">@frontend.eng</td><td>Chat UI, status vocabulary, trace panel, CSAT</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/integration.md">integration.md</a></td><td class="mono">@integration.eng</td><td>The envelope, the engine seam, 18 round-trip cases</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/qa.md">qa.md</a></td><td class="mono">@qa.eng</td><td>Verification, the defect register, all 55 criteria mapped</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/evals.md">evals.md</a></td><td class="mono">@qa.eng</td><td>The 9 eval slices and their 114 assertions</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/security.md">security.md</a></td><td class="mono">@security.eng</td><td>Severity-ranked findings with executed probes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="scroller">
+      <table>
+        <caption>Phase 3 — Deliver, plus the supporting material a reviewer is most likely to want.</caption>
+        <thead><tr><th scope="col" class="w">Document</th><th scope="col">Persona</th><th scope="col">What it holds</th></tr></thead>
+        <tbody>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/3.deliver/deploy.md">deploy.md</a></td><td class="mono">@devops.eng</td><td>Container, keyless CI, the Railway runbook, rollback</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/3.deliver/user-guide.md">user-guide.md</a></td><td class="mono">@devops.eng</td><td>Installation and the user manual</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/README.md">README.md</a></td><td>—</td><td>Quickstart, pinned to <code>AS_OF_DATE=2026-09-01</code> so the walkthrough ids match</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/docs/AGENTS.md">docs/AGENTS.md</a></td><td>—</td><td>Agent and tool manual, written for a reader who did not build it</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/docs/novamart-crew-2min.mp4">novamart-crew-2min.mp4</a></td><td>—</td><td>Two-minute narrated walkthrough, seven randomly sampled cases, all real captured output</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/actions">GitHub Actions</a></td><td>—</td><td>The keyless CI pipeline, and the weekly live eval run with its spend cap</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">The framework's own rules are in the repository too — <a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/.claude/rules/">.claude/rules/</a>
+      holds the persona contracts and the runtime adapter, so the process that produced these documents is
+      auditable alongside them.</p>
+  </section>
+
+  <footer>NovaMart Support Crew · 6 agents · 9 tools · 171 unit tests · 114 eval assertions · AAMAD_TARGET_RUNTIME=claude-agent-sdk</footer>
 
 </div>
