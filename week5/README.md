@@ -2,7 +2,7 @@
 
 | File | What |
 | --- | --- |
-| `NovaMart-Week5-Submission.pdf` | **Hand this in.** 8 pages, all figures embedded. |
+| `NovaMart-Week5-Submission.pdf` | **Hand this in.** 12 pages, all figures embedded. |
 | `submission.html` | The source. Open in a browser for links and the interactive diagram. |
 | `assets/architecture.html` | Interactive architecture map (archify). Standalone — pan, zoom, four guided views, export. |
 | `assets/architecture.json` | The runtime diagram's typed source, validated at `showcase` quality. |
@@ -48,3 +48,9 @@ node $A visual-check week5/assets/pipeline.html
 Every figure in the submission traces to something in the repository rather than to prose:
 `project-context/2.build/qa.md` for the test and defect record, `evals.md` for the eval results,
 `security.md` for the open findings, and `docs/demo-feedback.md` for what the live demo surfaced.
+
+## Submission snapshot
+
+The links inside `submission.html` (§9) point at the tag `submission-2026-09-05`, not at `main`,
+so a reader opens the tree this document describes rather than whatever the branch moved on to.
+Re-pin them if the document is regenerated for a later submission.

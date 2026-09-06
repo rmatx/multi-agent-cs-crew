@@ -303,7 +303,7 @@
     <h2>Design decisions that shaped it</h2>
     <div class="scroller">
       <table>
-        <caption>Eighteen ADRs are recorded in the SAD; these are the load-bearing ones.</caption>
+        <caption>Nineteen ADRs are recorded in the SAD; these are the load-bearing ones.</caption>
         <thead><tr><th scope="col">ID</th><th scope="col">Decision</th><th scope="col">Why it mattered</th></tr></thead>
         <tbody>
           <tr><td class="mono">ADR-03</td><td>Hierarchical coordinator + specialists</td><td>One customer voice; specialisation is the grounding boundary</td></tr>
@@ -397,8 +397,8 @@
       <b>One defect is open and accepted</b> — DEF-14, a correct policy retrieval rejected by the 0.55 grounding
       gate on roughly 1 turn in 5; it fails cautiously, sending the customer to a human rather than saying
       anything wrong. All of this is recorded in
-      <a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/security.md">security.md</a> and
-      <a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/qa.md">qa.md</a> rather than left for a reader to discover.</p>
+      <a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/security.md">security.md</a> and
+      <a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/qa.md">qa.md</a> rather than left for a reader to discover.</p>
   </section>
 
   <section>
@@ -426,7 +426,7 @@
   <section>
     <h2>Where everything lives</h2>
     <p>Every artifact below is in the repository at
-      <a href="https://github.com/rmatx/multi-agent-cs-crew">github.com/rmatx/multi-agent-cs-crew</a> — public, on <code>main</code>. The three phases
+      <a href="https://github.com/rmatx/multi-agent-cs-crew">github.com/rmatx/multi-agent-cs-crew</a> — public. Every link below is pinned to the tag <code>submission-2026-09-05</code> rather than to <code>main</code>, so a reader opens the tree this document describes rather than whatever the branch has moved on to. The three phases
       map to three directories, and each document is the output of exactly one persona.</p>
 
     <div class="scroller">
@@ -434,9 +434,9 @@
         <caption>Phase 1 — Define. Requirements and architecture; everything downstream traces to ids in these.</caption>
         <thead><tr><th scope="col" class="w">Document</th><th scope="col">Persona</th><th scope="col">What it holds</th></tr></thead>
         <tbody>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/1.define/mrd.md">mrd.md</a></td><td class="mono">@product.mgr</td><td>Market research and the problem framing</td></tr>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/1.define/prd.md">prd.md</a></td><td class="mono">@product.mgr</td><td>Requirements, features, and the 55 acceptance criteria</td></tr>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/1.define/sad.md">sad.md</a></td><td class="mono">@system.arch</td><td>Architecture, 18 ADRs, and the frozen wire contract</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/1.define/mrd.md">mrd.md</a></td><td class="mono">@product.mgr</td><td>Market research and the problem framing</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/1.define/prd.md">prd.md</a></td><td class="mono">@product.mgr</td><td>Requirements, features, and the 55 acceptance criteria</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/1.define/sad.md">sad.md</a></td><td class="mono">@system.arch</td><td>Architecture, 19 ADRs, and the frozen wire contract</td></tr>
         </tbody>
       </table>
     </div>
@@ -446,13 +446,13 @@
         <caption>Phase 2 — Build. One artifact per epic; a persona records defects outside its scope rather than fixing them.</caption>
         <thead><tr><th scope="col" class="w">Document</th><th scope="col">Persona</th><th scope="col">What it holds</th></tr></thead>
         <tbody>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/setup.md">setup.md</a></td><td class="mono">@project.mgr</td><td>Scaffold, toolchain, environment names, the CI fixture</td></tr>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/backend.md">backend.md</a></td><td class="mono">@backend.eng</td><td>Agents, tools, engines, hooks, stores, and every defect fix</td></tr>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/frontend.md">frontend.md</a></td><td class="mono">@frontend.eng</td><td>Chat UI, status vocabulary, trace panel, CSAT</td></tr>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/integration.md">integration.md</a></td><td class="mono">@integration.eng</td><td>The envelope, the engine seam, 18 round-trip cases</td></tr>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/qa.md">qa.md</a></td><td class="mono">@qa.eng</td><td>Verification, the defect register, all 55 criteria mapped</td></tr>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/evals.md">evals.md</a></td><td class="mono">@qa.eng</td><td>The 9 eval slices and their 114 assertions</td></tr>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/2.build/security.md">security.md</a></td><td class="mono">@security.eng</td><td>Severity-ranked findings with executed probes</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/setup.md">setup.md</a></td><td class="mono">@project.mgr</td><td>Scaffold, toolchain, environment names, the CI fixture</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/backend.md">backend.md</a></td><td class="mono">@backend.eng</td><td>Agents, tools, engines, hooks, stores, and every defect fix</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/frontend.md">frontend.md</a></td><td class="mono">@frontend.eng</td><td>Chat UI, status vocabulary, trace panel, CSAT</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/integration.md">integration.md</a></td><td class="mono">@integration.eng</td><td>The envelope, the engine seam, 18 round-trip cases</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/qa.md">qa.md</a></td><td class="mono">@qa.eng</td><td>Verification, the defect register, all 55 criteria mapped</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/evals.md">evals.md</a></td><td class="mono">@qa.eng</td><td>The 9 eval slices and their 114 assertions</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/security.md">security.md</a></td><td class="mono">@security.eng</td><td>Severity-ranked findings with executed probes</td></tr>
         </tbody>
       </table>
     </div>
@@ -462,16 +462,16 @@
         <caption>Phase 3 — Deliver, plus the supporting material a reviewer is most likely to want.</caption>
         <thead><tr><th scope="col" class="w">Document</th><th scope="col">Persona</th><th scope="col">What it holds</th></tr></thead>
         <tbody>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/3.deliver/deploy.md">deploy.md</a></td><td class="mono">@devops.eng</td><td>Container, keyless CI, the Railway runbook, rollback</td></tr>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/project-context/3.deliver/user-guide.md">user-guide.md</a></td><td class="mono">@devops.eng</td><td>Installation and the user manual</td></tr>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/README.md">README.md</a></td><td>—</td><td>Quickstart, pinned to <code>AS_OF_DATE=2026-09-01</code> so the walkthrough ids match</td></tr>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/docs/AGENTS.md">docs/AGENTS.md</a></td><td>—</td><td>Agent and tool manual, written for a reader who did not build it</td></tr>
-          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/docs/novamart-crew-2min.mp4">novamart-crew-2min.mp4</a></td><td>—</td><td>Two-minute narrated walkthrough, seven randomly sampled cases, all real captured output</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/3.deliver/deploy.md">deploy.md</a></td><td class="mono">@devops.eng</td><td>Container, keyless CI, the Railway runbook, rollback</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/3.deliver/user-guide.md">user-guide.md</a></td><td class="mono">@devops.eng</td><td>Installation and the user manual</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/README.md">README.md</a></td><td>—</td><td>Quickstart, pinned to <code>AS_OF_DATE=2026-09-01</code> so the walkthrough ids match</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/docs/AGENTS.md">docs/AGENTS.md</a></td><td>—</td><td>Agent and tool manual, written for a reader who did not build it</td></tr>
+          <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/docs/novamart-crew-2min.mp4">novamart-crew-2min.mp4</a></td><td>—</td><td>Two-minute narrated walkthrough, seven randomly sampled cases, all real captured output</td></tr>
           <tr><td class="mono"><a href="https://github.com/rmatx/multi-agent-cs-crew/actions">GitHub Actions</a></td><td>—</td><td>The keyless CI pipeline, and the weekly live eval run with its spend cap</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="note">The framework's own rules are in the repository too — <a href="https://github.com/rmatx/multi-agent-cs-crew/blob/main/.claude/rules/">.claude/rules/</a>
+    <p class="note">The framework's own rules are in the repository too — <a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/.claude/rules/">.claude/rules/</a>
       holds the persona contracts and the runtime adapter, so the process that produced these documents is
       auditable alongside them.</p>
   </section>

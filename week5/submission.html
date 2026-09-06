@@ -84,6 +84,20 @@
   .pass { color: var(--ok); font-weight: 600; }
   .miss { color: var(--warn); font-weight: 600; }
 
+  /* No anchor rule existed because nothing linked out until the app went live. */
+  a { color: var(--accent); text-underline-offset: .17em; }
+  a:hover { text-decoration-thickness: 2px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .live { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem;
+          background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+          border-radius: 8px; padding: 1rem 1.2rem; margin: 1.6rem 0; }
+  .live .u { font-family: "IBM Plex Mono", monospace; font-size: .92rem; word-break: break-all; flex: 1 1 20rem; }
+  .live .tag { font-family: "IBM Plex Mono", monospace; font-size: .63rem; letter-spacing: .1em;
+               text-transform: uppercase; color: var(--accent); border: 1px solid currentColor;
+               border-radius: 999px; padding: .18rem .6rem; white-space: nowrap; }
+  .live .n { flex: 1 1 100%; font-size: .85rem; color: var(--ink-soft); margin: 0; max-width: none; }
+
   figure { margin: 1.4rem 0; }
   figure img { width: 100%; border: 1px solid var(--rule); border-radius: 8px; display: block; box-shadow: var(--shadow); }
   figcaption { font-size: .8rem; color: var(--ink-faint); margin-top: .5rem; }
@@ -145,20 +159,32 @@
       0.8.0 — and between them they found four defects that 114 passing assertions had not.
     </p>
     <div class="meta">
-      <span>4 September 2026</span>
-      <span>32 commits since the 29 Aug submission</span>
-      <span>github.com/rmatx/multi-agent-cs-crew</span>
+      <span>5 September 2026</span>
+      <span>35 commits since the 29 Aug submission</span>
+      <span><a href="https://github.com/rmatx/multi-agent-cs-crew">github.com/rmatx/multi-agent-cs-crew</a></span>
       <span>aamad 0.8.0</span>
     </div>
   </header>
 
   <div class="metrics">
-    <div class="metric hero"><span class="n">410</span><span class="k">turns traced</span></div>
-    <div class="metric"><span class="n">168</span><span class="k">unit tests</span></div>
+    <div class="metric hero"><span class="n">514</span><span class="k">turns traced</span></div>
+    <div class="metric"><span class="n">171</span><span class="k">unit tests</span></div>
     <div class="metric"><span class="n">114</span><span class="k">eval assertions</span></div>
     <div class="metric hero"><span class="n">26</span><span class="k">golden items</span></div>
     <div class="metric"><span class="n">0.0%</span><span class="k">error rate</span></div>
     <div class="metric"><span class="n">6</span><span class="k">agents · 9 tools</span></div>
+  </div>
+
+  <div class="live">
+    <a class="u" href="https://multi-agent-cs-crew-production.up.railway.app/">multi-agent-cs-crew-production.up.railway.app</a>
+    <span class="tag">Live · Railway</span>
+    <p class="n">Deployed and publicly reachable since 5 September, with the demo surface on — the crew
+      strip, the 23-scenario picker and the operator trace. It sits on the <strong>keyless engine</strong>,
+      which answers from the fixture and calls no model, so it costs nothing to leave running and nothing
+      to click through; <code>CHAT_ENGINE=sdk</code> arms the crew for a live demo.
+      <a href="https://multi-agent-cs-crew-production.up.railway.app/api/health"><code>/api/health</code></a> reports which engine is actually serving, so
+      nothing on this page has to be taken on trust. This changes §08 below: the production container is
+      no longer blocked.</p>
   </div>
 
   <!-- ─────────────────────────────────────────────────────── 1 -->
@@ -374,7 +400,7 @@ CACHE        74.0% hit ratio on cacheable input</pre>
 
   <figure>
     <img src="assets/pipeline.visual-check.1440x900.light.png"
-         alt="Swimlane pipeline: a commit runs typecheck, 168 unit tests, the money-tools invariant and a Docker build in the keyless CI lane; a keyed lane grades a 26-item golden dataset through a live crew eval behind a spend gate; an evidence lane collects trace logs which replay to Arize AX and feed the QA artifacts">
+         alt="Swimlane pipeline: a commit runs typecheck, 171 unit tests, the money-tools invariant and a Docker build in the keyless CI lane; a keyed lane grades a 26-item golden dataset through a live crew eval behind a spend gate; an evidence lane collects trace logs which replay to Arize AX and feed the QA artifacts">
     <figcaption>
       The delivery and quality pipeline. The red node is the gate that matters: nine assertions
       that fail CI if the registered tool set changes at all, so a money tool cannot arrive
@@ -388,7 +414,7 @@ CACHE        74.0% hit ratio on cacheable input</pre>
       <tbody>
         <tr>
           <td><code>ci.yml</code></td><td>every push &amp; PR</td><td>No</td>
-          <td>Typecheck · 168 unit tests · zero-money-tools invariant · production build · fixture row counts · policy corpus present · secret scan · Docker image builds</td>
+          <td>Typecheck · 171 unit tests · zero-money-tools invariant · production build · fixture row counts · policy corpus present · secret scan · Docker image builds</td>
         </tr>
         <tr>
           <td><code>eval.yml</code></td><td>manual + monthly</td><td>Yes</td>
@@ -441,6 +467,18 @@ CACHE        74.0% hit ratio on cacheable input</pre>
       customer id, blocking 6 of 23 demo scenarios. Client-side only; the server was always correct.</li>
     <li><strong>SEC-03 mitigated</strong> — PII scrubbed from trace logs at write, retention window
       enforced by <code>npm run prune:traces</code>.</li>
+  </ul>
+
+  <h3>Deployment — new</h3>
+  <ul>
+    <li>Live on <strong>Railway</strong>, public, one replica, volume at <code>/app/var</code>. Container
+      built and run for the first time outside CI, which is what found DEF-15, DEF-16 and DEF-17.</li>
+    <li><code>DEMO_MODE</code> resolved on the server and reported through <code>/api/health</code>,
+      replacing a build-time <code>NEXT_PUBLIC_*</code> flag no deployment could reach.</li>
+    <li>Writable state split from read-only data — handoff artifacts and trace logs were being written
+      outside any volume and lost on every redeploy.</li>
+    <li>Non-root entrypoint that repairs a root-owned platform mount instead of failing as an
+      unexplainable <code>503</code>.</li>
   </ul>
 
   <h3>Interface</h3>
@@ -502,27 +540,83 @@ CACHE        74.0% hit ratio on cacheable input</pre>
     <table>
       <thead><tr><th>Item</th><th>Status</th><th>Note</th></tr></thead>
       <tbody>
-        <tr><td>DEF-11 — processing-calendar inconsistency</td><td class="miss">Open, accepted</td>
-            <td>Fails cautiously; fixing needs re-sampling every returns path</td></tr>
-        <tr><td>DEF-13 — unaided-answer guard misfires</td><td class="miss">Open</td>
-            <td>Found in the demo capture; needs an ADR-17 change</td></tr>
-        <tr><td>Latency p95 vs PRD &lt; 30 s</td><td class="miss">Missed</td>
-            <td>27.5 s current, 30.4 s lifetime; single-user, concurrency unmeasured</td></tr>
+        <tr><td>DEF-14 — a correct retrieval rejected by the 0.55 grounding gate</td><td class="miss">Open, accepted</td>
+            <td>Split out of the DEF-11 fix. Deterministic repro, no model needed; ~1 turn in 5. Fails cautiously. Every candidate fix touches ADR-11's normative threshold, so it is <code>@system.arch</code>'s call</td></tr>
+        <tr><td>DEF-11 — processing-calendar inconsistency</td><td class="pass">Fixed 4 Sep</td>
+            <td>Re-sampled across all three returns paths: 4 in 5 now quote the window. The residual is DEF-14 above</td></tr>
+        <tr><td>DEF-13 — unaided-answer guard misfires</td><td class="pass">Fixed 4 Sep</td>
+            <td>The guard now distinguishes "answered with no evidence" from "answered from what this conversation established"</td></tr>
+        <tr><td>DEF-17 — demo surface unswitchable in a built image</td><td class="pass">Fixed 5 Sep</td>
+            <td>Found deploying. <code>NEXT_PUBLIC_*</code> is inlined by <code>next build</code>, so the compose line setting it was inert; <code>DEMO_MODE</code> is now read at run time and reported by <code>/api/health</code></td></tr>
+        <tr><td>Latency p95 vs PRD &lt; 30 s</td><td class="miss">Half met</td>
+            <td>28.2 s over 514 turns, so the single-user half now passes. Concurrency has still never been measured, and that is the half the target was about</td></tr>
         <tr><td>LLM-as-judge</td><td class="miss">Specified, unrun</td>
             <td>Deliberate — uncalibrated is worse than none</td></tr>
-        <tr><td>Production container</td><td class="miss">Blocked</td>
-            <td>Blocked on authentication (SEC-01), not on the Dockerfile</td></tr>
+        <tr><td>Production container</td><td class="pass">Deployed 5 Sep</td>
+            <td>No longer blocked. Built, run, and live on Railway — see the link at the top. SEC-01/SEC-02 are accepted for <em>this</em> deployment on the ground that the fixture is fictional, not fixed</td></tr>
       </tbody>
     </table>
   </div>
   <p>
-    The defect register reads <strong>"two open, both accepted"</strong> rather than none. That is the
-    honest position: this project distinguishes a cautious failure it chose to carry from a wrong
-    answer it would not.
+    The register now reads <strong>one open, accepted</strong>. That is still the honest position rather
+    than a claim of none: this project distinguishes a cautious failure it chose to carry from a wrong
+    answer it would not. What changed since 4 September is that the container stopped being a plan.
+    Running it found three faults — <strong>DEF-15, DEF-16 and DEF-17</strong> — that had all passed a
+    green CI <code>container</code> job, because that job builds the image and never starts it. All three
+    share one shape: a configuration line that looks like it forwards a value and forwards nothing.
+    DEF-15 was loud, since the crew refused to start. DEF-17 was quiet — the app came up, served customers
+    correctly, and merely looked like a build with its features stripped out.
   </p>
 
+  <!-- ─────────────────────────────────────────────────────── 9 -->
+  <h2><span class="num">09</span>Where everything lives</h2>
+  <p>
+    Every document is in the repository, public, and every link below is pinned to the tag
+    <code>submission-2026-09-05</code> rather than to <code>main</code> — so what a reader opens is the tree this
+    submission describes, not whatever the branch has moved on to since.
+  </p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Document</th><th>Persona</th><th>What it holds</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/week5/NovaMart-Week5-Submission.pdf">NovaMart-Week5-Submission.pdf</a></td><td>—</td><td><strong>This document</strong>, 8 pages, figures embedded</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/1.define/prd.md">prd.md</a></td><td><code>@product.mgr</code></td><td>Requirements and the 55 acceptance criteria</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/1.define/mrd.md">mrd.md</a></td><td><code>@product.mgr</code></td><td>Market research and problem framing</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/1.define/sad.md">sad.md</a></td><td><code>@system.arch</code></td><td>Architecture and 19 ADRs</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/setup.md">setup.md</a></td><td><code>@project.mgr</code></td><td>Scaffold, toolchain, CI fixture</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/backend.md">backend.md</a></td><td><code>@backend.eng</code></td><td>Agents, tools, engines, hooks, every defect fix</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/frontend.md">frontend.md</a></td><td><code>@frontend.eng</code></td><td>Chat UI, trace panel, CSAT</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/integration.md">integration.md</a></td><td><code>@integration.eng</code></td><td>Envelope, engine seam, 18 round-trip cases</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/qa.md">qa.md</a></td><td><code>@qa.eng</code></td><td>Verification and the full defect register</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/evals.md">evals.md</a></td><td><code>@qa.eng</code></td><td>The 9 slices, 114 assertions, 26 golden items</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/2.build/security.md">security.md</a></td><td><code>@security.eng</code></td><td>Findings with executed probes</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/3.deliver/deploy.md">deploy.md</a></td><td><code>@devops.eng</code></td><td>Container, CI, the Railway runbook, rollback</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/project-context/3.deliver/user-guide.md">user-guide.md</a></td><td><code>@devops.eng</code></td><td>Installation and user manual</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/docs/demo-feedback.md">docs/demo-feedback.md</a></td><td>—</td><td>What the live demo surfaced, recorded before it was fixed</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/docs/AGENTS.md">docs/AGENTS.md</a></td><td>—</td><td>Agent and tool manual</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/README.md">README.md</a></td><td>—</td><td>Quickstart, pinned to <code>AS_OF_DATE=2026-09-01</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>This week's own evidence</h3>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Asset</th><th>What it is</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/week5/assets/architecture.html">architecture.html</a> · <a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/week5/assets/architecture.json">.json</a></td><td>Interactive runtime map (§4) and its typed source</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/week5/assets/pipeline.html">pipeline.html</a> · <a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/week5/assets/pipeline.json">.json</a></td><td>Delivery and quality pipeline (§5) and its typed source</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/week5/assets/demo-capture.pdf">demo-capture.pdf</a></td><td>The operator's own 3-page demo capture (§1)</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/docs/novamart-crew-2min.mp4">novamart-crew-2min.mp4</a></td><td>Two-minute narrated walkthrough, all real captured output</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/actions">GitHub Actions</a></td><td>The keyless pipeline and the keyed monthly eval run</td></tr>
+        <tr><td><a href="https://github.com/rmatx/multi-agent-cs-crew/blob/submission-2026-09-05/.claude/rules/">.claude/rules/</a></td><td>The persona contracts and runtime adapter that produced all of the above</td></tr>
+      </tbody>
+    </table>
+  </div>
+
   <footer>
-    <p>Evidence: project-context/2.build/{qa,evals,security}.md · docs/demo-feedback.md · week5/assets/</p>
-    <p>410 turns traced · 168 unit tests · 114 eval assertions · 26 golden items · aamad 0.8.0 clean on define, build and deliver</p>
+    <p>Evidence: every document linked in §9, pinned to tag <code>submission-2026-09-05</code> · live app: <a href="https://multi-agent-cs-crew-production.up.railway.app/">multi-agent-cs-crew-production.up.railway.app</a></p>
+    <p>514 turns traced · 171 unit tests · 114 eval assertions · 26 golden items · aamad 0.8.0 clean on define, build and deliver</p>
   </footer>
 </div>
