@@ -1,0 +1,424 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Two harnesses, one adapter",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/rmatx/multi-agent-cs-crew",
+      "revision": "2312e9dacb87c23787ab7869bf337f8f9455d739"
+    },
+    "viewBox": [
+      1380,
+      580
+    ],
+    "views": [
+      {
+        "id": "the-split",
+        "label": "The split",
+        "focus": [
+          "personas",
+          "adapter",
+          "coordinator",
+          "specialists"
+        ],
+        "note": "Two things get called the harness. One builds the app and stays behind; one ships inside it and serves a turn."
+      },
+      {
+        "id": "build-time",
+        "label": "Build time",
+        "focus": [
+          "personas",
+          "define",
+          "build",
+          "deliver"
+        ],
+        "note": "Nine role-scoped personas, three gated phases, one artifact per epic. Deliver cannot start until qa.md records results."
+      },
+      {
+        "id": "customer-turn",
+        "label": "A customer turn",
+        "focus": [
+          "coordinator",
+          "specialists",
+          "mcp",
+          "data"
+        ],
+        "note": "Coordinator classifies and delegates, one specialist per turn, tools read the data. The customer hears one voice."
+      },
+      {
+        "id": "structural",
+        "label": "Structural, not prompted",
+        "focus": [
+          "hooks",
+          "mcp",
+          "specialists"
+        ],
+        "note": "Capabilities are absent rather than forbidden. An injection cannot talk its way into a tool that was never bound."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "personas",
+      "type": "cloud",
+      "label": "AAMAD personas",
+      "sublabel": "9 declared roles",
+      "pos": [
+        40,
+        210
+      ],
+      "size": [
+        195,
+        72
+      ],
+      "tag": "does not ship",
+      "sources": [
+        {
+          "path": "README-AAMAD.md",
+          "label": "personas + phase model"
+        }
+      ]
+    },
+    {
+      "id": "define",
+      "type": "database",
+      "label": "1 · Define",
+      "sublabel": "mrd · prd · sad",
+      "pos": [
+        298,
+        96
+      ],
+      "size": [
+        178,
+        60
+      ],
+      "sources": [
+        {
+          "path": "project-context/1.define/prd.md"
+        },
+        {
+          "path": "project-context/1.define/sad.md"
+        }
+      ]
+    },
+    {
+      "id": "build",
+      "type": "database",
+      "label": "2 · Build",
+      "sublabel": "one artifact per epic",
+      "pos": [
+        298,
+        220
+      ],
+      "size": [
+        178,
+        60
+      ],
+      "sources": [
+        {
+          "path": "project-context/2.build/backend.md"
+        },
+        {
+          "path": "project-context/2.build/qa.md"
+        }
+      ]
+    },
+    {
+      "id": "deliver",
+      "type": "database",
+      "label": "3 · Deliver",
+      "sublabel": "deploy · user-guide",
+      "pos": [
+        298,
+        344
+      ],
+      "size": [
+        178,
+        60
+      ],
+      "tag": "gated on qa.md",
+      "sources": [
+        {
+          "path": "project-context/3.deliver/deploy.md"
+        }
+      ]
+    },
+    {
+      "id": "adapter",
+      "type": "security",
+      "label": "Runtime adapter",
+      "sublabel": "adapter-claude-agent-sdk.md",
+      "pos": [
+        290,
+        466
+      ],
+      "size": [
+        200,
+        68
+      ],
+      "tag": "AAMAD_TARGET_RUNTIME",
+      "sources": [
+        {
+          "path": "aamad.config.yml",
+          "label": "runtime.target"
+        }
+      ]
+    },
+    {
+      "id": "coordinator",
+      "type": "backend",
+      "label": "triage-router",
+      "sublabel": "the only voice the customer hears",
+      "pos": [
+        620,
+        96
+      ],
+      "size": [
+        190,
+        66
+      ],
+      "tag": "coordinator",
+      "sources": [
+        {
+          "path": "server/runtime/agents.ts",
+          "label": "coordinatorPrompt"
+        }
+      ]
+    },
+    {
+      "id": "specialists",
+      "type": "backend",
+      "label": "5 specialists",
+      "sublabel": "AgentDefinition entries",
+      "pos": [
+        620,
+        226
+      ],
+      "size": [
+        190,
+        70
+      ],
+      "tag": "cannot delegate",
+      "sources": [
+        {
+          "path": "server/runtime/agents.ts",
+          "label": "AgentDefinition entries"
+        }
+      ]
+    },
+    {
+      "id": "hooks",
+      "type": "security",
+      "label": "Lifecycle hooks",
+      "sublabel": "4 SDK lifecycle hooks",
+      "pos": [
+        620,
+        360
+      ],
+      "size": [
+        190,
+        70
+      ],
+      "tag": "enforcement layer",
+      "sources": [
+        {
+          "path": "server/runtime/hooks.ts"
+        }
+      ]
+    },
+    {
+      "id": "mcp",
+      "type": "backend",
+      "label": "In-process MCP server",
+      "sublabel": "mcp__novamart__* · 9 tools",
+      "pos": [
+        875,
+        226
+      ],
+      "size": [
+        190,
+        66
+      ],
+      "tag": "zero money tools",
+      "sources": [
+        {
+          "path": "server/runtime/toolRegistry.ts"
+        }
+      ]
+    },
+    {
+      "id": "deterministic",
+      "type": "backend",
+      "label": "Deterministic engine",
+      "sublabel": "no LLM · no key · the default",
+      "pos": [
+        875,
+        96
+      ],
+      "size": [
+        190,
+        62
+      ],
+      "sources": [
+        {
+          "path": "server/runtime/engine.ts",
+          "label": "TurnEngine"
+        }
+      ]
+    },
+    {
+      "id": "data",
+      "type": "database",
+      "label": "Grounding data",
+      "sublabel": "DuckDB · policy corpus · SQLite",
+      "pos": [
+        1130,
+        226
+      ],
+      "size": [
+        190,
+        66
+      ],
+      "tag": "read-only"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Build harness — development time only, never shipped",
+      "wraps": [
+        "personas",
+        "define",
+        "build",
+        "deliver",
+        "adapter"
+      ],
+      "pad": 34
+    },
+    {
+      "kind": "security-group",
+      "label": "Runtime harness — ships in the container",
+      "wraps": [
+        "coordinator",
+        "specialists",
+        "hooks",
+        "mcp",
+        "deterministic",
+        "data"
+      ],
+      "pad": 34
+    }
+  ],
+  "connections": [
+    {
+      "from": "personas",
+      "to": "define",
+      "label": "writes",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "from": "define",
+      "to": "build",
+      "label": "traces to prd + sad",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 24
+    },
+    {
+      "from": "build",
+      "to": "deliver",
+      "label": "gate: qa.md",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 24
+    },
+    {
+      "from": "personas",
+      "to": "adapter",
+      "label": "selects one runtime",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "from": "adapter",
+      "to": "coordinator",
+      "label": "scaffolds — one direction only",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "from": "coordinator",
+      "to": "specialists",
+      "label": "Agent tool · max 4 hops",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 24
+    },
+    {
+      "from": "specialists",
+      "to": "mcp",
+      "label": "allowlisted",
+      "variant": "security"
+    },
+    {
+      "from": "mcp",
+      "to": "data",
+      "label": "read-only"
+    },
+    {
+      "from": "hooks",
+      "to": "specialists",
+      "label": "hop accounting",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "hooks",
+      "to": "mcp",
+      "label": "denies at PreToolUse",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "from": "deterministic",
+      "to": "data",
+      "label": "same reads, no model",
+      "fromSide": "right",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "violet",
+      "title": "Say which harness you mean",
+      "items": [
+        "AAMAD is the build harness: nine persona contracts in .claude/agents/, three gated phases, one artifact per epic. It does not ship.",
+        "The Claude Agent SDK is the runtime harness: triage-router delegating to order-specialist, returns-advisor, faq-policy, plus-specialist and escalation-handoff.",
+        "The adapter is the only link between them, and it points one way: it shapes the generated app, it does not orchestrate AAMAD's phases."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Structural, not prompted",
+      "items": [
+        "Four independent layers keep money tools out: nothing bound in the process, a startup assertion that throws, an exact-set CI test that fails when a tool is added, and PreToolUse denial.",
+        "Specialists cannot delegate because the Agent tool is absent from their tools array — not because a prompt forbids it.",
+        "Hooks do the accounting: SubagentStart counts the hop, PostToolUse records the trace and tools_tried."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Two engines, one contract",
+      "items": [
+        "CHAT_ENGINE picks deterministic or sdk; both honour the same wire contract and the same escalation guarantee.",
+        "The sdk engine is a dynamic import, so on the default path no key is read and no subprocess starts.",
+        "That is what lets the same build run keyless in front of an audience."
+      ]
+    }
+  ]
+}
