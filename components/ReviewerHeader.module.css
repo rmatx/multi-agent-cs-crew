@@ -1,0 +1,97 @@
+/* Reviewer strip. Shares the chat column's width and its tokens so it reads as part of the
+   same page rather than a banner bolted to the top of it. */
+
+.strip {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  flex: 0 0 auto;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-ring);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lede {
+  flex: 1 1 20rem;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.inlineLink {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* The one thing on this strip a visitor is meant to act on, so it is the one thing built like
+   a target rather than a line of text. */
+.download {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.download:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.download:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.downloadIcon {
+  flex: 0 0 auto;
+  font-size: 1.1rem;
+  line-height: 1.3;
+  color: var(--accent);
+}
+
+.downloadText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+}
+
+.downloadNote {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.5;
+}

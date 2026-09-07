@@ -50,6 +50,12 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/next.config.ts ./next.config.ts
 
+# Static assets Next serves from `public/` — currently the demo run sheet the `/final` reviewer
+# build links to. Easy to forget: `next build` does NOT fold `public/` into `.next`, so without
+# this line the app boots healthy and the download 404s, which is exactly the kind of fault that
+# only shows up in front of the person you built the link for.
+COPY --from=build /app/public ./public
+
 # Read-only data the app cannot start without: the committed 3.2 MB CI fixture (ADR-12), the
 # policy corpus the crew answers from, and the single demo-overlay persona (ADR-14).
 COPY --from=build /app/data/fixtures/novamart_ci.duckdb ./data/fixtures/novamart_ci.duckdb
