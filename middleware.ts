@@ -22,7 +22,7 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { GATE_COOKIE, gateToken } from "@/server/runtime/demoGate";
+import { GATE_COOKIE, gateToken, requestPassedGate } from "@/server/runtime/demoGate";
 
 const REALM = 'Basic realm="NovaMart reviewer build", charset="UTF-8"';
 
@@ -64,6 +64,20 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return challenge();
   }
 
+  /*
+   * The cookie is accepted as proof, not only the Authorization header — and this is a fix, not
+   * a convenience. The Basic protection space covers paths at or below the authenticated URI,
+   * and the run sheet lives at `/novamart-demo-runsheet.xlsx`: a SIBLING of `/final`, not a
+   * child. A browser therefore does not send the credentials it already holds when the reviewer
+   * clicks the download, and the gate answered 401 to someone who had just typed the password
+   * correctly. Same root cause as the one `demoGate.ts` describes for `/api/chat`; it applies to
+   * every gated path that is not nested under `/final`.
+   *
+   * Checked BEFORE the header so the common case — a reviewer who authenticated a moment ago —
+   * costs one digest and no challenge round-trip.
+   */
+  if (await requestPassedGate(request)) return pass(request, expected);
+
   const header = request.headers.get("authorization");
   if (header === null || !header.startsWith("Basic ")) return challenge();
 
@@ -83,6 +97,17 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   if (!constantTimeEqual(supplied, expected)) return challenge();
 
+  return pass(request, expected);
+}
+
+/**
+ * The allow path: continue, refuse caching, and (re)mint the reviewer cookie.
+ *
+ * Shared by both ways in so a session that arrived by cookie keeps getting its expiry extended
+ * exactly as one that arrived by password does — otherwise a reviewer's twelve hours would
+ * start expiring from their first request rather than their last.
+ */
+async function pass(request: NextRequest, password: string): Promise<NextResponse> {
   const response = NextResponse.next();
   // Belt and braces alongside the app's Referrer-Policy: nothing behind the gate should be
   // held by a shared cache that does not know the gate exists.
@@ -100,7 +125,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
    * development — a Secure cookie is silently dropped over http://localhost's non-TLS origin,
    * which would make the whole gate appear broken only when developing.
    */
-  response.cookies.set(GATE_COOKIE, await gateToken(expected), {
+  response.cookies.set(GATE_COOKIE, await gateToken(password), {
     httpOnly: true,
     sameSite: "lax",
     secure: request.nextUrl.protocol === "https:",
