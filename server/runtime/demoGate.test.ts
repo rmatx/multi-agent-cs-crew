@@ -14,7 +14,12 @@ type Mod = typeof import("./demoGate");
 
 const gate = (await import(new URL("./demoGate.ts", import.meta.url).href)) as Mod;
 
-const PASSWORD = "MavenDemo$";
+/*
+ * Deliberately synthetic, and deliberately NOT whatever the deployment is using. This file is in
+ * a public repository, so a fixture that happens to be the live password is a published secret —
+ * which is exactly what this line used to be. The tests care only that the digest round-trips.
+ */
+const PASSWORD = "fixture-password-not-a-real-one$";
 
 function withCookie(value: string | null): Request {
   return new Request("https://example.test/api/chat", {
