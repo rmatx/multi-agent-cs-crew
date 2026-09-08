@@ -16,6 +16,7 @@
 import type { ChatRequest, StreamEvent } from "@shared/dto";
 import { resolveTemporalMeta } from "@/server/data/dateShift";
 import { resolveBudgets, resolveEngineId } from "@/server/runtime/config";
+import { requestPassedGate } from "@/server/runtime/demoGate";
 import { checkRateLimit, clientKey } from "@/server/runtime/rateLimit";
 import { extractAppContext } from "@/server/runtime/escalationContext";
 import {
@@ -79,7 +80,16 @@ export async function POST(request: Request): Promise<Response> {
   const chatRequest = body;
   const conversationId = chatRequest.conversationId ?? crypto.randomUUID();
   const trace = chatRequest.clientFlags?.trace === true;
-  const engineId = resolveEngineId();
+  /*
+   * A request that came through the reviewer gate runs the crew; everyone else runs whatever
+   * `CHAT_ENGINE` says, which in the live deployment is the keyless deterministic engine.
+   *
+   * This is what keeps the public URL — the one printed in a submission document already handed
+   * in — answering for a grader with no password, while making it impossible for an anonymous
+   * caller to spend the operator's API key. The rate limit above still applies to both: it
+   * guards the process, not just the wallet.
+   */
+  const engineId = (await requestPassedGate(request)) ? "sdk" : resolveEngineId();
   const budgets = resolveBudgets();
 
   // Session first (ADR-10): the stored identity feeds the temporal resolve below, so a

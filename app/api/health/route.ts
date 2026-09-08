@@ -10,11 +10,12 @@
 import { getMaxOrderDate } from "@/server/data/duckdb";
 import { sessionDb, ticketStubDb } from "@/server/data/sqlite";
 import { demoModeEnabled, preflightSdkEngine, resolveEngineId } from "@/server/runtime/config";
+import { requestPassedGate } from "@/server/runtime/demoGate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
   let duckdb: "ok" | "error" = "ok";
   try {
     await getMaxOrderDate();
@@ -35,7 +36,13 @@ export async function GET(): Promise<Response> {
     stores = "error";
   }
 
-  const engine = resolveEngineId();
+  /*
+   * Reported PER CALLER, not per process. The browser reads this to decide whether to call the
+   * banner "Crew" and whether to light the crew strip, so a gated reviewer must be told `sdk`
+   * even though `CHAT_ENGINE` says otherwise — the alternative is a /final page that runs the
+   * crew while captioning itself a keyless lookup.
+   */
+  const engine = (await requestPassedGate(request)) ? "sdk" : resolveEngineId();
   const preflight = preflightSdkEngine();
   const healthy = duckdb === "ok" && stores === "ok";
 

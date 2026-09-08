@@ -1,5 +1,6 @@
 /**
- * Password gate for the reviewer surface (`/final` and the run sheet it links to).
+ * Password gate for the reviewer surface (`/final` and the run sheet it links to), and the
+ * place the reviewer cookie is minted.
  *
  * HTTP Basic, deliberately. It is ~40 lines with no login page, no POST route, no cookie and
  * no session store, and — the reason it was chosen over a prettier form — the browser sends the
@@ -7,9 +8,13 @@
  * without a second mechanism that could disagree with the first. The username is not checked;
  * there is one password and no accounts to have.
  *
- * WHAT THIS IS NOT: authentication. It is a shared password on a demo link. It does not protect
- * `/api/chat`, which stays open exactly as it is today, and it is not the auth story the
- * project still owes (see the post-demo notes). Anyone with the password has everything.
+ * On success it also sets the reviewer cookie, which is the ONLY thing that upgrades a turn to
+ * the live crew — see `server/runtime/demoGate.ts`. `/api/chat` stays open to everyone, but an
+ * ungated caller gets the keyless deterministic engine and therefore cannot spend the API key.
+ *
+ * WHAT THIS IS NOT: authentication. It is a shared password on a demo link. It gates which
+ * ENGINE answers, never who may read what — SEC-01 and SEC-02 are untouched, and this is not
+ * the auth story the project still owes (see the post-demo notes).
  *
  * FAILS CLOSED. With `FINAL_DEMO_PASSWORD` unset the gate denies rather than opens: the whole
  * point of the variable is that the secret is not in this repo, and a gate that swings open
@@ -17,6 +22,7 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { GATE_COOKIE, gateToken } from "@/server/runtime/demoGate";
 
 const REALM = 'Basic realm="NovaMart reviewer build", charset="UTF-8"';
 
@@ -48,7 +54,7 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export function middleware(request: NextRequest): NextResponse {
+export async function middleware(request: NextRequest): Promise<NextResponse> {
   const expected = process.env.FINAL_DEMO_PASSWORD?.trim();
   if (expected === undefined || expected.length === 0) {
     console.error(
@@ -81,6 +87,26 @@ export function middleware(request: NextRequest): NextResponse {
   // Belt and braces alongside the app's Referrer-Policy: nothing behind the gate should be
   // held by a shared cache that does not know the gate exists.
   response.headers.set("Cache-Control", "no-store");
+
+  /*
+   * Carry the proof to `/api/chat`, which is what decides whether this visitor's turns run the
+   * live crew or the public keyless engine (`server/runtime/demoGate.ts` explains why the
+   * Authorization header cannot do this job: `/api/chat` is a SIBLING of `/final`, so the
+   * browser never sends Basic credentials there).
+   *
+   * `path: "/"` because the endpoints that read it are not under `/final`. `httpOnly` so page
+   * scripts cannot read it, `sameSite: lax` so it survives following a link into the demo but
+   * is not sent from a third-party form post, and `secure` everywhere except plain-HTTP local
+   * development — a Secure cookie is silently dropped over http://localhost's non-TLS origin,
+   * which would make the whole gate appear broken only when developing.
+   */
+  response.cookies.set(GATE_COOKIE, await gateToken(expected), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: request.nextUrl.protocol === "https:",
+    path: "/",
+    maxAge: 60 * 60 * 12,
+  });
   return response;
 }
 
