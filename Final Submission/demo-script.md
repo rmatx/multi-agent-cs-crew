@@ -126,16 +126,86 @@ that survives an injection is not giving them the tool.)*
 
 ---
 
-## Q&A — likely questions
+## Q&A — the four they will ask
+
+### 1 · Why Crew rather than Flow?
+
+- **Reframe first, briefly.** That's CrewAI vocabulary; this runs on the Claude Agent SDK. The
+  real question is *who decides which specialist handles a turn* — the agents, or your code.
+- **I built both and shipped them behind one interface.** `TurnEngine` has two implementations:
+  `deterministic` (a coded pipeline — Flow-shaped) and `sdk` (coordinator + specialists —
+  Crew-shaped). Same wire contract, same escalation guarantee. Selected **per request**.
+- **Why crew for the real path:** the variable part is intent. You cannot know whether *"can I
+  still return this"* needs order data, policy, or both until you read it. A Flow would need a
+  classifier at the front — at which point you have built a crew with extra steps.
+- **Why the crew still has Flow-shaped rails:** max 4 hops, counted by the runtime and not
+  self-reported; one specialist per turn; specialists cannot delegate at all because the `Agent`
+  tool is absent from their tool list. A crew that cannot wander.
+- **The part worth landing:** the deterministic engine is the *default*, and it is what the public
+  URL runs. Same answers for the demo path, no key, no spend. Two engines behind one contract was
+  the architecture decision — not Crew *or* Flow.
+
+### 2 · Where does a human approve or override?
+
+- **Be precise: today it is hand-off, not approval — because there is nothing to approve.** No
+  refund, cancel or payment tool exists anywhere in the process, so the crew cannot take an action
+  a human would need to sign off. The boundary is structural, not procedural.
+- **Seven reason codes route a turn to a person** (`lib/status.ts`): `payment_or_refund`,
+  `restricted_action`, `customer_requested_human`, `ungrounded`, `low_confidence`,
+  `repeat_failure`, `high_severity`.
+- **The customer's own override** is the "Talk to a human" button — always visible, never buried,
+  and it routes through the *same* escalation path rather than a second mechanism that could
+  disagree with the first.
+- **What the human receives** is a ticket stub plus a handoff packet: the question, what was tried,
+  what was found, the reason code. Shown in the demo.
+- **What does not exist: approve-before-act.** That arrives with Phase 2 `F-WRITE-01` — the first
+  feature that needs a human in the loop by design rather than as a fallback.
+- CSAT (1–5) is a customer *signal*, not an override. Don't oversell it.
+
+### 3 · What breaks first at 10×?
+
+Answer in order, and lead with the one that already happened.
+
+1. **Cost — and I have the receipt.** Running the 23-scenario experiment on 10 Sep exhausted the
+   account's credit mid-run; turns started failing in two seconds. There is no per-conversation or
+   per-tenant budget cap. At 10× this is the first wall, not a theoretical one.
+2. **The guard against that does not survive scaling.** The rate limiter is an in-memory `Map`,
+   per process, keyed on client IP. `numReplicas: 1` today — add a second replica and the effective
+   limit silently doubles. The thing protecting spend is the thing horizontal scaling breaks first.
+3. **Latency goes before throughput.** p95 is **30.4s at single-user**, already missing the PRD's
+   <30s target. A second hop roughly doubles wall clock (order-specialist alone is p95 28.6s). The
+   ≥5-concurrent half of the target **has never been exercised** — say that rather than guess.
+4. **Disk, quietly.** Trace JSONL per conversation on one volume, pruned by a *manual* script.
+5. **What probably doesn't break:** SQLite has WAL on so reads never block a turn's writes, and
+   DuckDB is read-only. The stores are not the bottleneck; the model calls and the wallet are.
+
+### 4 · What would you build in Phase 2?
+
+- **Harden before building, and it is already written down as accepted risk.** SEC-01/SEC-02:
+  there is no authentication, and order ids are sequential integers. That is the gate before real
+  customer data — not a Dockerfile problem.
+- **Then `F-WRITE-01`** — refund and cancel write APIs. Interesting precisely because it is the
+  first feature that *requires* the approve-before-act loop question 2 says does not exist yet.
+- **Two new items from this week's observability work**, both honest additions:
+  - **Token and cost attribution.** There are currently *zero* LLM spans — traces are built from
+    hop and tool records, so cost dashboards have nothing to populate and latency cannot be split
+    between model time and tool time.
+  - **Make a failed turn distinguishable from a handoff.** A dead turn currently reports
+    `escalated`, which is right for the customer and a lie to the dashboard.
+- Also on the PRD's P2 list, lower: `F-PROD-DB-01`, `F-OMNI-01`, `F-ZENDESK-01`, `F-COP-01`,
+  `F-ANALYTICS-01`.
+
+### Shorter ones
 
 | They ask | You say |
 |---|---|
 | "How do you stop hallucination?" | Grounding guard + citations. Every fact traces to a tool result; ungrounded answers escalate. DEF-14 is that gate firing too eagerly — I kept it. |
 | "Why not one big agent?" | Tool permissions. Least-privilege per specialist is only meaningful if the roles are separate. |
-| "What's the latency?" | 13–16s resolved, 24–32s escalated. p95 measured 30.4s single-user. Concurrency untested — that's honest, not hidden. |
-| "Is this real data?" | Real schema, synthetic fixture. Dates shift onto today's calendar so "12 days ago" stays true whenever you run it. |
+| "What's the latency?" | 13–16s resolved, 24–32s escalated. p95 30.4s single-user. Concurrency untested — that's honest, not hidden. |
+| "Is this real data?" | Real schema, synthetic fixture. Dates shift onto today's calendar so "12 days ago" stays true. |
 | "What did the framework do?" | AAMAD drove the *build* — nine personas, gated phases. Different harness from the Agent SDK crew inside the app. See the two-harness diagram. |
 | "Cost?" | Public URL runs the keyless engine, so a stranger can't spend my key. Crew runs only behind the password. |
+| "How do you know it still works?" | The run sheet is an Arize golden dataset; an experiment replays all 23 against the deployed crew. Last run: 88% status match, 94% specialist match. |
 
 ## If the demo breaks
 
