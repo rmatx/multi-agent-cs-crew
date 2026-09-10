@@ -20,6 +20,10 @@
 - [ ] **Do not push to `main` beforehand.** A deploy swap kills in-flight requests — it produced a
       502 during rehearsal. Let it settle if you have pushed.
 - [ ] Run one throwaway turn to warm it, then press **Reset**.
+- [ ] **Press Reset between every scenario.** Not cosmetic: two scenarios asking the same question
+      with different order ids in ONE conversation makes the coordinator stop and ask *which* order
+      you mean — `needs_input`, not the escalation you came to show. Correct behaviour, wrong
+      moment. It broke a recording take before Reset was added between turns.
 - [ ] Trace panel open, scenario picker visible. Zoom browser to ~125% so the trace is readable.
 - [ ] Fallback ready in a second tab: **`Final Submission/NovaMart-demo-60s.mp4`** (60s, the
       same two turns, unedited). `week5/assets/demo-capture.pdf` is the backup to the backup.
@@ -77,6 +81,10 @@
   - trace: **2 hops · 5 tool calls**, now including `create_ticket_stub` and
     `format_handoff_summary`
 - Result: **escalated**, with a real ticket id (`STUB-…`) and reason `restricted_action`.
+- **This one is not guaranteed.** Measured roughly 6 times in 7. Occasionally the returns advisor
+  answers and *offers* to escalate instead — a `resolved` turn, which is defensible but not the
+  beat you want. If it happens: press Reset and run it again, or move straight to **"Refund
+  request"**, which escalates structurally because no refund tool exists and has never varied.
 - Open the **handoff packet** — what the human receives: the question, what was tried, what was found.
 - **The line to land:**
   > "Three days apart, opposite answers. It didn't get more confident as it got closer to the

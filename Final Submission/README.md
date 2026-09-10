@@ -9,6 +9,7 @@ The 23-scenario test workbook downloads from that page.
 
 | File | What it is |
 |---|---|
+| `NovaMart-demo-2min.mp4` | **The submission video (1:44).** Three turns: answers with citations, escalates with a ticket and shows the packet the human receives, then refuses a refund because no refund tool exists. Also shows the operator trace. Single unedited take against the deployed app. |
 | `NovaMart-demo-60s.mp4` | **60-second recording of the live demo** — one question asked twice, three days apart: resolved with citations, then handed to a human with a ticket. A single unedited take against the deployed app; the pauses are real model latency. Doubles as the fallback if the live demo fails. |
 | `NovaMart-Demo-Deck.pptx` | 8-slide demo deck. **The narration is in the speaker notes** — present from the notes pane. |
 | `demo-script.md` | The same script as bullets, with measured timings, a pre-flight checklist, likely Q&A, and a break-glass procedure. |
@@ -27,6 +28,7 @@ the two disagree and the generated file wins by accident.
 
 | Output | Source | Regenerate with |
 |---|---|---|
+| `NovaMart-demo-2min.mp4` | `week5/assets/demo-record-2min.js` | `npm i playwright && FINAL_DEMO_PASSWORD=… node week5/assets/demo-record-2min.js out/`, then ffmpeg to mp4 |
 | `NovaMart-demo-60s.mp4` | `week5/assets/demo-record.js` | `npm i playwright && FINAL_DEMO_PASSWORD=… node week5/assets/demo-record.js out/`, then ffmpeg to mp4 |
 | `NovaMart-Demo-Deck.pptx` | `week5/assets/demo-deck.js` | `npm i pptxgenjs && node week5/assets/demo-deck.js "Final Submission/NovaMart-Demo-Deck.pptx"` |
 | `architecture.html` | `week5/assets/architecture.json` | archify `deliver architecture` |
