@@ -49,6 +49,19 @@ function stateDir(): string {
 }
 
 const TICKET_DIR = path.join(stateDir(), "tickets");
+
+/**
+ * Where a ticket's packet lives, for whoever needs to READ it back.
+ *
+ * Exported because the reader used to compute its own path — `process.cwd()/data/tickets` — and
+ * that is only the same directory as this one when `NOVAMART_STATE_DIR` is unset. In the
+ * container it is set to `/app/var`, so the writer wrote to `/app/var/tickets` and the reader
+ * looked in `/app/data/tickets`, found nothing, and reported the packet "not ready" forever.
+ * Two paths for one file is the bug; there is now one.
+ */
+export function ticketArtifactPath(ticketStubId: string): string {
+  return path.join(TICKET_DIR, `${ticketStubId}.md`);
+}
 const OUTBOX = path.join(stateDir(), "outbox.md");
 
 /** Shape written by `createTicketStub`, narrowed to what an artifact needs. */
@@ -182,7 +195,7 @@ export function writeHandoffArtifacts(stub: HandoffStub, asOf: string): void {
     await ensureOutboxHeader();
     await mkdir(TICKET_DIR, { recursive: true });
     await writeFile(
-      path.join(TICKET_DIR, `${stub.ticket_stub_id}.md`),
+      ticketArtifactPath(stub.ticket_stub_id),
       ticketMarkdown(stub, asOf),
       "utf8",
     );

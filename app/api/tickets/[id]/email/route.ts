@@ -13,7 +13,7 @@
  */
 
 import { readFile } from "node:fs/promises";
-import path from "node:path";
+import { ticketArtifactPath } from "@/server/runtime/handoffArtifacts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,10 +37,7 @@ export async function GET(
   }
 
   try {
-    const text = await readFile(
-      path.join(process.cwd(), "data", "tickets", `${id}.md`),
-      "utf8",
-    );
+    const text = await readFile(ticketArtifactPath(id), "utf8");
     return Response.json({ ticketStubId: id, text });
   } catch {
     // The artifact write is best-effort and not awaited on the turn's hot path, so a ticket can
