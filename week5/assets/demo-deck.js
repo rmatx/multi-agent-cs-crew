@@ -1,13 +1,13 @@
 /**
- * Generator for week5/NovaMart-Demo-Deck.pptx.
+ * Generator for "Final Submission/NovaMart-Demo-Deck.pptx".
  *
  * Committed for the same reason the archify diagram JSON is: the .pptx is OUTPUT. Edit this and
  * regenerate — never edit the deck by hand, or the two disagree and the file wins by accident.
  *
  *   npm i pptxgenjs   (not a project dependency; the app does not need it)
- *   node week5/assets/demo-deck.js week5/NovaMart-Demo-Deck.pptx
+ *   node week5/assets/demo-deck.js "Final Submission/NovaMart-Demo-Deck.pptx"
  *
- * Speaker notes are the demo script (week5/demo-script.md). If you change one, change both.
+ * Speaker notes are the demo script ("Final Submission/demo-script.md"). If you change one, change both.
  * NOTE: pptxgenjs LAYOUT_16x9 is 10 x 5.625in. This deck is authored for 13.333 x 7.5, which is
  * LAYOUT_WIDE — getting that wrong silently clips every slide at the right and bottom edges.
  */
