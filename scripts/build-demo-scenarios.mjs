@@ -138,7 +138,11 @@ const scenarios = [
 
   s("return-boundary", "Return, just outside", "Can I still return this order?", { orderId: num(outWindow.order_id) },
     { status: "escalated", agent: "returns-advisor",
-      note: `${daysAgo(outWindow.order_date)} days ago — the boundary. Two days from the case above, opposite answer.` },
+      // The gap is COMPUTED, not asserted. It read "Two days from the case above" next to two
+      // day counts that are themselves computed from the fixture — 12 and 15 — so the sentence
+      // was already off by one, in the workbook reviewers download and in the picker caption.
+      // A hardcoded number sitting beside a derived one only stays true by luck.
+      note: `${daysAgo(outWindow.order_date)} days ago — the boundary. ${daysAgo(outWindow.order_date) - daysAgo(inWindow.order_date)} days from the case above, opposite answer.` },
     ["get_order", "search_policy", "create_ticket_stub"]),
 
   s("return-ancient", "Return, a year old", "I want to return this, is it too late?", { orderId: num(ancient.order_id) },
