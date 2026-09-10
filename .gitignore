@@ -46,3 +46,7 @@ data/*.sqlite-shm
 
 # Office lock files
 ~$*
+
+# Python bytecode from the Arize experiment task
+__pycache__/
+*.pyc

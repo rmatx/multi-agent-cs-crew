@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NovaMart — Arize observability demo</title>
+<style>
+  :root{
+    --bg:#0c0e14; --surface:#161a24; --raised:#1a1530; --fg:#e9ecf3; --muted:#aeb6c6;
+    --line:#262b37; --accent:#818cf8; --ok:#34d399; --human:#a78bfa; --warn:#fbbf24; --bad:#f87171;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .bar{position:fixed;left:0;top:0;width:6px;height:100%;background:var(--accent)}
+  .wrap{max-width:900px;margin:0 auto;padding:3.2rem 1.5rem 5rem 2.2rem}
+  .eyebrow{font-family:var(--mono);font-size:.74rem;letter-spacing:.09em;color:var(--muted);
+           text-transform:uppercase;margin-bottom:.7rem}
+  h1{font-size:2.3rem;line-height:1.15;margin:0 0 .5rem}
+  .lede{font-size:1.08rem;color:var(--muted);margin:0 0 2.4rem;max-width:64ch}
+  h2{font-size:1.32rem;margin:2.9rem 0 .5rem;padding-top:1.5rem;border-top:1px solid var(--line)}
+  h3{font-size:1rem;margin:1.6rem 0 .4rem;color:var(--accent)}
+  p{margin:.7rem 0;max-width:70ch}
+  code{font-family:var(--mono);font-size:.88em;background:var(--surface);
+       border:1px solid var(--line);border-radius:4px;padding:.08em .38em}
+  pre{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+      border-radius:7px;padding:.9rem 1.1rem;overflow-x:auto;font-family:var(--mono);
+      font-size:.83rem;line-height:1.55}
+  pre code{background:none;border:0;padding:0}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.9rem}
+  th,td{text-align:left;padding:.5rem .7rem;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em}
+  td.m,th.m{font-family:var(--mono);font-size:.83rem}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)} .hum{color:var(--human)}
+  .muted{color:var(--muted)}
+  .stats{display:flex;flex-wrap:wrap;gap:.7rem;margin:1.3rem 0}
+  .stat{flex:1 1 150px;background:var(--surface);border:1px solid var(--line);
+        border-radius:8px;padding:.8rem .9rem}
+  .stat b{display:block;font-size:1.6rem;line-height:1.2}
+  .stat span{color:var(--muted);font-size:.78rem}
+  .call{background:var(--raised);border:1px solid var(--accent);border-radius:8px;
+        padding:1rem 1.2rem;margin:1.4rem 0}
+  .call.warn{border-color:var(--warn)}
+  .call h3{margin-top:0;color:inherit}
+  .call.warn h3{color:var(--warn)}
+  footer{margin-top:3.5rem;padding-top:1.2rem;border-top:1px solid var(--line);
+         color:var(--muted);font-size:.83rem}
+</style>
+</head>
+<body>
+<div class="bar"></div>
+<div class="wrap">
+
+<div class="eyebrow">NovaMart Support Crew · observability · 10 Sep 2026</div>
+<h1>What the traces actually say</h1>
+<p class="lede">Every finished turn exports OpenInference spans to Arize AX. This is what that
+data was used for: an instrumentation audit, a golden dataset built from the run sheet, and an
+experiment that replays all 23 scenarios against the deployed crew and scores them against their
+labels. Every number here came out of a command, not an estimate.</p>
+
+<h2>1 · How the tracing is wired</h2>
+<p>Export is <strong>in-process</strong>, at the end of each turn — <code>server/runtime/trace.ts</code>
+calls <code>exportTurnSpans()</code> in <code>flush()</code>. It is not an offline replay of the JSONL
+logs, though those are written too.</p>
+<p>It is also <strong>silent when unconfigured</strong>: <code>resolveArizeConfig()</code> returns
+<code>null</code> with no keys and the export is skipped without a word. That is right for a turn — a
+broken collector must never cost a customer their answer — and wrong for an operator, who otherwise
+finds out by opening an empty dashboard days later. So <code>/api/health</code> reports it:</p>
+<pre><code>"arize": { "status": "enabled", "project": "novamart-support-crew" }</code></pre>
+<p class="muted">Only turns that call a model produce spans. The public engine is
+<code>deterministic</code>, so spans come from gated <code>/final</code> traffic and nothing else — an
+empty dashboard is not by itself evidence of a broken exporter.</p>
+
+<h2>2 · Instrumentation health</h2>
+<p>Deterministic checks over every span from a 24-hour window, not a sample.</p>
+<div class="stats">
+  <div class="stat"><b>119</b><span>spans</span></div>
+  <div class="stat"><b>19</b><span>traces</span></div>
+  <div class="stat"><b>6.3</b><span>spans per turn</span></div>
+  <div class="stat"><b class="ok">0</b><span>orphans / flat traces</span></div>
+</div>
+<table>
+  <tr><th>Check</th><th>Result</th></tr>
+  <tr><td>Orphaned spans (parent missing)</td><td class="ok">0</td></tr>
+  <tr><td>Flat traces (no hierarchy)</td><td class="ok">0 of 19</td></tr>
+  <tr><td>Spans with no <code>span.kind</code></td><td class="ok">0</td></tr>
+  <tr><td>Root spans with blank input <em>and</em> output</td><td class="ok">0 of 19</td></tr>
+  <tr><td>Span status</td><td class="ok">119 OK, 0 ERROR</td></tr>
+  <tr><td><strong>LLM spans / token counts</strong></td><td class="bad"><strong>0 / 0</strong> — see below</td></tr>
+</table>
+<p>Span kinds break down as <span class="m">AGENT 19 · CHAIN 22 · TOOL 78</span>, and a single
+escalating turn looks like this — the hop structure is real, not flattened:</p>
+<pre><code>AGENT  novamart.turn
+TOOL   Agent
+CHAIN  returns-advisor
+TOOL   mcp__novamart__get_order
+TOOL   mcp__novamart__get_order_items
+TOOL   mcp__novamart__search_policy
+TOOL   Agent
+CHAIN  escalation-handoff
+TOOL   mcp__novamart__create_ticket_stub
+TOOL   mcp__novamart__format_handoff_summary</code></pre>
+
+<div class="call warn">
+  <h3>The finding: no LLM spans, so no token or cost attribution</h3>
+  <p>Spans are built from the runtime's own trace records — agent hops and tool calls — so the
+  model calls themselves are never instrumented. Structurally the traces are clean, but Arize's
+  token and cost dashboards have nothing to populate from, and <em>latency cannot be attributed</em>
+  between model time and tool time.</p>
+  <p class="muted">Worth stating plainly rather than discovering during a cost review: this is a gap
+  in coverage, not a bug in what exists. Closing it means instrumenting the SDK's model calls, not
+  changing the spans above.</p>
+</div>
+
+<h2>3 · The run sheet as a golden dataset</h2>
+<p>The 23-scenario run sheet was already a labelled evaluation set in everything but format: each
+row carries a question, an identity, and the status, specialist and tools it should reach. It is
+generated from <code>data/demo-scenarios.json</code> by <code>npm run demo:build</code>, so the
+labels and the workbook a reviewer downloads cannot drift apart.</p>
+<table>
+  <tr><th>Dataset</th><td class="m">novamart-runsheet-23</td></tr>
+  <tr><th>Id</th><td class="m">RGF0YXNldDozNjQ1ODc6bnZZNg==</td></tr>
+  <tr><th>Examples</th><td>23 — verified round-trip, every label intact, ids matching the run sheet exactly</td></tr>
+  <tr><th>Labels</th><td>15 <span class="ok">resolved</span> · 6 <span class="hum">escalated</span> · 2 <span class="warn">needs_input</span>, across all 6 agents</td></tr>
+</table>
+
+<h2>4 · Experiment: does the live crew still match its run sheet?</h2>
+<p>The task in <code>scripts/arize-experiment-task.py</code> replays each row against the
+<em>deployed</em> app and returns what actually happened. It derives the reviewer-gate cookie from
+<code>FINAL_DEMO_PASSWORD</code>, because <code>/api/chat</code> picks its engine per request — without
+it, every row would quietly run the keyless engine and the experiment would measure the wrong system
+while looking perfectly healthy. All 23 rows confirmed <span class="m ok">engine=sdk</span>.</p>
+
+<div class="call warn">
+  <h3>Read the headline number carefully</h3>
+  <p>Six of the 23 rows did not run. Partway through, the Anthropic account backing the deployment
+  <strong>ran out of credit</strong> — <span class="m">Claude Code returned an error result: Credit
+  balance is too low</span> — and those turns failed in about two seconds.</p>
+  <p>They are not scored below. They also do not <em>look</em> like failures at a glance, which is
+  the more interesting part: when a turn fails the app reports <code>done{escalated}</code> as a
+  fail-cautious fallback, so an outage and a genuine handoff are the same status. The tell is that a
+  real escalation mints a ticket <em>and</em> a reason code; these had neither, no tools and no hop.</p>
+</div>
+
+<div class="stats">
+  <div class="stat"><b>17<span class="muted" style="font-size:1rem">/23</span></b><span>rows that genuinely ran</span></div>
+  <div class="stat"><b class="ok">88%</b><span>status matched the label</span></div>
+  <div class="stat"><b class="ok">94%</b><span>expected specialist in the chain</span></div>
+  <div class="stat"><b>82%</b><span>both</span></div>
+</div>
+
+<h3>The three genuine mismatches</h3>
+<table>
+  <tr><th>Scenario</th><th>Expected</th><th>Observed</th></tr>
+  <tr><td class="m">cancelled</td><td>resolved / order-specialist</td>
+      <td class="hum">escalated / order-specialist → escalation-handoff</td></tr>
+  <tr><td class="m">plus-expired</td><td>resolved / plus-specialist</td>
+      <td class="hum">escalated / plus-specialist</td></tr>
+  <tr><td class="m">ungrounded</td><td>escalated / faq-policy</td>
+      <td class="hum">escalated / triage-router</td></tr>
+</table>
+<p>All three lean the same way: the crew escalated where the run sheet expected an answer, or
+escalated earlier in the chain than labelled. That is the same direction as the one accepted open
+defect, <strong>DEF-14</strong> — a correct retrieval scoring under the grounding gate and handing
+off. Erring toward a human is the right direction for a support system to err in, but it is a real
+gap between documented and observed behaviour, and it is now measured rather than asserted.</p>
+
+<h3>Reproducing it</h3>
+<pre><code>ax datasets create --name novamart-runsheet-23 \
+  --space &lt;your space id&gt; --file runsheet-dataset.json
+
+FINAL_DEMO_PASSWORD=… ax experiments run \
+  --name runsheet-vs-live-crew \
+  --dataset RGF0YXNldDozNjQ1ODc6bnZZNg== \
+  --task scripts/arize-experiment-task.py --concurrency 2</code></pre>
+<p class="muted"><code>ax</code> will not resolve a project or dataset by name without
+<code>--space</code>; pass ids. Experiment
+<span class="m">RXhwZXJpbWVudDoxNDE4NTA6cG1HLw==</span>, project
+<span class="m">novamart-support-crew</span>.</p>
+
+<h2>5 · What this demonstrates</h2>
+<p>Three things that are hard to claim without data. The traces are structurally sound and prove the
+hop-and-tool architecture is real rather than described. The run sheet doubles as a regression
+suite, so "it matches the documented behaviour" became a number that can move. And the exercise
+surfaced two things nobody would have gone looking for: no token attribution anywhere in the
+traces, and a fail-cautious status that makes an outage indistinguishable from a handoff.</p>
+<p class="muted">The second one is the one worth keeping. A support crew that escalates when it
+breaks is behaving correctly for its customer and lying to its dashboard.</p>
+
+<footer>
+  Generated from live Arize data on 10 Sep 2026 · project <span class="m">novamart-support-crew</span><br>
+  Every figure produced by <code>ax</code> against the deployed app; nothing estimated.
+</footer>
+
+</div>
+</body>
+</html>

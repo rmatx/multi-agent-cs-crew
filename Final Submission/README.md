@@ -13,6 +13,7 @@ The 23-scenario test workbook downloads from that page.
 | `NovaMart-demo-60s.mp4` | **60-second recording of the live demo** — one question asked twice, three days apart: resolved with citations, then handed to a human with a ticket. A single unedited take against the deployed app; the pauses are real model latency. Doubles as the fallback if the live demo fails. |
 | `NovaMart-Demo-Deck.pptx` | 8-slide demo deck. **The narration is in the speaker notes** — present from the notes pane. |
 | `demo-script.md` | The same script as bullets, with measured timings, a pre-flight checklist, likely Q&A, and a break-glass procedure. |
+| `arize-observability-demo.html` | **Observability demo.** Instrumentation-health audit over real spans, the run sheet turned into an Arize golden dataset, and an experiment replaying all 23 scenarios against the deployed crew and scoring them against their labels. Every figure produced by `ax`, nothing estimated. |
 | `architecture.html` | Runtime architecture — the path a customer question travels, per-request engine selection, grounding sources, observability. |
 | `two-harnesses.html` | The distinction reviewers most often conflate: AAMAD (the **build** harness, which does not ship) vs the Claude Agent SDK (the **runtime** harness, which does), and the one-way adapter between them. |
 | `ci-pipeline.html` | From a commit to confidence — what runs on every push, what needs an API key, what it produces. |
