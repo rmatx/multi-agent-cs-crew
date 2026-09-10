@@ -19,7 +19,8 @@
       502 during rehearsal. Let it settle if you have pushed.
 - [ ] Run one throwaway turn to warm it, then press **Reset**.
 - [ ] Trace panel open, scenario picker visible. Zoom browser to ~125% so the trace is readable.
-- [ ] Fallback ready in a second tab: `week5/assets/demo-capture.pdf`.
+- [ ] Fallback ready in a second tab: **`Final Submission/NovaMart-demo-60s.mp4`** (60s, the
+      same two turns, unedited). `week5/assets/demo-capture.pdf` is the backup to the backup.
 
 ---
 
@@ -129,5 +130,5 @@ that survives an injection is not giving them the tool.)*
 ## If the demo breaks
 
 1. **Don't debug on camera.** One sentence: "Deployed demo, live model call — let me show the capture."
-2. Open `week5/assets/demo-capture.pdf`.
+2. Play `Final Submission/NovaMart-demo-60s.mp4` — it is this exact demo, already recorded.
 3. Keep narrating the same script. The story doesn't depend on the click.
