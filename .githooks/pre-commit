@@ -64,6 +64,17 @@ if [ -f .env.local ]; then
     # even when its value is short; anything else must be long enough that matching it is
     # unlikely to be a coincidence. That keeps DEMO_MODE=1, MODEL_ID=claude-sonnet-5 and
     # CHAT_ENGINE=deterministic out of the way without letting a short password through.
+    # Names that denote configuration rather than a credential. Skipped outright, because the
+    # length fallback below cannot tell a long name from a long secret: ARIZE_PROJECT_NAME=
+    # novamart-support-crew is 21 characters, is the committed default in openinference.ts, and
+    # blocked a commit that contained no secret at all. A guard that cries wolf gets bypassed by
+    # reflex, and a reflexively bypassed guard protects nothing — so the false positive is the
+    # bug, not an inconvenience.
+    case "$key" in
+      *_NAME|*NAME_*|*_URL|*_ENDPOINT|*_HOST|*_PORT|*_REGION|*_PROJECT|*_MODEL|*MODEL_*|*_ENGINE|*_ENV|*_DIR|*_PATH)
+        continue ;;
+    esac
+
     case "$key" in
       *PASSWORD*|*PASSWD*|*SECRET*|*TOKEN*|*CREDENTIAL*|*_KEY|*KEY_*|*APIKEY*)
         min=6 ;;

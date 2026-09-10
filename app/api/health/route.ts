@@ -10,6 +10,7 @@
 import { getMaxOrderDate } from "@/server/data/duckdb";
 import { sessionDb, ticketStubDb } from "@/server/data/sqlite";
 import { demoModeEnabled, preflightSdkEngine, resolveEngineId } from "@/server/runtime/config";
+import { resolveArizeConfig } from "@/server/runtime/openinference";
 import { requestPassedGate } from "@/server/runtime/demoGate";
 
 export const runtime = "nodejs";
@@ -56,6 +57,18 @@ export async function GET(request: Request): Promise<Response> {
       sdkEngineConfigured: preflight.ok,
       // Whether the operator trace is reachable at all — never the key itself.
       operatorTrace: (process.env.OPERATOR_KEY?.trim().length ?? 0) > 0 ? "enabled" : "disabled",
+      /*
+       * Whether finished turns are exported to Arize. Reported because the export is deliberately
+       * SILENT when unconfigured — `resolveArizeConfig()` returns null and `flush()` skips, so a
+       * deployment with no keys looks exactly like one that is exporting fine. That is correct
+       * behaviour for a turn (a broken collector must never cost a customer an answer) and a
+       * terrible property for an operator, who otherwise discovers the gap by finding an empty
+       * dashboard days later. Names the project, never the key or the space id.
+       */
+      arize: (() => {
+        const cfg = resolveArizeConfig();
+        return cfg === null ? "disabled" : { status: "enabled", project: cfg.project };
+      })(),
       /*
        * Whether this deployment serves the demo surface (crew strip, scenario picker, handoff
        * packet). Reported from HERE, and not read from `NEXT_PUBLIC_DEMO_MODE` in the browser,
