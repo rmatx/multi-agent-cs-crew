@@ -415,9 +415,9 @@
       "dot": "amber",
       "title": "Two engines, one contract",
       "items": [
-        "CHAT_ENGINE picks deterministic or sdk; both honour the same wire contract and the same escalation guarantee.",
-        "The sdk engine is a dynamic import, so on the default path no key is read and no subprocess starts.",
-        "That is what lets the same build run keyless in front of an audience."
+        "The engine is a per-request decision, not a process-wide one: a request carrying the reviewer cookie runs the sdk crew, everyone else runs CHAT_ENGINE.",
+        "Both honour the same wire contract and the same escalation guarantee; only sdk calls a model.",
+        "The live deployment keeps CHAT_ENGINE=deterministic, so the public URL answers keyless and an anonymous caller cannot spend the API key."
       ]
     }
   ]

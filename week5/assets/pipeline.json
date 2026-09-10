@@ -25,7 +25,7 @@
           "goldens",
           "spendgate"
         ],
-        "note": "Model behaviour regresses with no code change, so it needs its own gate \u2014 manual and monthly, never on pull_request."
+        "note": "Model behaviour regresses with no code change, so it needs its own gate — manual and monthly, never on pull_request."
       },
       {
         "id": "evidence",
@@ -42,11 +42,11 @@
   "lanes": [
     {
       "id": "keyless",
-      "label": "CI \u2014 keyless, every push"
+      "label": "CI — keyless, every push"
     },
     {
       "id": "keyed",
-      "label": "Eval \u2014 keyed, manual + monthly"
+      "label": "Eval — keyed, manual + monthly"
     },
     {
       "id": "evidence",
@@ -99,7 +99,7 @@
       "col": 2,
       "type": "backend",
       "label": "Unit",
-      "sublabel": "171 tests"
+      "sublabel": "179 tests"
     },
     {
       "id": "invariant",
@@ -125,7 +125,7 @@
       "col": 4,
       "type": "backend",
       "label": "Live crew eval",
-      "sublabel": "9 scripts \u00b7 114 checks"
+      "sublabel": "9 scripts · 114 checks"
     },
     {
       "id": "goldens",
@@ -133,7 +133,7 @@
       "col": 3,
       "type": "backend",
       "label": "Golden dataset",
-      "sublabel": "26 items \u00b7 5 categories",
+      "sublabel": "26 items · 5 categories",
       "tag": "half never run before"
     },
     {

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "NovaMart Support Crew \u2014 runtime architecture",
+    "title": "NovaMart Support Crew — runtime architecture",
     "quality_profile": "showcase",
     "viewBox": [
       1340,
@@ -29,7 +29,7 @@
           "deterministic",
           "crew"
         ],
-        "note": "CHAT_ENGINE picks the engine. Both honour one wire contract and one escalation guarantee; only sdk calls a model."
+        "note": "The engine is decided per REQUEST: through the reviewer gate it is the crew, otherwise CHAT_ENGINE — deterministic in the live deployment."
       },
       {
         "id": "grounding",
@@ -59,7 +59,7 @@
       "id": "browser",
       "type": "frontend",
       "label": "Chat UI",
-      "sublabel": "Next.js 16 \u00b7 React 19",
+      "sublabel": "Next.js 16 · React 19",
       "pos": [
         40,
         210
@@ -74,7 +74,7 @@
       "id": "chatapi",
       "type": "backend",
       "label": "POST /api/chat",
-      "sublabel": "App Router \u00b7 SSE",
+      "sublabel": "App Router · SSE",
       "pos": [
         280,
         210
@@ -83,13 +83,13 @@
         165,
         66
       ],
-      "tag": "rate limited"
+      "tag": "rate limited · gated"
     },
     {
       "id": "deterministic",
       "type": "backend",
       "label": "Deterministic engine",
-      "sublabel": "keyless \u00b7 no model call",
+      "sublabel": "keyless · no model call",
       "pos": [
         580,
         60
@@ -118,7 +118,7 @@
       "id": "toolserver",
       "type": "backend",
       "label": "In-process MCP tools",
-      "sublabel": "9 tools \u00b7 per-agent allowlist",
+      "sublabel": "9 tools · per-agent allowlist",
       "pos": [
         860,
         210
@@ -163,7 +163,7 @@
       "id": "stores",
       "type": "database",
       "label": "Session + ticket stores",
-      "sublabel": "SQLite \u00b7 node:sqlite",
+      "sublabel": "SQLite · node:sqlite",
       "pos": [
         1120,
         380
@@ -226,14 +226,14 @@
     {
       "from": "chatapi",
       "to": "deterministic",
-      "label": "keyless",
+      "label": "public · keyless",
       "fromSide": "top",
       "toSide": "left"
     },
     {
       "from": "chatapi",
       "to": "crew",
-      "label": "sdk"
+      "label": "gated · sdk"
     },
     {
       "from": "crew",
