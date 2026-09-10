@@ -7,7 +7,9 @@
 `FINAL_DEMO_PASSWORD` in `.env.local` and in Railway. Any username works.
 
 > Timings below are measured against the deployed app, not estimated.
-> Resolved turn **13–15s**. Escalated turn **24–26s**. Two turns ≈ **40s** of model time.
+> Resolved turn **13–16s**. Escalated turn **24–32s** — re-measured 10 Sep and the escalation
+> path has drifted slower, so budget for the top of that range, not the bottom.
+> Two turns ≈ **40–48s** of model time. First turn after a restart is slower still (~32s).
 
 ---
 
@@ -66,7 +68,7 @@
   `policy:returns#return-window`.
   - "It didn't recall the return policy. It read it, and it'll tell you which section."
 
-### Turn 2 — "Return, just outside" (order 42319) · ~25s  ← **the moment**
+### Turn 2 — "Return, just outside" (order 42319) · ~25–32s  ← **the moment**
 
 - Same question. Same specialist. **Order is 15 days old instead of 12 — three days.**
 - Narrate the handoff as it happens — this is the HITL moment, and it's visible:
@@ -122,7 +124,7 @@ that survives an injection is not giving them the tool.)*
 |---|---|
 | "How do you stop hallucination?" | Grounding guard + citations. Every fact traces to a tool result; ungrounded answers escalate. DEF-14 is that gate firing too eagerly — I kept it. |
 | "Why not one big agent?" | Tool permissions. Least-privilege per specialist is only meaningful if the roles are separate. |
-| "What's the latency?" | 13–15s resolved, ~25s escalated. p95 measured 30.4s single-user. Concurrency untested — that's honest, not hidden. |
+| "What's the latency?" | 13–16s resolved, 24–32s escalated. p95 measured 30.4s single-user. Concurrency untested — that's honest, not hidden. |
 | "Is this real data?" | Real schema, synthetic fixture. Dates shift onto today's calendar so "12 days ago" stays true whenever you run it. |
 | "What did the framework do?" | AAMAD drove the *build* — nine personas, gated phases. Different harness from the Agent SDK crew inside the app. See the two-harness diagram. |
 | "Cost?" | Public URL runs the keyless engine, so a stranger can't spend my key. Crew runs only behind the password. |
