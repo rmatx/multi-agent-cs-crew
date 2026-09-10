@@ -474,7 +474,18 @@ export default function ChatApp({ forceDemo = false }: ChatAppProps) {
                   <span />
                   <span />
                 </span>
-                <span>{status.hint}</span>
+                {/*
+                  * Same text as the banner, and for the same reason — but this is the element
+                  * the viewer is actually staring at while the turn runs, so it matters more
+                  * here. It used to show only the generic hint while the banner overhead named
+                  * the agent and the tool, which left the chat column reading "Looking that up."
+                  * for twenty seconds. On an escalation that was not merely vague but wrong:
+                  * the crew is not looking anything up, it is writing a handoff to a person.
+                  *
+                  * Falls back to the hint when there is no detail, so the untraced customer
+                  * surface at `/` is unchanged.
+                  */}
+                <span>{status.detail ?? status.hint}</span>
               </div>
               <div className={styles.skeleton} aria-hidden="true">
                 <span />
