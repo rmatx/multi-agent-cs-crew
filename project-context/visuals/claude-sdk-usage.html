@@ -153,7 +153,8 @@
     <div class="eyebrow">
       <span>Runtime notes</span><span>·</span>
       <span>AAMAD_TARGET_RUNTIME=claude-agent-sdk</span><span>·</span>
-      <span>30 Aug 2026</span>
+      <span>30 Aug 2026</span><span>·</span>
+      <span>revised 10 Sep 2026</span>
     </div>
     <h1>Claude Agent SDK in NovaMart</h1>
     <p class="standfirst">Every place this codebase touches <code>@anthropic-ai/claude-agent-sdk</code>, and why each option is set the way it is. The SDK is reached through one function call — what surrounds that call is the whole design.</p>
@@ -218,7 +219,7 @@
 
   <section>
     <h2>How the SDK is reached at all</h2>
-    <p>The default engine is <code>deterministic</code>: keyless, code-composed, no SDK. The SDK engine is opt-in through <code>CHAT_ENGINE=sdk</code>, and it is loaded by dynamic import so an unconfigured or broken SDK cannot take the default path down.</p>
+    <p>The default engine is <code>deterministic</code>: keyless, code-composed, no SDK. The SDK engine is opt-in per request — <code>CHAT_ENGINE=sdk</code> process-wide, or a single caller carrying the reviewer-gate cookie — and it is loaded by dynamic import so an unconfigured or broken SDK cannot take the default path down.</p>
     <div class="review">
       <pre><span class="c">// server/runtime/engines/select.ts</span>
 export async function loadEngine(id) {

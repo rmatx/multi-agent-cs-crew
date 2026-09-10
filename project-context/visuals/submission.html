@@ -130,7 +130,8 @@
     <div class="eyebrow">
       <span>Capstone submission</span><span>·</span>
       <span>Multi-agent customer support</span><span>·</span>
-      <span>5 Sep 2026</span>
+      <span>5 Sep 2026</span><span>·</span>
+      <span>revised 10 Sep 2026</span>
     </div>
     <h1>NovaMart Support Crew</h1>
     <p class="standfirst">Six agents that answer a customer from NovaMart's own data and written policy — and hand the conversation to a person the moment they cannot. The interesting part is not that it answers. It is what it refuses to do, and how that refusal is enforced.</p>
@@ -141,8 +142,7 @@
     <span class="pill on">Live · Railway</span>
     <p class="why">Running now, publicly reachable, with the demo surface on — the crew strip, the 23-scenario
       picker and the operator trace. It is parked on the <b>keyless engine</b>, which answers from the fixture
-      and calls no model, so it costs nothing to leave up and nothing to click through. Flipping
-      <code>CHAT_ENGINE=sdk</code> arms the crew; <a href="https://multi-agent-cs-crew-production.up.railway.app/api/health"><code>/api/health</code></a>
+      and calls no model, so it costs nothing to leave up and nothing to click through. The crew is not armed by a process-wide switch: <code>/api/chat</code> decides per request, and only a caller that came through the password-gated <code>/final</code> reviewer route runs the SDK crew — which is what keeps this public URL free to run; <a href="https://multi-agent-cs-crew-production.up.railway.app/api/health"><code>/api/health</code></a>
       always reports which engine is actually serving, so no claim here has to be taken on trust.</p>
   </div>
 
@@ -150,7 +150,7 @@
     <div><dt>Runtime</dt><dd>claude-agent-sdk</dd></div>
     <div><dt>Agents</dt><dd class="ok">6 registered</dd></div>
     <div><dt>Tools</dt><dd class="ok">9, all read-only</dd></div>
-    <div><dt>Unit tests</dt><dd class="ok">171 / 171</dd></div>
+    <div><dt>Unit tests</dt><dd class="ok">179 / 179</dd></div>
     <div><dt>Eval scripts</dt><dd class="ok">114 / 114</dd></div>
     <div><dt>Money tools</dt><dd class="ok">0 of 0</dd></div>
   </dl>
@@ -375,7 +375,7 @@
         <thead><tr><th scope="col">Check</th><th scope="col">Method</th><th scope="col">Result</th></tr></thead>
         <tbody>
           <tr><td>Type safety</td><td><code>tsc --noEmit</code>, strict</td><td class="ok num">exit 0</td></tr>
-          <tr><td>Unit suite</td><td>Node built-in runner, no test framework dependency</td><td class="ok num">171 / 171</td></tr>
+          <tr><td>Unit suite</td><td>Node built-in runner, no test framework dependency</td><td class="ok num">179 / 179</td></tr>
           <tr><td>Money-tool invariant</td><td>Exact-set test, plus an injected refund tool</td><td class="ok num">9 / 9</td></tr>
           <tr><td>Crew behaviour</td><td>9 eval scripts against a live server, both wire and trace</td><td class="ok num">114 / 114</td></tr>
           <tr><td>Integration round trip</td><td>18 executed cases, both engines</td><td class="ok num">18 / 18</td></tr>
@@ -476,6 +476,6 @@
       auditable alongside them.</p>
   </section>
 
-  <footer>NovaMart Support Crew · 6 agents · 9 tools · 171 unit tests · 114 eval assertions · AAMAD_TARGET_RUNTIME=claude-agent-sdk</footer>
+  <footer>NovaMart Support Crew · 6 agents · 9 tools · 179 unit tests · 114 eval assertions · AAMAD_TARGET_RUNTIME=claude-agent-sdk</footer>
 
 </div>

@@ -186,7 +186,8 @@
       <span>·</span>
       <span>AAMAD Build phase</span>
       <span>·</span>
-      <span>28 Aug 2026</span>
+      <span>28 Aug 2026</span><span>·</span>
+      <span>revised 10 Sep 2026</span>
     </div>
     <h1>The backend, as built</h1>
     <p class="standfirst">Two engines behind one seam, and a six-agent crew behind one of them. Every guarantee in the architecture is now something the runtime enforces rather than something a prompt asks for.</p>
@@ -202,7 +203,7 @@
 
   <section>
     <h2>One request, two possible engines</h2>
-    <p>The route handler does the work that must happen either way — parse, validate, resolve the demo clock, pump the stream — then hands off to whichever engine <code>CHAT_ENGINE</code> selects. Both return the same frame types, so the browser cannot tell them apart.</p>
+    <p>The route handler does the work that must happen either way — parse, validate, resolve the demo clock, pump the stream — then hands off to whichever engine that request resolves to — the reviewer gate decides per caller, with <code>CHAT_ENGINE</code> as the default. Both return the same frame types, so the browser cannot tell them apart.</p>
 
     <figure>
       <div class="frame">

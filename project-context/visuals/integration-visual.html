@@ -211,7 +211,8 @@
       <span>·</span>
       <span>Integration epic</span>
       <span>·</span>
-      <span>27 Aug 2026</span>
+      <span>27 Aug 2026</span><span>·</span>
+      <span>revised 10 Sep 2026</span>
     </div>
     <h1>The wire between them</h1>
     <p class="standfirst">One endpoint, one envelope, two engines that must not be tellable apart. Twelve cases run live against both — ten held, two did not.</p>
@@ -227,7 +228,7 @@
 
   <section>
     <h2>One turn, end to end</h2>
-    <p>The browser validates, then the server validates the same rules again — a client-side rule is a convenience and never a control. From there the route does everything that must happen either way, hands the turn to whichever engine <code>CHAT_ENGINE</code> selects, and pumps frames back until <code>done</code>.</p>
+    <p>The browser validates, then the server validates the same rules again — a client-side rule is a convenience and never a control. From there the route does everything that must happen either way, hands the turn to whichever engine that request resolves to — the SDK crew for a caller holding the reviewer-gate cookie, otherwise whatever <code>CHAT_ENGINE</code> says, and pumps frames back until <code>done</code>.</p>
 
     <figure>
       <div class="frame">
