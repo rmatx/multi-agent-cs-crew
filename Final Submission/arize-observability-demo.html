@@ -87,7 +87,8 @@ empty dashboard is not by itself evidence of a broken exporter.</p>
   <tr><td>Spans with no <code>span.kind</code></td><td class="ok">0</td></tr>
   <tr><td>Root spans with blank input <em>and</em> output</td><td class="ok">0 of 19</td></tr>
   <tr><td>Span status</td><td class="ok">119 OK, 0 ERROR</td></tr>
-  <tr><td><strong>LLM spans / token counts</strong></td><td class="bad"><strong>0 / 0</strong> — see below</td></tr>
+  <tr><td><strong>Spans of kind <code>LLM</code></strong></td><td class="warn"><strong>0</strong> — see below</td></tr>
+  <tr><td>Turn spans carrying token counts + model name</td><td class="ok">63 of 63</td></tr>
 </table>
 <p>Span kinds break down as <span class="m">AGENT 19 · CHAIN 22 · TOOL 78</span>, and a single
 escalating turn looks like this — the hop structure is real, not flattened:</p>
@@ -103,14 +104,28 @@ TOOL   mcp__novamart__create_ticket_stub
 TOOL   mcp__novamart__format_handoff_summary</code></pre>
 
 <div class="call warn">
-  <h3>The finding: no LLM spans, so no token or cost attribution</h3>
-  <p>Spans are built from the runtime's own trace records — agent hops and tool calls — so the
-  model calls themselves are never instrumented. Structurally the traces are clean, but Arize's
-  token and cost dashboards have nothing to populate from, and <em>latency cannot be attributed</em>
-  between model time and tool time.</p>
-  <p class="muted">Worth stating plainly rather than discovering during a cost review: this is a gap
-  in coverage, not a bug in what exists. Closing it means instrumenting the SDK's model calls, not
-  changing the spans above.</p>
+  <h3>The finding: token counts are on the turn span, not on <code>LLM</code> spans</h3>
+  <p>Every turn span carries <code>llm.token_count.prompt</code>, <code>llm.token_count.completion</code>
+  and <code>llm.model_name</code> — so cost and usage data <em>is</em> present. What does not exist is
+  a span of kind <code>LLM</code>: spans are built from the runtime's own hop and tool records, so
+  individual model calls are never their own span.</p>
+  <p>The practical consequence is not missing data but missing <em>resolution</em>. Usage is
+  attributed per turn rather than per model call, so latency cannot be split between model time and
+  tool time, and any Arize view that filters on <code>LLM</code>-kind spans will look empty while the
+  underlying numbers are sitting on the AGENT span one level up.</p>
+</div>
+
+<div class="call warn">
+  <h3>And a bug this surfaced: the model name was being scrubbed</h3>
+  <p>Switching the runtime to <code>claude-haiku-4-5-20251001</code> made
+  <code>llm.model_name</code> arrive as <code class="bad">claude-haiku-[PHONE]</code>. The SEC-03 PII
+  scrubber strips ten-to-fifteen digit runs as phone numbers, and that model id is exactly ten
+  digits once its separators are removed.</p>
+  <p>It was latent for the life of the project: <code>claude-sonnet-5</code> has no digit run long
+  enough to match. The field Arize keys cost and model comparison on had become a string no model
+  has ever been called — in the JSONL audit trail as well as in the spans. Fixed by exempting
+  operator-configuration keys from PII scrubbing, with a regression test that also asserts a phone
+  number typed into the chat is still scrubbed.</p>
 </div>
 
 <h2>3 · The run sheet as a golden dataset</h2>

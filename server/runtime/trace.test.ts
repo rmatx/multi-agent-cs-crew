@@ -242,3 +242,18 @@ test("TRACE_LOG_DIR redirects the trace directory, and only when it says somethi
   // write to a path that depends on which directory the process happened to start in.
   assert.equal(read("logs"), path.join(process.cwd(), "logs"));
 });
+
+test("a model id survives redaction — it is operator config, not customer text", () => {
+  // claude-haiku-4-5-20251001 is ten digits once separators are stripped, which is precisely
+  // what the phone rule matches. It reached Arize as `claude-haiku-[PHONE]`, corrupting the one
+  // attribute cost and model comparison are keyed on. Latent until the model changed, because
+  // claude-sonnet-5 has no digit run long enough to trip it.
+  const out = asRecord(redact({ model: "claude-haiku-4-5-20251001" }));
+  assert.equal(out["model"], "claude-haiku-4-5-20251001");
+});
+
+test("the exemption is for the KEY, not for phone-shaped strings generally", () => {
+  // A customer typing their number into the chat must still be scrubbed.
+  const out = asRecord(redact({ userPrompt: "call me on 415-555-0142" }));
+  assert.match(String(out["userPrompt"]), /\[PHONE\]/);
+});

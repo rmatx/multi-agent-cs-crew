@@ -141,6 +141,22 @@ export function scrubPii(text: string): string {
 const REDACTED = "[REDACTED]";
 const MAX_STRING = 2_000;
 
+/**
+ * Keys whose string value is OPERATOR CONFIGURATION, never customer text, and which must
+ * therefore skip PII scrubbing.
+ *
+ * `model` is here because `claude-haiku-4-5-20251001` contains ten digits once the separators
+ * are stripped, which is exactly what `PHONE_PATTERN` is looking for. The model id reached Arize
+ * as `claude-haiku-[PHONE]` and the JSONL audit trail recorded the same, so the one field Arize
+ * keys cost and model comparison on was a string no model has ever been called. It went unnoticed
+ * through `claude-sonnet-5`, which has no digit run long enough to match — the bug was latent
+ * until the model changed.
+ *
+ * Same shape as the `isUsageCount` exemption above, and for the same reason: a redaction rule
+ * written for customer text should not be applied to values the operator set themselves.
+ */
+const CONFIG_VALUE_KEYS = new Set(["model", "modelId", "engine", "runtime"]);
+
 export function redact(value: unknown, depth = 0): unknown {
   if (depth > 6) return "[depth-limit]";
   if (typeof value === "string") {
@@ -155,7 +171,14 @@ export function redact(value: unknown, depth = 0): unknown {
   const out: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
     const secretKey = SECRET_KEY_PATTERN.test(key) && !isUsageCount(key, val);
-    out[key] = secretKey ? REDACTED : redact(val, depth + 1);
+    if (secretKey) {
+      out[key] = REDACTED;
+    } else if (CONFIG_VALUE_KEYS.has(key) && typeof val === "string") {
+      // Still truncated — an operator value has no business being unbounded — but not scrubbed.
+      out[key] = val.length > MAX_STRING ? `${val.slice(0, MAX_STRING)}…[truncated]` : val;
+    } else {
+      out[key] = redact(val, depth + 1);
+    }
   }
   return out;
 }
