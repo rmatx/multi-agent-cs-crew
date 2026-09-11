@@ -14,6 +14,7 @@ The 23-scenario test workbook downloads from that page.
 | `NovaMart-Demo-Deck.pptx` | 8-slide demo deck. **The narration is in the speaker notes** — present from the notes pane. |
 | `demo-script.md` | The same script as bullets, with measured timings, a pre-flight checklist, likely Q&A, and a break-glass procedure. |
 | `arize-observability-demo.html` | **Observability demo.** Instrumentation-health audit over real spans, the run sheet turned into an Arize golden dataset, and an experiment replaying all 23 scenarios against the deployed crew and scoring them against their labels. Every figure produced by `ax`, nothing estimated. |
+| `NovaMart Support — reviewer build.pdf` | A printed page capture of the reviewer build mid-escalation — the crew strip, the scenario picker and a `customer_requested_human` handoff with its ticket. A static fallback that needs no browser, no password and no running service. |
 | `architecture.html` | Runtime architecture — the path a customer question travels, per-request engine selection, grounding sources, observability. |
 | `two-harnesses.html` | The distinction reviewers most often conflate: AAMAD (the **build** harness, which does not ship) vs the Claude Agent SDK (the **runtime** harness, which does), and the one-way adapter between them. |
 | `ci-pipeline.html` | From a commit to confidence — what runs on every push, what needs an API key, what it produces. |
