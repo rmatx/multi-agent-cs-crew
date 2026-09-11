@@ -7,6 +7,11 @@ The reviewer build is password-protected — the password is the value of `FINAL
 (Railway / `.env.local`), deliberately not written down in this public repo. Any username works.
 The 23-scenario test workbook downloads from that page.
 
+**Currently disarmed (2026-09-11).** `FINAL_DEMO_PASSWORD` is unset in Railway, so `/final`
+returns 401 for everyone and no request can reach the live crew — the deployment spends no
+tokens. The public URL (`/`) still answers on the keyless deterministic engine. To re-arm,
+set `FINAL_DEMO_PASSWORD` in Railway and restart the service.
+
 | File | What it is |
 |---|---|
 | `NovaMart-demo-2min.mp4` | **The submission video (1:44).** Three turns: answers with citations, escalates with a ticket and shows the packet the human receives, then refuses a refund because no refund tool exists. Also shows the operator trace. Single unedited take against the deployed app. |
