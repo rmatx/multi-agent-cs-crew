@@ -142,6 +142,13 @@ export const config = {
    * `components/ReviewerHeader.tsx` that names the same .xlsx path. If that filename ever
    * changes, this matcher is the second place to change, and a gate pointed at the old name
    * would leave the new one served to anyone.
+   *
+   * WHOLE SITE since 2026-09-13. The submission is over, so the constraint that kept `/` public
+   * (a grader opening the printed URL with no password) no longer holds. Every page and API
+   * route is gated; the browser holds the Basic credentials for `/` and below, and the cookie
+   * upgrades chat turns to the live crew. Excluded: `/api/health`, because Railway's healthcheck
+   * and the Dockerfile HEALTHCHECK call it without credentials and a 401 there fails the deploy;
+   * and Next's static assets, which carry no data.
    */
-  matcher: ["/final", "/final/:path*", "/novamart-demo-runsheet.xlsx"],
+  matcher: ["/((?!api/health|_next/static|_next/image|favicon.ico).*)"],
 };
