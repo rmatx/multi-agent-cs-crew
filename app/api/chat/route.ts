@@ -16,7 +16,7 @@
 import type { ChatRequest, StreamEvent } from "@shared/dto";
 import { resolveTemporalMeta } from "@/server/data/dateShift";
 import { resolveBudgets, resolveEngineId } from "@/server/runtime/config";
-import { requestPassedGate } from "@/server/runtime/demoGate";
+import { requestGetsLiveCrew } from "@/server/runtime/demoGate";
 import { checkRateLimit, clientKey } from "@/server/runtime/rateLimit";
 import { extractAppContext } from "@/server/runtime/escalationContext";
 import {
@@ -89,7 +89,7 @@ export async function POST(request: Request): Promise<Response> {
    * caller to spend the operator's API key. The rate limit above still applies to both: it
    * guards the process, not just the wallet.
    */
-  const engineId = (await requestPassedGate(request)) ? "sdk" : resolveEngineId();
+  const engineId = (await requestGetsLiveCrew(request)) ? "sdk" : resolveEngineId();
   const budgets = resolveBudgets();
 
   // Session first (ADR-10): the stored identity feeds the temporal resolve below, so a

@@ -104,3 +104,20 @@ test("constant-time compare still compares", () => {
   assert.equal(gate.constantTimeEqual("abc", "abcd"), false, "length differences count");
   assert.equal(gate.constantTimeEqual("", ""), true);
 });
+
+test("a valid cookie gets the live crew only when LIVE_CREW is exactly 1", async () => {
+  process.env.FINAL_DEMO_PASSWORD = PASSWORD;
+  const cookie = withCookie(`${gate.GATE_COOKIE}=${await gate.gateToken(PASSWORD)}`);
+  try {
+    delete process.env.LIVE_CREW;
+    assert.equal(await gate.requestGetsLiveCrew(cookie), false, "unset ⇒ paused");
+    process.env.LIVE_CREW = "true";
+    assert.equal(await gate.requestGetsLiveCrew(cookie), false, "'true' is not '1'");
+    process.env.LIVE_CREW = "1";
+    assert.equal(await gate.requestGetsLiveCrew(cookie), true);
+    assert.equal(await gate.requestGetsLiveCrew(withCookie(null)), false, "switch alone is not enough");
+    assert.equal(await gate.requestPassedGate(cookie), true, "pausing never locks the site");
+  } finally {
+    delete process.env.LIVE_CREW;
+  }
+});

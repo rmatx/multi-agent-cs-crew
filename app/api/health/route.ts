@@ -11,7 +11,7 @@ import { getMaxOrderDate } from "@/server/data/duckdb";
 import { sessionDb, ticketStubDb } from "@/server/data/sqlite";
 import { demoModeEnabled, preflightSdkEngine, resolveEngineId } from "@/server/runtime/config";
 import { resolveArizeConfig } from "@/server/runtime/openinference";
-import { requestPassedGate } from "@/server/runtime/demoGate";
+import { requestGetsLiveCrew } from "@/server/runtime/demoGate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,7 +43,7 @@ export async function GET(request: Request): Promise<Response> {
    * even though `CHAT_ENGINE` says otherwise — the alternative is a /final page that runs the
    * crew while captioning itself a keyless lookup.
    */
-  const engine = (await requestPassedGate(request)) ? "sdk" : resolveEngineId();
+  const engine = (await requestGetsLiveCrew(request)) ? "sdk" : resolveEngineId();
   const preflight = preflightSdkEngine();
   const healthy = duckdb === "ok" && stores === "ok";
 

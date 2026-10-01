@@ -91,6 +91,23 @@ export function readCookie(header: string | null, name: string): string | undefi
 }
 
 /**
+ * The spend switch for the gated crew. Strictly `"1"`, so `"true"` or a typo reads as OFF — the
+ * failure direction here is spending the key, so it defaults to paused.
+ *
+ * Separate from `requestPassedGate` on purpose: the middleware still needs the gate to decide
+ * who may load the site at all. Pausing the crew must not lock the password holders out; it
+ * only stops their turns reaching the model.
+ */
+export function liveCrewEnabled(): boolean {
+  return process.env.LIVE_CREW?.trim() === "1";
+}
+
+/** Should this request run the sdk crew? Needs the gate AND the spend switch. */
+export async function requestGetsLiveCrew(request: Request): Promise<boolean> {
+  return liveCrewEnabled() && (await requestPassedGate(request));
+}
+
+/**
  * Did this request come through the reviewer gate?
  *
  * FAILS CLOSED in both directions that matter: no configured password means no request can ever
